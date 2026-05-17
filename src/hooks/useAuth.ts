@@ -13,11 +13,42 @@ export function useAuth() {
       return;
     }
 
+    let mounted = true;
+
+    async function fetchProfile(uid: string, currentUserEmail: string | undefined) {
+      if (!supabase) return;
+      try {
+        const { data, error } = await supabase
+          .from('usuarios')
+          .select('*')
+          .eq('id', uid)
+          .single();
+        
+        if (mounted) {
+          if (!error && data) {
+            setProfile(data as UserProfile);
+          } else {
+            setProfile({
+              id: uid,
+              nombre: currentUserEmail === 'miranda.salud2026@gmail.com' ? 'Administrador Central' : 'Usuario Oficina',
+              email: currentUserEmail || '',
+              rol: currentUserEmail === 'miranda.salud2026@gmail.com' ? 'admin' : 'oficina'
+            });
+          }
+          setLoading(false);
+        }
+      } catch (err) {
+        if (mounted) setLoading(false);
+      }
+    }
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
+      if (!mounted) return;
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      if (currentUser) {
+        fetchProfile(currentUser.id, currentUser.email);
       } else {
         setLoading(false);
       }
@@ -25,40 +56,22 @@ export function useAuth() {
 
     // Listen for changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!mounted) return;
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       if (currentUser) {
-        await fetchProfile(currentUser.id);
+        await fetchProfile(currentUser.id, currentUser.email);
       } else {
         setProfile(null);
         setLoading(false);
       }
     });
 
-    async function fetchProfile(uid: string) {
-      if (!supabase) return;
-      const { data, error } = await supabase
-        .from('usuarios')
-        .select('*')
-        .eq('id', uid)
-        .single();
-      
-      if (!error && data) {
-        setProfile(data as UserProfile);
-      } else {
-        // Fallback for demo when Supabase isn't fully configured
-        setProfile({
-          id: uid,
-          nombre: user?.email === 'miranda.salud2026@gmail.com' ? 'Administrador Central' : 'Usuario Oficina',
-          email: user?.email || '',
-          rol: user?.email === 'miranda.salud2026@gmail.com' ? 'admin' : 'oficina'
-        });
-      }
-      setLoading(false);
-    }
-
-    return () => subscription.unsubscribe();
-  }, [user?.email, user?.user_metadata?.full_name]);
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []); // Run once on mount
 
   return { user, profile, loading };
 }
