@@ -1,0 +1,6 @@
+{
+  "name": "SIM Miranda",
+  "description": "Sistema de Información en Salud – Estado Miranda. PWA para gestión de información sanitaria.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

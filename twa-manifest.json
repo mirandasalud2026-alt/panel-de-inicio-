@@ -1,0 +1,41 @@
+{
+  "packageId": "ve.gob.miranda.simsalud",
+  "host": "tu-dominio.vercel.app",
+  "name": "SIM Miranda",
+  "launcherName": "SIM Miranda",
+  "display": "standalone",
+  "themeColor": "#0B3D5C",
+  "backgroundColor": "#FFFFFF",
+  "enableNotifications": false,
+  "navigationColor": "#0B3D5C",
+  "navigationColorDark": "#0A3450",
+  "navigationDividerColor": "#0A3450",
+  "navigationDividerColorDark": "#0A3450",
+  "fallbackType": "customtabs",
+  "features": [
+    {
+      "name": "playBilling",
+      "enabled": false
+    }
+  ],
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "sim-miranda"
+  },
+  "additionalTrustedOrigins": [
+    "https://sites.google.com",
+    "https://*.google.com"
+  ],
+  "intentFilters": [
+    {
+      "action": "VIEW",
+      "data": [
+        {
+          "scheme": "https",
+          "host": "sites.google.com",
+          "pathPrefix": "/view/saludmiranda04"
+        }
+      ]
+    }
+  ]
+}
