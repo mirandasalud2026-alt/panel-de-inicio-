@@ -8,6 +8,11 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
@@ -31,6 +36,7 @@ export function useAuth() {
     });
 
     async function fetchProfile(uid: string) {
+      if (!supabase) return;
       const { data, error } = await supabase
         .from('usuarios')
         .select('*')

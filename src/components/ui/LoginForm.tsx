@@ -9,6 +9,10 @@ export default function LoginForm() {
   const navigate = useNavigate();
 
   const handleGoogleLogin = async () => {
+    if (!supabase) {
+      setError('Configuración de Supabase faltante. Contacte al administrador.');
+      return;
+    }
     setError('');
     setLoading(true);
     try {

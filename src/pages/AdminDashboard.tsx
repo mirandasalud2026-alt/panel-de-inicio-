@@ -42,7 +42,7 @@ export default function AdminDashboard() {
           </span>
           
           <button 
-            onClick={() => supabase.auth.signOut()}
+            onClick={() => supabase?.auth.signOut()}
             className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all shadow-sm"
             title="Cerrar sesión"
           >
