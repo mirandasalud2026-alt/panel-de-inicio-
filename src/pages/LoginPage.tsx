@@ -17,11 +17,14 @@ export default function LoginPage() {
         </Link>
 
         <div className="text-center mb-10">
-          <div className="w-20 h-20 bg-gray-50 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-inner">
-            <span className="text-4xl">🔐</span>
+          <div className="w-20 h-20 bg-gray-50 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-inner border border-gray-100">
+            <span className="text-4xl">🏥</span>
           </div>
-          <h1 className="text-3xl font-extrabold text-gray-800 tracking-tight leading-none">Acceso SIM</h1>
-          <p className="text-xs text-gray-400 mt-3 font-medium uppercase tracking-tight">Personal Administrativo</p>
+          <h1 className="text-3xl font-extrabold text-[#0B3D5C] tracking-tight leading-none">Acceso SIM</h1>
+          <p className="text-[10px] text-gray-400 mt-2 font-black uppercase tracking-widest">Gobierno del Estado Miranda</p>
+          <div className="mt-3 inline-block bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest">
+            Portal Oficial de Salud
+          </div>
         </div>
 
         <LoginForm />

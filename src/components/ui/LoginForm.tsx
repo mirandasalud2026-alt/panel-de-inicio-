@@ -116,9 +116,12 @@ export default function LoginForm() {
 
       <button
         onClick={handleGoogleLogin}
-        className="w-full py-4 bg-white border border-gray-100 text-gray-600 font-bold rounded-2xl shadow-sm flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
+        className="w-full py-4 bg-[#F8FAFC] border border-blue-100 text-[#0B3D5C] font-bold rounded-2xl shadow-sm flex items-center justify-center gap-3 hover:bg-blue-50 transition-all border-dashed"
       >
-        <Chrome size={18} /> GOOGLE WORKSPACE
+        <div className="w-6 h-6 bg-white rounded-lg flex items-center justify-center shadow-sm">
+          <Chrome size={14} className="text-[#4285F4]" />
+        </div> 
+        <span className="text-[11px] uppercase tracking-widest">Identidad Institucional</span>
       </button>
 
       {error && <motion.p initial={{opacity:0}} animate={{opacity:1}} className="text-red-500 text-xs text-center font-bold bg-red-50 p-3 rounded-xl border border-red-100">{error}</motion.p>}
