@@ -1,7 +1,7 @@
 -- SQL para Supabase - Configuración de Roles y Perfiles
--- Ejecutar esto en el SQL Editor de su proyecto Supabase
+-- Ejecutar esto en el SQL Editor (Dashboard > SQL Editor > New query)
 
--- 1. Crear tabla de perfiles si no existe
+-- 1. Tabla de perfiles
 CREATE TABLE IF NOT EXISTS public.usuarios (
     id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
@@ -14,9 +14,11 @@ CREATE TABLE IF NOT EXISTS public.usuarios (
 ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
 
 -- 3. Políticas de seguridad
+DROP POLICY IF EXISTS "Usuarios pueden ver su propio perfil" ON public.usuarios;
 CREATE POLICY "Usuarios pueden ver su propio perfil" ON public.usuarios
     FOR SELECT USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Admins pueden ver todos los perfiles" ON public.usuarios;
 CREATE POLICY "Admins pueden ver todos los perfiles" ON public.usuarios
     FOR ALL USING (
         EXISTS (
@@ -25,7 +27,9 @@ CREATE POLICY "Admins pueden ver todos los perfiles" ON public.usuarios
         )
     );
 
--- 4. Función Trigger para asignar "admin" automáticamente al correo específico
+-- 4. Función Trigger - LA CLAVE MAESTRA
+-- Esta función se encarga de asignar el rol de 'admin' automáticamente al correo solicitado.
+-- La clave 'Roble.26' debe ser configurada manualmente en Supabase Auth > Users (Create User).
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -33,7 +37,7 @@ BEGIN
     VALUES (
         new.id,
         new.email,
-        new.raw_user_meta_data->>'full_name',
+        COALESCE(new.raw_user_meta_data->>'full_name', 'Administrador'),
         CASE 
             WHEN new.email = 'miranda.salud2026@gmail.com' THEN 'admin'
             ELSE 'oficina'
@@ -43,13 +47,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 5. Crear el trigger en la tabla auth.users
+-- 5. Vincular el trigger a la creación de usuarios en Auth
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
--- 6. Actualizar usuario existente si ya se registró
-UPDATE public.usuarios 
-SET rol = 'admin' 
-WHERE email = 'miranda.salud2026@gmail.com';
+-- 6. Asegurar que el usuario actual tenga rol admin
+-- Si ya te registraste con este correo, ejecuta esto:
+UPDATE public.usuarios SET rol = 'admin' WHERE email = 'miranda.salud2026@gmail.com';
