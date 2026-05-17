@@ -46,12 +46,12 @@ export function useAuth() {
       if (!error && data) {
         setProfile(data as UserProfile);
       } else {
-        // Fallback or auto-profile creation for demo
+        // Fallback for demo when Supabase isn't fully configured
         setProfile({
           id: uid,
-          nombre: user?.user_metadata?.full_name || 'Usuario',
+          nombre: user?.email === 'miranda.salud2026@gmail.com' ? 'Administrador Central' : 'Usuario Oficina',
           email: user?.email || '',
-          rol: user?.email === 'miranda.salud2026@gmail.com' ? 'directivo' : 'oficina'
+          rol: user?.email === 'miranda.salud2026@gmail.com' ? 'admin' : 'oficina'
         });
       }
       setLoading(false);

@@ -19,6 +19,28 @@ export default function LoginForm() {
     setLoading(true);
     
     try {
+      // Caso especial: Admin solicitado por el usuario
+      if (email === 'miranda.salud2026@gmail.com' && password === 'Roble.26') {
+        // Intentamos login real
+        const { data, error: authError } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+        
+        if (authError) {
+          // Si el usuario no existe en Supabase Auth todavía, mostramos un mensaje descriptivo
+          if (authError.message === 'Invalid login credentials') {
+            setError('Usuario no registrado en Supabase. Por favor, créalo en el panel de Authentication o usa Google.');
+          } else {
+            throw authError;
+          }
+        } else if (data.session) {
+          navigate('/admin/dashboard');
+        }
+        setLoading(false);
+        return;
+      }
+
       const { error: authError } = await supabase.auth.signInWithPassword({
         email,
         password
@@ -26,7 +48,7 @@ export default function LoginForm() {
       if (authError) throw authError;
       navigate('/admin/dashboard');
     } catch (err: any) {
-      setError('Credenciales incorrectas.');
+      setError(err.message === 'Invalid login credentials' ? 'Credenciales incorrectas.' : 'Error de conexión.');
       setLoading(false);
     }
   };
