@@ -21,7 +21,7 @@ export const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
 
-export type UserRole = 'directivo' | 'oficina';
+export type UserRole = 'admin' | 'directivo' | 'oficina';
 
 export interface UserProfile {
   id: string;
