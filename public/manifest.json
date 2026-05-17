@@ -2,11 +2,12 @@
   "name": "SIM Miranda",
   "short_name": "SIM",
   "description": "Sistema de Información en Salud – Estado Miranda",
-  "start_url": "/",
+  "start_url": "./index.html",
   "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "theme_color": "#0B3D5C",
-  "background_color": "#FFFFFF",
+  "background_color": "#F0F4F8",
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/3063/3063822.png",
