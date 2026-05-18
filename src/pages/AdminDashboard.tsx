@@ -5,7 +5,7 @@ import OficinaDashboard from '../components/ui/OficinaDashboard';
 import AdminPortal from '../components/ui/AdminPortal';
 import InteractiveMirandaMap from '../components/InteractiveMirandaMap';
 import { supabase } from '../lib/supabase';
-import { LogOut, User, ShieldCheck } from 'lucide-react';
+import { LogOut, User, ShieldCheck, Clock } from 'lucide-react';
 
 export default function AdminDashboard() {
   const { user, profile, loading } = useAuth();

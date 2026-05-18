@@ -43,19 +43,20 @@ ALTER TABLE public.mapa_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mapa_poligonos ENABLE ROW LEVEL SECURITY;
 
 -- 5. FUNCIÓN CRÍTICA PARA EVITAR RECURSIÓN INFINITA
--- Se usa SECURITY DEFINER para que la función pueda leer 'usuarios' saltándose el RLS.
+-- Esta función usa SECURITY DEFINER para saltarse el RLS al consultar perfiles.
+-- Se añade SET row_security TO 'off' para mayor robustez ante recursión.
 CREATE OR REPLACE FUNCTION public.get_user_role()
 RETURNS TEXT AS $$
 BEGIN
   RETURN (
     SELECT rol FROM public.usuarios
-    WHERE id = auth.uid() AND estado = 'aprobado'
+    WHERE id = auth.uid()
     LIMIT 1
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET row_security TO 'off';
 
--- POLÍTICAS PARA USUARIOS
+-- POLÍTICAS PARA USUARIOS (REVISADAS PARA EVITAR RECURSIÓN)
 DROP POLICY IF EXISTS "Usuarios ven su propio perfil" ON public.usuarios;
 CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
     FOR SELECT TO authenticated
@@ -64,7 +65,8 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
 DROP POLICY IF EXISTS "Admins gestionan todo" ON public.usuarios;
 CREATE POLICY "Admins gestionan todo" ON public.usuarios
     FOR ALL TO authenticated
-    USING (get_user_role() = 'admin');
+    USING (get_user_role() = 'admin')
+    WITH CHECK (get_user_role() = 'admin');
 
 -- POLÍTICAS PARA NOTICIAS
 DROP POLICY IF EXISTS "Lectura pública noticias" ON public.noticias;
@@ -131,3 +133,7 @@ VALUES
 ('Sistema SIG Miranda Activado', 'informativa', 'El sistema de información geográfica ha sido desplegado exitosamente.'),
 ('Alerta de Brote en Eje Metropolitano', 'urgente', 'Se reporta incremento de casos en la red ambulatoria. Favor verificar capas de SIG.')
 ON CONFLICT DO NOTHING;
+
+-- 8. TIP: SI NO PUEDES ENTRAR COMO ADMIN
+-- Ejecuta esto reemplazando el email para darte permisos manuales:
+-- UPDATE public.usuarios SET rol = 'admin', estado = 'aprobado' WHERE email = 'miranda.salud2026@gmail.com';

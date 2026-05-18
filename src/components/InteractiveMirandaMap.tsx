@@ -28,7 +28,9 @@ import {
   Loader2,
   Newspaper,
   Save,
-  Trash2
+  Trash2,
+  Database,
+  AlertCircle
 } from 'lucide-react';
 
 interface Eje {
@@ -110,6 +112,26 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const [lastAction, setLastAction] = useState<{ msg: string, type: 'success' | 'error' } | null>(null);
   const [noticias, setNoticias] = useState<any[]>([]);
   const [isNewsOpen, setIsNewsOpen] = useState(false);
+
+  const [showSqlRepair, setShowSqlRepair] = useState(false);
+
+  const sqlCode = `-- EJECUTAR EN SUPABASE SQL EDITOR
+-- Para corregir el error de recursion infinita (RLS)
+CREATE OR REPLACE FUNCTION public.get_user_role()
+RETURNS TEXT AS $$
+BEGIN
+  RETURN (SELECT rol FROM public.usuarios 
+          WHERE id = auth.uid() LIMIT 1);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Re-aplicar políticas seguras
+ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Usuarios ven su propio perfil" ON public.usuarios;
+CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
+    FOR SELECT TO authenticated
+    USING (auth.uid() = id OR (SELECT true FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin'));
+`;
 
   const notify = (msg: string, type: 'success' | 'error' = 'success') => {
     console.log(`Notification [${type}]: ${msg}`);
@@ -356,39 +378,128 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
     <div className="flex flex-col w-full h-full min-h-[500px] md:min-h-[700px] bg-[#0B1525] text-slate-200 rounded-[3rem] overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)] border border-white/5 relative">
       
       {isLoading && (
-        <div className="absolute inset-0 z-[100] bg-[#0B1525]/90 backdrop-blur-xl flex flex-col items-center justify-center gap-6">
-           <div className="relative">
-              <div className="w-16 h-16 border-4 border-blue-500/10 border-t-blue-500 rounded-full animate-spin"></div>
-              <div className="absolute inset-0 flex items-center justify-center">
-                 <div className="w-2 h-2 bg-blue-400 rounded-full animate-ping"></div>
-              </div>
-           </div>
-           <div className="flex flex-col items-center gap-2">
-              <span className="text-[10px] font-black text-white uppercase tracking-[0.4em] animate-pulse">Sincronizando SIG...</span>
-              {dbStatus === 'error' && (
-                <span className="text-[8px] text-rose-500 font-bold uppercase tracking-widest mt-2">Error en base de datos. Ver consola.</span>
-              )}
-           </div>
-           
-           <div className="flex gap-4">
-              <button 
-                onClick={() => {
-                  setIsLoading(false);
-                  notify('Modo Local Activado', 'error');
-                }}
-                className="px-6 py-2 bg-white/5 border border-white/10 rounded-full text-[8px] font-black text-slate-500 hover:text-white hover:bg-white/10 uppercase transition-all tracking-widest"
-              >
-                Omitir Sincronización
-              </button>
-              
-              <button 
-                onClick={runConnectionTest}
-                className="px-6 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full text-[8px] font-black text-blue-400 hover:text-white hover:bg-blue-500/30 uppercase transition-all tracking-widest flex items-center gap-2"
-              >
-                <RefreshCw size={10} className={dbStatus === 'testing' ? 'animate-spin' : ''} />
-                Reintentar
-              </button>
-           </div>
+        <div className="absolute inset-0 z-[100] bg-[#0B1525]/95 backdrop-blur-3xl flex flex-col items-center justify-center p-8 text-center">
+           {!showSqlRepair ? (
+             <>
+               <div className="relative mb-8">
+                  <div className="w-20 h-20 border-4 border-blue-500/10 border-t-blue-500 rounded-full animate-spin"></div>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                     <Database className="text-blue-500 animate-pulse" size={24} />
+                  </div>
+               </div>
+               
+               <div className="max-w-md">
+                  <h3 className="text-lg font-black text-white uppercase tracking-[0.3em] mb-2">SIM Miranda SIG</h3>
+                  <p className="text-xs text-slate-500 font-medium leading-relaxed mb-8">
+                    Sincronizando capas geográficas y preferencias globales con la nube de salud...
+                  </p>
+                  
+                  {dbStatus === 'error' && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-rose-500/10 border border-rose-500/20 p-6 rounded-[2rem] mb-8"
+                    >
+                      <div className="flex items-center justify-center gap-2 text-rose-500 mb-2">
+                        <AlertCircle size={16} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Error de Sincronización</span>
+                      </div>
+                      <p className="text-[10px] text-rose-400/80 mb-4 font-medium uppercase tracking-tighter">
+                         Se detectó un error de RLS (Recursión Infinita) en Supabase.
+                      </p>
+                      <button 
+                        onClick={() => setShowSqlRepair(true)}
+                        className="w-full py-3 bg-rose-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-600 transition-all shadow-lg shadow-rose-900/20 mb-3"
+                      >
+                        Ver Instrucciones de Reparación
+                      </button>
+                    </motion.div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                      <button 
+                        onClick={() => {
+                          setIsLoading(false);
+                          notify('Modo Local (Offline) forzado', 'error');
+                        }}
+                        className="px-8 py-3 bg-white/5 border border-white/10 rounded-full text-[9px] font-black text-slate-400 hover:text-white hover:bg-white/10 uppercase transition-all tracking-widest flex items-center justify-center gap-2"
+                      >
+                        <Play size={10} /> Omitir y Usar Modo Local
+                      </button>
+                      
+                      <button 
+                        onClick={runConnectionTest}
+                        className="px-8 py-3 bg-blue-500/10 border border-blue-500/20 rounded-full text-[9px] font-black text-blue-400 hover:text-white hover:bg-blue-500/30 uppercase transition-all tracking-widest flex items-center justify-center gap-2 min-w-[140px]"
+                      >
+                        <RefreshCw size={10} className={dbStatus === 'testing' ? 'animate-spin' : ''} />
+                        Reintentar
+                      </button>
+                  </div>
+               </div>
+             </>
+           ) : (
+             <motion.div 
+               initial={{ opacity: 0, scale: 0.9 }}
+               animate={{ opacity: 1, scale: 1 }}
+               className="max-w-2xl w-full bg-[#0A111E] border border-white/10 p-10 rounded-[3rem] shadow-2xl text-left"
+             >
+                <div className="flex justify-between items-start mb-6">
+                   <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-rose-500/20 rounded-2xl flex items-center justify-center text-rose-500">
+                         <Terminal size={24} />
+                      </div>
+                      <div>
+                         <h3 className="text-xl font-black text-white uppercase tracking-tight">Reparación SQL</h3>
+                         <p className="text-xs text-slate-500 font-medium">Siga estos pasos para activar la sincronización</p>
+                      </div>
+                   </div>
+                   <button onClick={() => setShowSqlRepair(false)} className="text-slate-500 hover:text-white">
+                      <X size={24} />
+                   </button>
+                </div>
+
+                <div className="space-y-6">
+                   <div className="flex gap-4">
+                      <div className="w-6 h-6 shrink-0 bg-blue-500 text-white rounded-full flex items-center justify-center text-[10px] font-black">1</div>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                         Vaya a su dashboard de <span className="text-blue-400 font-black">Supabase</span> y entre a la sección <span className="text-white font-bold">SQL Editor</span>.
+                      </p>
+                   </div>
+                   <div className="flex gap-4">
+                      <div className="w-6 h-6 shrink-0 bg-blue-500 text-white rounded-full flex items-center justify-center text-[10px] font-black">2</div>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                         Copie el siguiente código y ejecútelo presionando <span className="text-white font-bold">RUN</span>.
+                      </p>
+                   </div>
+                   
+                   <div className="relative group">
+                      <pre className="w-full bg-black/40 border border-white/5 p-6 rounded-2xl text-[10px] text-blue-300 font-mono overflow-x-auto custom-scrollbar">
+                         {sqlCode}
+                      </pre>
+                      <button 
+                        onClick={() => {
+                          navigator.clipboard.writeText(sqlCode);
+                          notify('Código SQL Copiado');
+                        }}
+                        className="absolute top-4 right-4 p-2 bg-white/10 rounded-lg text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                         <Save size={14} />
+                      </button>
+                   </div>
+
+                   <p className="text-[10px] text-amber-500/80 bg-amber-500/5 p-4 rounded-xl border border-amber-500/10 italic">
+                      <b>Nota:</b> Esto desactivará el error "infinite recursion" al separar la lógica de roles de las políticas RLS.
+                   </p>
+
+                   <button 
+                     onClick={() => { setShowSqlRepair(false); runConnectionTest(); }}
+                     className="w-full py-4 bg-white text-black rounded-2xl text-xs font-black uppercase tracking-[0.2em] hover:bg-blue-400 hover:text-white transition-all shadow-xl"
+                   >
+                      Ya ejecuté el SQL, Reintentar ahora
+                   </button>
+                </div>
+             </motion.div>
+           )}
         </div>
       )}
 
