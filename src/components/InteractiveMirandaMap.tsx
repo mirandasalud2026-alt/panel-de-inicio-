@@ -104,11 +104,16 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isExecuting, setIsExecuting] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Cargar Datos desde Supabase
   useEffect(() => {
     const fetchMapData = async () => {
-      if (!supabase) return;
+      setIsLoading(true);
+      if (!supabase) {
+        setIsLoading(false);
+        return;
+      }
 
       try {
         // 1. Cargar Configuración General
@@ -147,6 +152,8 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
       } catch (err) {
         console.error('Error loading map data:', err);
         addLog('Error al conectar con la base de datos.');
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -263,8 +270,15 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   };
 
   return (
-    <div className="flex flex-col h-full min-h-[700px] bg-[#0B1525] text-slate-200 rounded-[3rem] overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)] border border-white/5 relative">
+    <div className="flex flex-col w-full h-full min-h-[500px] md:min-h-[700px] bg-[#0B1525] text-slate-200 rounded-[3rem] overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)] border border-white/5 relative">
       
+      {isLoading && (
+        <div className="absolute inset-0 z-[100] bg-[#0B1525]/80 backdrop-blur-md flex flex-col items-center justify-center gap-4">
+           <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+           <span className="text-[10px] font-black text-white uppercase tracking-[0.3em] animate-pulse">Sincronizando SIG...</span>
+        </div>
+      )}
+
       {/* Header de Gestión Maestra (Admin Mode) */}
       {isAdminMode && (
         <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[40] flex items-center gap-4 px-8 py-3 bg-[#0A111E]/80 backdrop-blur-2xl border border-white/10 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] active:scale-95 transition-all">
@@ -281,8 +295,8 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
 
       {/* SIG CONTROLS (Solo en Admin Mode) - Integrados en página */}
       {isAdminMode && (
-        <div className="absolute top-24 right-8 z-30 flex flex-col gap-4 w-72">
-           <div className="bg-[#0A111E]/90 backdrop-blur-xl border border-white/10 p-6 rounded-[2rem] shadow-2xl flex flex-col gap-5">
+        <div className="absolute top-24 right-8 bottom-24 z-30 flex flex-col gap-4 w-72 overflow-y-auto pr-2 custom-scrollbar">
+           <div className="bg-[#0A111E]/90 backdrop-blur-xl border border-white/10 p-6 rounded-[2rem] shadow-2xl flex flex-col gap-5 shrink-0">
               <div className="flex items-center justify-between border-b border-white/5 pb-4">
                  <div className="flex flex-col">
                     <div className="flex items-center gap-2">
@@ -384,7 +398,7 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
 
            {/* Lista de Polígonos */}
            {customPolygons.length > 0 && (
-              <div className="bg-[#0A111E]/90 backdrop-blur-xl border border-white/10 p-6 rounded-[2rem] shadow-2xl flex flex-col gap-4 max-h-[200px] overflow-y-auto custom-scrollbar">
+              <div className="bg-[#0A111E]/90 backdrop-blur-xl border border-white/10 p-6 rounded-[2rem] shadow-2xl flex flex-col gap-4 max-h-[250px] overflow-y-auto custom-scrollbar shrink-0">
                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-white/5 pb-3">Capas Dibujadas</span>
                  {customPolygons.map(poly => {
                     const eje = ejes.find(e => e.id === poly.ejeId);
@@ -407,7 +421,7 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
            )}
 
            {/* Editor de Propiedades del Eje Activo */}
-           <div className="bg-[#0A111E]/90 backdrop-blur-xl border border-white/10 p-6 rounded-[2rem] shadow-2xl flex flex-col gap-4">
+           <div className="bg-[#0A111E]/90 backdrop-blur-xl border border-white/10 p-6 rounded-[2rem] shadow-2xl flex flex-col gap-4 mb-4 shrink-0">
               <div className="flex items-center justify-between border-b border-white/5 pb-3">
                  <span className="text-[10px] font-black text-white uppercase tracking-widest">Config: {activeEje.name}</span>
                  <Settings size={12} className="text-slate-500" />
@@ -476,12 +490,14 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
           {/* Fondo de Grilla Técnica */}
           <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
 
-          <svg 
-            viewBox="0 0 800 500" 
-            className="w-full h-full max-w-4xl drop-shadow-[0_40px_120px_rgba(0,0,0,1)] relative z-10 p-4 overflow-hidden bg-black/20 rounded-[2rem]"
-            onClick={handleSvgClick}
-            id="interactive-svg-map"
-          >
+          <div className="w-full h-full max-w-5xl flex items-center justify-center p-4">
+            <svg 
+              viewBox="0 0 800 500" 
+              className="w-full h-auto max-h-full drop-shadow-[0_40px_120px_rgba(0,0,0,1)] relative z-10 p-4 bg-black/20 rounded-[2rem] border border-white/5"
+              onClick={handleSvgClick}
+              id="interactive-svg-map"
+              preserveAspectRatio="xMidYMid meet"
+            >
             {/* Imagen de Fondo Cargada */}
             {backgroundImage && (
               <image 
@@ -560,6 +576,7 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
               </g>
             )}
           </svg>
+          </div>
 
           {/* Tooltip Dinámico (SaaS Style) */}
           <AnimatePresence>
