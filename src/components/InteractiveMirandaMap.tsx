@@ -234,11 +234,18 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
     if (!isDrawingMode) return;
     
     const svg = e.currentTarget;
-    const rect = svg.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 800;
-    const y = ((e.clientY - rect.top) / rect.height) * 500;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
     
-    setCurrentPoints([...currentPoints, { x, y }]);
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return;
+    
+    const svgP = pt.matrixTransform(ctm.inverse());
+    
+    if (svgP) {
+      setCurrentPoints([...currentPoints, { x: svgP.x, y: svgP.y }]);
+    }
   };
 
   const finishPolygon = async () => {
