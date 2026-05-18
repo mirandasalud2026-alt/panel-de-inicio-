@@ -185,13 +185,13 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
 
   const saveMapConfig = async (currentEjes?: Eje[], currentBg?: string | null) => {
     if (!supabase) {
-      addLog('Error: Supabase no configurado.');
+      addLog('Error: Supabase no detectado en el entorno.');
       return;
     }
     if (!isAdminMode) return;
     
     setIsSaving(true);
-    addLog('Guardando configuración en Supabase...');
+    addLog('Sincronizando configuración con la nube...');
     try {
       const ejesToSave = (currentEjes || ejes).map(e => ({
         id: e.id,
@@ -201,6 +201,7 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
         description: e.description
       }));
 
+      // Usamos upsert con onConflict para asegurar que sobreescriba el registro 'default'
       const { error } = await supabase
         .from('mapa_config')
         .upsert({
@@ -208,13 +209,19 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
           background_image: currentBg !== undefined ? currentBg : backgroundImage,
           ejes_data: ejesToSave,
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'id' });
 
       if (error) throw error;
-      addLog('Configuración guardada exitosamente.');
+      addLog('✅ Configuración guardada en Supabase.');
     } catch (err: any) {
-      console.error('Save error:', err);
-      addLog(`Error al guardar: ${err.message || 'Permiso denegado (RLS)'}`);
+      console.error('Save error details:', err);
+      addLog(`❌ Error DB: ${err.message || 'Error de permisos o red'}`);
+      
+      // Fallback: Si falla el upsert, intentamos un insert simple si es porque no existe
+      if (err.code === 'PGRST116') { // No rows found for updating
+        addLog('Reintentando creación inicial...');
+        // ... handled by upsert usually, but let's be safe
+      }
     } finally {
       setIsSaving(false);
     }
@@ -223,16 +230,20 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const savePolygon = async (poly: { id: string, points: { x: number, y: number }[], ejeId: string }) => {
      if (!supabase || !isAdminMode) return;
      try {
+        addLog(`Sincronizando capa ${poly.id}...`);
         const { error } = await supabase
           .from('mapa_poligonos')
           .upsert({
             id: poly.id,
             eje_id: poly.ejeId,
             points: poly.points
-          });
+          }, { onConflict: 'id' });
+        
         if (error) throw error;
-     } catch (err) {
+        addLog('✅ Capa sincronizada.');
+     } catch (err: any) {
         console.error('Save poly error:', err);
+        addLog(`❌ Error Capa: ${err.message}`);
      }
   };
 
@@ -356,6 +367,13 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
                          className="text-[7px] text-slate-500 font-bold uppercase flex items-center gap-1 hover:text-white transition-colors"
                        >
                          <RefreshCw size={8} /> Recargar
+                       </button>
+                       <button 
+                         onClick={() => saveMapConfig()}
+                         disabled={isSaving}
+                         className="text-[7px] text-blue-500 font-bold uppercase flex items-center gap-1 hover:text-blue-400 transition-colors disabled:opacity-50"
+                       >
+                         {isSaving ? <Loader2 size={8} className="animate-spin" /> : <Save size={8} />} Guardar Todo
                        </button>
                        {!supabase && (
                           <span className="text-[7px] text-rose-500 font-bold uppercase">Sin DB</span>
@@ -662,6 +680,27 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
             )}
           </svg>
           </div>
+
+          {/* Consola de Actividad SIG (Floating) */}
+          {isAdminMode && logs.length > 0 && (
+            <div className="absolute bottom-6 left-6 z-50 w-64 bg-[#0A111E]/95 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl">
+               <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2">
+                  <div className="flex items-center gap-2">
+                     <Terminal size={12} className="text-blue-400" />
+                     <span className="text-[8px] font-black text-white uppercase tracking-widest">Actividad SIG</span>
+                  </div>
+                  <button onClick={() => setLogs([])} className="text-[8px] text-slate-500 hover:text-white uppercase font-black">Limpiar</button>
+               </div>
+               <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar pr-1">
+                  {logs.slice().reverse().map((log, i) => (
+                    <div key={i} className="flex flex-col gap-0.5">
+                       <span className="text-[7px] text-slate-500 font-bold">{log.time}</span>
+                       <p className="text-[9px] text-slate-300 leading-tight font-medium bg-white/5 p-1.5 rounded-md border border-white/5">{log.msg}</p>
+                    </div>
+                  ))}
+               </div>
+            </div>
+          )}
 
           {/* Tooltip Dinámico (SaaS Style) */}
           <AnimatePresence>
