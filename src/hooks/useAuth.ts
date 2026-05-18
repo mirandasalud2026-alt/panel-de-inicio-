@@ -46,36 +46,60 @@ export function useAuth() {
     }
 
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!mounted) return;
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
-      if (currentUser) {
-        fetchProfile(currentUser.id, currentUser.email);
-      } else {
-        setLoading(false);
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await (supabase ? supabase.auth.getSession() : Promise.resolve({ data: { session: null } }));
+        if (!mounted) return;
+        
+        const currentUser = session?.user ?? null;
+        
+        if (currentUser) {
+          setUser(currentUser);
+          await fetchProfile(currentUser.id, currentUser.email);
+        } else if (localStorage.getItem('sim_demo_admin') === 'true') {
+          // Fallback for Demo Admin if specifically logged in via bypass
+          setUser({ email: 'miranda.salud2026@gmail.com' } as User);
+          setProfile({
+            id: 'demo-admin',
+            nombre: 'Administrador Central (Demo)',
+            email: 'miranda.salud2026@gmail.com',
+            rol: 'admin'
+          });
+          setLoading(false);
+        } else {
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('Supabase session fetch failed:', err);
+        if (mounted) setLoading(false);
       }
-    }).catch(err => {
-      console.error('Supabase session fetch failed:', err);
-      if (mounted) setLoading(false);
-    });
+    };
+
+    checkAuth();
 
     // Listen for changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!mounted) return;
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
-      if (currentUser) {
-        await fetchProfile(currentUser.id, currentUser.email);
-      } else {
-        setProfile(null);
-        setLoading(false);
-      }
-    });
+    let subscription: { unsubscribe: () => void } | null = null;
+    if (supabase) {
+      const { data } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        if (!mounted) return;
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
+        if (currentUser) {
+          localStorage.removeItem('sim_demo_admin'); // Clear bypass if real session starts
+          await fetchProfile(currentUser.id, currentUser.email);
+        } else if (localStorage.getItem('sim_demo_admin') === 'true') {
+          // Keep demo profile if bypass is active
+        } else {
+          setProfile(null);
+          setLoading(false);
+        }
+      });
+      subscription = data.subscription;
+    }
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      if (subscription) subscription.unsubscribe();
     };
   }, []); // Run once on mount
 

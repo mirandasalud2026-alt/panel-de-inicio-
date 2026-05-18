@@ -49,7 +49,11 @@ export default function AdminDashboard() {
           </div>
           
           <button 
-            onClick={() => supabase?.auth.signOut()}
+            onClick={() => {
+              localStorage.removeItem('sim_demo_admin');
+              supabase?.auth.signOut();
+              if (!supabase) window.location.href = '/login';
+            }}
             className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all shadow-sm"
             title="Cerrar sesión"
           >

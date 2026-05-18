@@ -284,11 +284,16 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
         <div className="absolute top-24 right-8 z-30 flex flex-col gap-4 w-72">
            <div className="bg-[#0A111E]/90 backdrop-blur-xl border border-white/10 p-6 rounded-[2rem] shadow-2xl flex flex-col gap-5">
               <div className="flex items-center justify-between border-b border-white/5 pb-4">
-                 <div className="flex items-center gap-2">
-                    <Edit3 size={16} className="text-blue-400" />
-                    <span className="text-[10px] font-black text-white uppercase tracking-widest">Editor SIG</span>
+                 <div className="flex flex-col">
+                    <div className="flex items-center gap-2">
+                       <Edit3 size={16} className="text-blue-400" />
+                       <span className="text-[10px] font-black text-white uppercase tracking-widest">Editor SIG</span>
+                    </div>
+                    {!supabase && (
+                       <span className="text-[7px] text-rose-500 font-bold uppercase mt-1">Sin conexión a DB</span>
+                    )}
                  </div>
-                 <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></div>
+                 <div className={`w-2.5 h-2.5 rounded-full ${supabase ? 'bg-green-500 animate-pulse' : 'bg-rose-500'}`}></div>
               </div>
 
               {/* Selector de Eje Activo */}

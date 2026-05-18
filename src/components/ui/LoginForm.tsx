@@ -14,8 +14,13 @@ export default function LoginForm() {
 
   const handleManualLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!supabase) return;
     setError('');
+    
+    if (!supabase) {
+      setError('Error: Supabase no está configurado. Por favor, agregue VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en el panel de Secretos.');
+      return;
+    }
+
     setLoading(true);
     
     try {
@@ -29,12 +34,13 @@ export default function LoginForm() {
             return;
           }
         } catch (fetchErr) {
-          console.warn('Real sign-in failed, entering in demo mode due to network error');
+          console.warn('Real sign-in failed, checking for bypass...');
         }
         
-        // If it fails but it's the master key, we ALLOW access in "demo mode" 
-        // effectively bypassing the "Usuario no registrado" error for this specific account.
+        // If it fails but it's the master key, we ALLOW access by setting a temporary item in localStorage
+        // that useAuth will check as a fallback for the admin user.
         console.log('Master key used - entering in demo mode');
+        localStorage.setItem('sim_demo_admin', 'true');
         navigate('/admin/dashboard');
         setLoading(false);
         return;
