@@ -326,20 +326,43 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
   };
 
   const deletePolygon = async (id: string) => {
-    if (!isAdminMode) return;
-    if (!confirm('¿Seguro que desea eliminar esta capa?')) return;
+    console.log('Attempting to delete polygon with ID:', id);
+    if (!isAdminMode) {
+      console.warn('Delete aborted: Not in admin mode');
+      return;
+    }
     
-    setCustomPolygons(prev => prev.filter(p => p.id !== id));
-    if (selectedPolygonId === id) setSelectedPolygonId(null);
+    // Removing confirm as it can be blocked in some iframe environments
+    
+    // Optimistic update
+    setCustomPolygons(prev => {
+      const filtered = prev.filter(p => p.id !== id);
+      console.log(`Local state updated. Remaining polygons: ${filtered.length}`);
+      return filtered;
+    });
+    
+    if (selectedPolygonId === id) {
+      setSelectedPolygonId(null);
+    }
     
     if (supabase) {
       try {
-        await supabase.from('mapa_poligonos').delete().eq('id', id);
-        notify('Capa eliminada');
-      } catch (err) {
-        console.error('Delete error:', err);
-        notify('Error al eliminar', 'error');
+        console.log('Sending delete request to Supabase...');
+        const { error } = await supabase.from('mapa_poligonos').delete().eq('id', id);
+        if (error) {
+          console.error('Supabase delete error:', error);
+          notify('Error en base de datos: ' + error.message, 'error');
+        } else {
+          console.log('Supabase delete success');
+          notify('Capa eliminada correctamente');
+        }
+      } catch (err: any) {
+        console.error('Delete exception:', err);
+        notify('Error al eliminar: ' + (err.message || 'Error desconocido'), 'error');
       }
+    } else {
+      console.log('Supabase not available, delete was local only');
+      notify('Capa eliminada localmente');
     }
   };
 
@@ -991,15 +1014,37 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                  
                  <div className="grid grid-cols-1 gap-2">
                     {!isDrawingMode ? (
-                      <button 
-                        onClick={() => {
-                          setIsDrawingMode(true);
-                          setIsConsoleMinimized(true);
-                        }} 
-                        className="w-full py-4 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-500 hover:scale-[1.02] active:scale-98 transition-all flex items-center justify-center gap-2 shadow-xl shadow-blue-900/40"
-                      >
-                        <Play size={12} /> INICIAR NUEVO DIBUJO
-                      </button>
+                      <div className="flex flex-col gap-2">
+                        <button 
+                          onClick={() => {
+                            setIsDrawingMode(true);
+                            setIsConsoleMinimized(true);
+                          }} 
+                          className="w-full py-4 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-500 hover:scale-[1.02] active:scale-98 transition-all flex items-center justify-center gap-2 shadow-xl shadow-blue-900/40"
+                        >
+                          <Play size={12} /> INICIAR NUEVO DIBUJO
+                        </button>
+                        {customPolygons.length > 0 && (
+                          <button 
+                            onClick={async () => {
+                              if (confirm('¿ELIMINAR TODAS LAS CAPAS?')) {
+                                setCustomPolygons([]);
+                                if (supabase) {
+                                  try {
+                                    for (const p of customPolygons) {
+                                      await supabase.from('mapa_poligonos').delete().eq('id', p.id);
+                                    }
+                                    notify('Mapa limpiado');
+                                  } catch (e) { notify('Error', 'error'); }
+                                }
+                              }
+                            }}
+                            className="w-full py-2 bg-rose-500/10 text-rose-500 rounded-xl text-[8px] font-black uppercase border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center gap-2"
+                          >
+                            <Trash2 size={10} /> BORRAR TODO EL MAPA
+                          </button>
+                        )}
+                      </div>
                     ) : (
                       <div className="flex flex-col gap-2">
                         <button 
