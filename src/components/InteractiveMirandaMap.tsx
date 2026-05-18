@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { supabase } from '../lib/supabase';
 import { 
   Settings, 
   ExternalLink, 
@@ -25,7 +26,8 @@ import {
   Clock,
   Play,
   Loader2,
-  Newspaper
+  Newspaper,
+  Save
 } from 'lucide-react';
 
 interface Eje {
@@ -101,14 +103,121 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const [hoveredMunicipio, setHoveredMunicipio] = useState<string | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isExecuting, setIsExecuting] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Cargar Datos desde Supabase
+  useEffect(() => {
+    const fetchMapData = async () => {
+      if (!supabase) return;
+
+      try {
+        // 1. Cargar Configuración General
+        const { data: config, error: configError } = await supabase
+          .from('mapa_config')
+          .select('*')
+          .eq('id', 'default')
+          .single();
+
+        if (config) {
+          setBackgroundImage(config.background_image);
+          if (config.ejes_data) {
+             const loadedEjes = config.ejes_data.map((e: any) => ({
+                ...e,
+                icon: INITIAL_EJES.find(ie => ie.id === e.id)?.icon || <Activity size={18} />
+             }));
+             setEjes(loadedEjes);
+             setActiveEje(loadedEjes[0]);
+          }
+        }
+
+        // 2. Cargar Polígonos
+        const { data: polygons, error: polyError } = await supabase
+          .from('mapa_poligonos')
+          .select('*');
+
+        if (polygons) {
+          setCustomPolygons(polygons.map(p => ({
+            id: p.id,
+            ejeId: p.eje_id,
+            points: p.points as { x: number, y: number }[]
+          })));
+        }
+        
+        addLog('Datos del mapa cargados desde la base de datos.');
+      } catch (err) {
+        console.error('Error loading map data:', err);
+        addLog('Error al conectar con la base de datos.');
+      }
+    };
+
+    fetchMapData();
+  }, []);
+
+  const saveMapConfig = async (currentEjes?: Eje[], currentBg?: string | null) => {
+    if (!supabase || !isAdminMode) return;
+    setIsSaving(true);
+    try {
+      const ejesToSave = (currentEjes || ejes).map(e => ({
+        id: e.id,
+        name: e.name,
+        color: e.color,
+        url: e.url,
+        description: e.description
+      }));
+
+      const { error } = await supabase
+        .from('mapa_config')
+        .upsert({
+          id: 'default',
+          background_image: currentBg !== undefined ? currentBg : backgroundImage,
+          ejes_data: ejesToSave,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+      addLog('Configuración guardada exitosamente.');
+    } catch (err) {
+      console.error('Save error:', err);
+      addLog('Error al guardar configuración.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const savePolygon = async (poly: { id: string, points: { x: number, y: number }[], ejeId: string }) => {
+     if (!supabase || !isAdminMode) return;
+     try {
+        const { error } = await supabase
+          .from('mapa_poligonos')
+          .upsert({
+            id: poly.id,
+            eje_id: poly.ejeId,
+            points: poly.points
+          });
+        if (error) throw error;
+     } catch (err) {
+        console.error('Save poly error:', err);
+     }
+  };
+
+  const deletePolygonFromDB = async (id: string) => {
+     if (!supabase || !isAdminMode) return;
+     try {
+        await supabase.from('mapa_poligonos').delete().eq('id', id);
+     } catch (err) {
+        console.error('Delete poly error:', err);
+     }
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (event) => {
-        setBackgroundImage(event.target?.result as string);
+      reader.onload = async (event) => {
+        const result = event.target?.result as string;
+        setBackgroundImage(result);
         addLog('Nueva imagen de fondo cargada.');
+        await saveMapConfig(undefined, result);
       };
       reader.readAsDataURL(file);
     }
@@ -125,7 +234,7 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
     setCurrentPoints([...currentPoints, { x, y }]);
   };
 
-  const finishPolygon = () => {
+  const finishPolygon = async () => {
     if (currentPoints.length < 3) return;
     
     const newPolygon = {
@@ -138,12 +247,14 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
     setCurrentPoints([]);
     setIsDrawingMode(false);
     addLog(`Nuevo polígono dibujado y asignado a ${activeEje.name}.`);
+    await savePolygon(newPolygon);
   };
 
   const clearCurrentPoints = () => setCurrentPoints([]);
-  const removePolygon = (id: string) => {
+  const removePolygon = async (id: string) => {
     setCustomPolygons(customPolygons.filter(p => p.id !== id));
     addLog('Polígono eliminado.');
+    await deletePolygonFromDB(id);
   };
 
   const addLog = (msg: string) => {
@@ -182,7 +293,10 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
 
               {/* Selector de Eje Activo */}
               <div className="space-y-2">
-                 <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest px-1">Seleccionar Eje de Datos</label>
+                 <div className="flex items-center justify-between px-1">
+                    <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Eje de Datos</label>
+                    {isSaving && <Loader2 size={10} className="animate-spin text-blue-400" />}
+                 </div>
                  <div className="grid grid-cols-5 gap-1.5">
                     {ejes.map((eje) => (
                        <button
@@ -216,7 +330,10 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
                  </label>
                  {backgroundImage && (
                     <button 
-                      onClick={() => setBackgroundImage(null)}
+                      onClick={async () => {
+                        setBackgroundImage(null);
+                        await saveMapConfig(undefined, null);
+                      }}
                       className="text-[7px] font-black text-rose-500 uppercase tracking-widest hover:underline flex items-center justify-center gap-1"
                     >
                       <X size={10} /> Quitar Mapa
@@ -298,9 +415,11 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
                       value={activeEje.name}
                       onChange={(e) => {
                         const newName = e.target.value;
-                        setEjes(prev => prev.map(ej => ej.id === activeEje.id ? { ...ej, name: newName } : ej));
+                        const updatedEjes = ejes.map(ej => ej.id === activeEje.id ? { ...ej, name: newName } : ej);
+                        setEjes(updatedEjes);
                         setActiveEje(prev => ({ ...prev, name: newName }));
                       }}
+                      onBlur={() => saveMapConfig()}
                       className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[10px] font-bold text-white focus:outline-none focus:border-blue-500/50"
                     />
                  </div>
@@ -312,9 +431,11 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
                         value={activeEje.url}
                         onChange={(e) => {
                           const newUrl = e.target.value;
-                          setEjes(prev => prev.map(ej => ej.id === activeEje.id ? { ...ej, url: newUrl } : ej));
+                          const updatedEjes = ejes.map(ej => ej.id === activeEje.id ? { ...ej, url: newUrl } : ej);
+                          setEjes(updatedEjes);
                           setActiveEje(prev => ({ ...prev, url: newUrl }));
                         }}
+                        onBlur={() => saveMapConfig()}
                         className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[10px] font-bold text-white focus:outline-none focus:border-blue-500/50"
                        />
                        <a href={activeEje.url} target="_blank" rel="noreferrer" className="p-2 bg-white/5 rounded-lg text-slate-400 hover:text-white transition-colors">

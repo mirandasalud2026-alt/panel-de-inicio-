@@ -56,3 +56,41 @@ CREATE TRIGGER on_auth_user_created
 -- 6. Asegurar que el usuario actual tenga rol admin
 -- Si ya te registraste con este correo, ejecuta esto:
 UPDATE public.usuarios SET rol = 'admin' WHERE email = 'miranda.salud2026@gmail.com';
+
+-- 7. Tablas para el Mapa Interactivo SIG
+-- Tabla para configuración general (Fondo, Ejes)
+CREATE TABLE IF NOT EXISTS public.mapa_config (
+    id TEXT PRIMARY KEY DEFAULT 'default',
+    background_image TEXT,
+    ejes_data JSONB,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Tabla para Polígonos Dibujados
+CREATE TABLE IF NOT EXISTS public.mapa_poligonos (
+    id TEXT PRIMARY KEY,
+    eje_id TEXT NOT NULL,
+    points JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Habilitar RLS en nuevas tablas
+ALTER TABLE public.mapa_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mapa_poligonos ENABLE ROW LEVEL SECURITY;
+
+-- Políticas: Todos pueden ver, solo Admins pueden editar
+DROP POLICY IF EXISTS "Todos pueden ver config mapa" ON public.mapa_config;
+CREATE POLICY "Todos pueden ver config mapa" ON public.mapa_config FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins pueden editar config mapa" ON public.mapa_config;
+CREATE POLICY "Admins pueden editar config mapa" ON public.mapa_config FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin')
+);
+
+DROP POLICY IF EXISTS "Todos pueden ver poligonos" ON public.mapa_poligonos;
+CREATE POLICY "Todos pueden ver poligonos" ON public.mapa_poligonos FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins pueden editar poligonos" ON public.mapa_poligonos;
+CREATE POLICY "Admins pueden editar poligonos" ON public.mapa_poligonos FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin')
+);
