@@ -33,7 +33,9 @@ import {
   Database,
   AlertCircle,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 
 interface Eje {
@@ -45,11 +47,6 @@ interface Eje {
   description: string;
 }
 
-interface LogEntry {
-  time: string;
-  msg: string;
-}
-
 interface InteractiveMirandaMapProps {
   isAdminMode?: boolean;
 }
@@ -58,7 +55,7 @@ const INITIAL_EJES: Eje[] = [
   { 
     id: 'epidemiologico', 
     name: 'Eje Epidemiológico', 
-    color: '#3B82F6', // Azul
+    color: '#3B82F6',
     icon: <Activity size={18} />, 
     url: 'https://sites.google.com/view/saludmiranda04/menu-epidemiologia',
     description: 'URL: /menu-epidemiologia'
@@ -66,7 +63,7 @@ const INITIAL_EJES: Eje[] = [
   { 
     id: 'inmunizacion', 
     name: 'Eje de Inmunización', 
-    color: '#10B981', // Verde
+    color: '#10B981',
     icon: <ShieldCheck size={18} />, 
     url: 'https://sites.google.com/view/saludmiranda04/config-vacunas',
     description: 'URL: /config-vacunas'
@@ -74,7 +71,7 @@ const INITIAL_EJES: Eje[] = [
   { 
     id: 'suministros', 
     name: 'Eje de Suministros', 
-    color: '#F59E0B', // Naranja
+    color: '#F59E0B',
     icon: <Package size={18} />, 
     url: 'https://sites.google.com/view/saludmiranda04/inventario-medico',
     description: 'URL: /inventario-medico'
@@ -82,7 +79,7 @@ const INITIAL_EJES: Eje[] = [
   { 
     id: 'personal', 
     name: 'Eje de Personal', 
-    color: '#8B5CF6', // Púrpura
+    color: '#8B5CF6',
     icon: <Users size={18} />, 
     url: 'https://sites.google.com/view/saludmiranda04/gestion-personal',
     description: 'URL: /gestion-personal'
@@ -90,13 +87,12 @@ const INITIAL_EJES: Eje[] = [
   { 
     id: 'infraestructura', 
     name: 'Eje de Infraestructura', 
-    color: '#EF4444', // Rojo
+    color: '#EF4444',
     icon: <Building2 size={18} />, 
     url: 'https://sites.google.com/view/saludmiranda04/estado-ambulatorios',
     description: 'URL: /estado-ambulatorios'
   },
 ];
-
 export default function InteractiveMirandaMap({ isAdminMode = false }: InteractiveMirandaMapProps) {
   const [activeEje, setActiveEje] = useState<Eje>(INITIAL_EJES[0]);
   const [ejes, setEjes] = useState<Eje[]>(INITIAL_EJES);
@@ -117,8 +113,11 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const [lastAction, setLastAction] = useState<{ msg: string, type: 'success' | 'error' } | null>(null);
   const [noticias, setNoticias] = useState<any[]>([]);
   const [isNewsOpen, setIsNewsOpen] = useState(false);
-
   const [showSqlRepair, setShowSqlRepair] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isLandscape, setIsLandscape] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [mapDimensions, setMapDimensions] = useState({ width: 800, height: 500 });
 
   const sqlCode = `-- EJECUTAR EN SUPABASE SQL EDITOR
 -- Para corregir el error de recursion infinita (RLS)
@@ -138,13 +137,47 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
     USING (auth.uid() = id OR (SELECT true FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin'));
 `;
 
+  useEffect(() => {
+    const checkScreen = () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      setIsMobile(width < 768);
+      setIsLandscape(width > height);
+      if (width < 480) {
+        setMapDimensions({ width: 350, height: 250 });
+      } else if (width < 768) {
+        setMapDimensions({ width: 500, height: 350 });
+      } else if (width < 1024) {
+        setMapDimensions({ width: 700, height: 450 });
+      } else {
+        setMapDimensions({ width: 800, height: 500 });
+      }
+    };
+    checkScreen();
+    window.addEventListener('resize', checkScreen);
+    window.addEventListener('orientationchange', checkScreen);
+    return () => {
+      window.removeEventListener('resize', checkScreen);
+      window.removeEventListener('orientationchange', checkScreen);
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen();
+      setIsFullscreen(false);
+    }
+  };
+
   const notify = (msg: string, type: 'success' | 'error' = 'success') => {
     console.log(`Notification [${type}]: ${msg}`);
     setLastAction({ msg, type });
     setTimeout(() => setLastAction(null), 5000);
   };
 
-  // Test de Conexión Real
   const runConnectionTest = async () => {
     if (!supabase) {
       setDbStatus('disconnected');
@@ -156,10 +189,8 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
         setTimeout(() => reject(new Error('Test timeout')), 5000)
       );
       const fetchPromise = supabase.from('mapa_config').select('id').eq('id', 'default').maybeSingle();
-      
       const response: any = await Promise.race([fetchPromise, timeoutPromise]);
       if (response.error) throw response.error;
-      
       setDbStatus('ok');
       return true;
     } catch (err: any) {
@@ -169,42 +200,30 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
     }
   };
 
-  // Cargar Datos desde Supabase
   useEffect(() => {
     let mounted = true;
     const fetchMapData = async () => {
       setIsLoading(true);
-      
-      // Intentar conectar pero no bloquear el flujo infinito si falla
       const hasConnection = await runConnectionTest();
-      
       if (!mounted) return;
-
       if (!hasConnection || !supabase) {
         setIsLoading(false);
         return;
       }
-
       try {
-        // Safe timeout for network requests
         const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error('Map fetch timeout')), 10000)
         );
-
-        // 1. Cargar Configuración General
         console.log('Fetching map config...');
         const fetchConfig = supabase
           .from('mapa_config')
           .select('*')
           .eq('id', 'default')
           .maybeSingle();
-
         const configRes: any = await Promise.race([fetchConfig, timeoutPromise]);
         const config = configRes.data;
         const configError = configRes.error;
-
         if (configError) throw configError;
-
         if (config && mounted) {
           setBackgroundImage(config.background_image);
           setBgUrlInput(config.background_image || '');
@@ -217,41 +236,31 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
              setActiveEje(loadedEjes[0]);
           }
         }
-
-        // 2. Cargar Polígonos
         console.log('Fetching polygons...');
         const fetchPolys = supabase
           .from('mapa_poligonos')
           .select('*');
-        
         const polyRes: any = await Promise.race([fetchPolys, timeoutPromise]);
         const polygons = polyRes.data;
         const polyError = polyRes.error;
-
         if (polyError) throw polyError;
-
         if (polygons && mounted) {
-          setCustomPolygons(polygons.map(p => ({
+          setCustomPolygons(polygons.map((p: any) => ({
             id: p.id,
             ejeId: p.eje_id,
             points: p.points as { x: number, y: number }[]
           })));
         }
-
-        // 3. Cargar Noticias
         const fetchNews = supabase
           .from('noticias')
           .select('*')
           .order('fecha', { ascending: false })
           .limit(5);
-
         const newsRes: any = await Promise.race([fetchNews, timeoutPromise]);
         const newsData = newsRes.data;
-        
         if (newsData && mounted) {
           setNoticias(newsData);
         }
-        
         if (mounted) console.log('Map data synchronized');
       } catch (err: any) {
         console.error('Error loading map data:', err);
@@ -265,14 +274,12 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
         }
       }
     };
-
     fetchMapData();
     return () => { mounted = false; };
   }, []);
 
   const saveMapConfig = async (currentEjes?: Eje[], currentBg?: string | null) => {
     if (!supabase || !isAdminMode) return;
-    
     setIsSaving(true);
     try {
       const ejesToSave = (currentEjes || ejes).map(e => ({
@@ -282,9 +289,7 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
         url: e.url,
         description: e.description
       }));
-
       const finalBg = currentBg !== undefined ? currentBg : backgroundImage;
-
       const { error } = await supabase
         .from('mapa_config')
         .upsert({
@@ -293,7 +298,6 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
           ejes_data: ejesToSave,
           updated_at: new Date().toISOString()
         }, { onConflict: 'id' });
-
       if (error) throw error;
       setDbStatus('ok');
       notify('Configuración sincronizada');
@@ -316,7 +320,6 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
             eje_id: poly.ejeId,
             points: poly.points
           }, { onConflict: 'id' });
-        
         if (error) throw error;
         notify('Capa guardada');
      } catch (err: any) {
@@ -331,20 +334,14 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
       console.warn('Delete aborted: Not in admin mode');
       return;
     }
-    
-    // Removing confirm as it can be blocked in some iframe environments
-    
-    // Optimistic update
     setCustomPolygons(prev => {
       const filtered = prev.filter(p => p.id !== id);
       console.log(`Local state updated. Remaining polygons: ${filtered.length}`);
       return filtered;
     });
-    
     if (selectedPolygonId === id) {
       setSelectedPolygonId(null);
     }
-    
     if (supabase) {
       try {
         console.log('Sending delete request to Supabase...');
@@ -368,18 +365,15 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
 
   const updatePolygonEje = async (polyId: string, newEjeId: string) => {
     if (!isAdminMode || !supabase) return;
-    
     const updatedPolys = customPolygons.map(p => 
       p.id === polyId ? { ...p, ejeId: newEjeId } : p
     );
     setCustomPolygons(updatedPolys);
-
     try {
       const { error } = await supabase
         .from('mapa_poligonos')
         .update({ eje_id: newEjeId })
         .eq('id', polyId);
-      
       if (error) throw error;
       notify('Vínculo actualizado');
     } catch (err) {
@@ -391,7 +385,7 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 1024 * 1024 * 5) { // 5MB limit
+      if (file.size > 1024 * 1024 * 5) {
         notify('Archivo muy pesado (>5MB)', 'error');
         return;
       }
@@ -400,7 +394,6 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
         const result = event.target?.result as string;
         setBackgroundImage(result);
         setBgUrlInput(result.startsWith('data:') ? 'Imagen Base64' : result);
-        // Guardado persistente
         await saveMapConfig(undefined, result);
       };
       reader.onerror = () => notify('Error al leer el archivo', 'error');
@@ -416,17 +409,13 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
 
   const handleSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
     if (!isDrawingMode) return;
-    
     const svg = e.currentTarget;
     const pt = svg.createSVGPoint();
     pt.x = e.clientX;
     pt.y = e.clientY;
-    
     const ctm = svg.getScreenCTM();
     if (!ctm) return;
-    
     const svgP = pt.matrixTransform(ctm.inverse());
-    
     if (svgP) {
       setCurrentPoints([...currentPoints, { x: svgP.x, y: svgP.y }]);
     }
@@ -434,13 +423,11 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
 
   const finishPolygon = async () => {
     if (currentPoints.length < 3) return;
-    
     const newPolygon = {
       id: Math.random().toString(36).substr(2, 9),
       points: currentPoints,
       ejeId: activeEje.id
     };
-    
     setCustomPolygons([...customPolygons, newPolygon]);
     setCurrentPoints([]);
     setIsDrawingMode(false);
@@ -449,16 +436,23 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
   };
 
   const clearCurrentPoints = () => setCurrentPoints([]);
-
-  const addLog = (msg: string) => {
-    console.log(`SIG Log: ${msg}`);
-  };
-
-  return (
-    <div className="flex flex-col w-full h-full bg-[#0B1525] text-slate-200 rounded-[3rem] overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)] border border-white/5 relative">
+    return (
+    <div className={`flex flex-col w-full bg-[#0B1525] text-slate-200 overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)] border border-white/5 relative
+      ${isMobile ? 'h-screen rounded-none' : 'h-full rounded-[3rem]'}
+      ${isLandscape && isMobile ? 'flex-row' : 'flex-col'}
+    `}>
       
+      {isMobile && (
+        <button
+          onClick={toggleFullscreen}
+          className="absolute top-4 right-4 z-50 p-2 bg-black/40 backdrop-blur-xl rounded-full border border-white/20 text-white"
+        >
+          {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+        </button>
+      )}
+
       {isLoading && (
-        <div className="absolute inset-0 z-[100] bg-[#0B1525]/95 backdrop-blur-3xl flex flex-col items-center justify-center p-8 text-center">
+        <div className="absolute inset-0 z-[100] bg-[#0B1525]/95 backdrop-blur-3xl flex flex-col items-center justify-center p-4 sm:p-8 text-center">
            {!showSqlRepair ? (
              <>
                <div className="relative mb-8">
@@ -467,13 +461,11 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                      <Database className="text-blue-500 animate-pulse" size={24} />
                   </div>
                </div>
-               
                <div className="max-w-md">
                   <h3 className="text-lg font-black text-white uppercase tracking-[0.3em] mb-2">SIM Miranda SIG</h3>
                   <p className="text-xs text-slate-500 font-medium leading-relaxed mb-8">
                     Sincronizando capas geográficas y preferencias globales con la nube de salud...
                   </p>
-                  
                   {!supabase && (
                     <motion.div 
                       initial={{ opacity: 0 }}
@@ -496,7 +488,6 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                       </p>
                     </motion.div>
                   )}
-                  
                   {dbStatus === 'error' && supabase && (
                     <motion.div 
                       initial={{ opacity: 0, y: 10 }}
@@ -518,7 +509,6 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                       </button>
                     </motion.div>
                   )}
-
                   <div className="flex flex-col sm:flex-row gap-3 justify-center">
                       <button 
                         onClick={() => {
@@ -529,7 +519,6 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                       >
                         <Play size={10} /> Omitir y Usar Modo Local
                       </button>
-                      
                       <button 
                         onClick={runConnectionTest}
                         className="px-8 py-3 bg-blue-500/10 border border-blue-500/20 rounded-full text-[9px] font-black text-blue-400 hover:text-white hover:bg-blue-500/30 uppercase transition-all tracking-widest flex items-center justify-center gap-2 min-w-[140px]"
@@ -560,7 +549,6 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                       <X size={24} />
                    </button>
                 </div>
-
                 <div className="space-y-6">
                    <div className="flex gap-4">
                       <div className="w-6 h-6 shrink-0 bg-blue-500 text-white rounded-full flex items-center justify-center text-[10px] font-black">1</div>
@@ -574,7 +562,6 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                          Copie el siguiente código y ejecútelo presionando <span className="text-white font-bold">RUN</span>.
                       </p>
                    </div>
-                   
                    <div className="relative group">
                       <pre className="w-full bg-black/40 border border-white/5 p-6 rounded-2xl text-[10px] text-blue-300 font-mono overflow-x-auto custom-scrollbar">
                          {sqlCode}
@@ -589,11 +576,9 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                          <Save size={14} />
                       </button>
                    </div>
-
                    <p className="text-[10px] text-amber-500/80 bg-amber-500/5 p-4 rounded-xl border border-amber-500/10 italic">
                       <b>Nota:</b> Esto desactivará el error "infinite recursion" al separar la lógica de roles de las políticas RLS.
                    </p>
-
                    <button 
                      onClick={() => { setShowSqlRepair(false); runConnectionTest(); }}
                      className="w-full py-4 bg-white text-black rounded-2xl text-xs font-black uppercase tracking-[0.2em] hover:bg-blue-400 hover:text-white transition-all shadow-xl"
@@ -606,7 +591,6 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
         </div>
       )}
 
-      {/* Panel de Noticias (Floating) */}
       {!isNewsOpen && (
         <div className="absolute bottom-6 left-6 z-50">
            <button 
@@ -624,14 +608,16 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
         </div>
       )}
 
-      {/* Drawer de Noticias */}
       <AnimatePresence>
         {isNewsOpen && (
           <motion.div
-            initial={{ x: -400 }}
+            initial={{ x: isMobile ? '100%' : -400 }}
             animate={{ x: 0 }}
-            exit={{ x: -400 }}
-            className="absolute top-0 left-0 bottom-0 w-80 bg-[#0A111E]/95 backdrop-blur-2xl border-r border-white/10 z-[60] shadow-[40px_0_100px_rgba(0,0,0,0.5)] flex flex-col"
+            exit={{ x: isMobile ? '100%' : -400 }}
+            className={`absolute top-0 bottom-0 bg-[#0A111E]/95 backdrop-blur-2xl border-white/10 z-[60] shadow-[40px_0_100px_rgba(0,0,0,0.5)] flex flex-col
+              ${isMobile ? 'right-0 left-0 border-l' : 'left-0 w-80 border-r'}
+              ${isLandscape && isMobile ? 'w-1/2' : 'w-full'}
+            `}
           >
              <div className="p-8 border-b border-white/5 flex justify-between items-center bg-blue-500/5">
                 <div className="flex items-center gap-3">
@@ -642,7 +628,6 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                    <X size={20} />
                 </button>
              </div>
-             
              <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
                 {noticias.length === 0 ? (
                   <div className="text-center py-12">
@@ -675,7 +660,6 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                   ))
                 )}
              </div>
-             
              <div className="p-6 border-t border-white/5 bg-black/20">
                 <p className="text-[9px] text-slate-500 italic text-center leading-relaxed">
                    Actualización automática vía SIM Miranda • <span className="text-blue-400 font-bold uppercase tracking-widest">SIG-CLOUD</span>
@@ -684,38 +668,40 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Header de Gestión Maestra (Admin Mode) */}
-      {isAdminMode && (
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[40] flex items-center gap-6 px-10 py-4 bg-[#0A111E]/90 backdrop-blur-3xl border border-white/20 rounded-[2rem] shadow-[0_30px_70px_rgba(0,0,0,0.8)] transition-all">
-          <div className="flex items-center gap-3 pr-6 border-r border-white/10">
+            {isAdminMode && (
+        <div className={`z-[40] flex items-center bg-[#0A111E]/90 backdrop-blur-3xl border border-white/20 shadow-[0_30px_70px_rgba(0,0,0,0.8)] transition-all
+          ${isMobile 
+            ? 'absolute top-4 left-4 right-4 px-3 py-2 rounded-2xl flex-wrap gap-2' 
+            : 'absolute top-6 left-1/2 -translate-x-1/2 px-10 py-4 rounded-[2rem] gap-6'
+          }
+          ${isLandscape && isMobile ? 'flex-row justify-between' : 'flex-col'}
+        `}>
+          <div className={`flex items-center gap-3 ${!isMobile && 'pr-6 border-r border-white/10'}`}>
              <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse shadow-[0_0_15px_rgba(34,197,94,0.6)]"></div>
              <div className="flex flex-col">
-                <span className="text-[10px] font-black text-white uppercase tracking-[0.2em] whitespace-nowrap">Gestión Maestra SIM</span>
-                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Sincronizado Cloud</span>
+                <span className="text-[8px] sm:text-[10px] font-black text-white uppercase tracking-[0.2em] whitespace-nowrap">Gestión Maestra SIM</span>
+                <span className="text-[6px] sm:text-[8px] text-slate-500 font-bold uppercase tracking-widest">Sincronizado Cloud</span>
              </div>
           </div>
-          
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
              {!isDrawingMode ? (
                <button 
                  onClick={() => {
                    setIsDrawingMode(true);
                    setIsConsoleMinimized(true);
                  }}
-                 className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-full text-[10px] font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-lg shadow-blue-900/40 flex items-center gap-2"
+                 className="px-3 sm:px-6 py-1.5 sm:py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-lg shadow-blue-900/40 flex items-center gap-1 sm:gap-2"
                >
-                 <Play size={14} fill="currentColor" /> Iniciar Dibujo
+                 <Play size={12} fill="currentColor" /> {isMobile ? 'Dibujar' : 'Iniciar Dibujo'}
                </button>
              ) : (
                <button 
                  onClick={finishPolygon}
-                 className="px-6 py-2 bg-green-600 hover:bg-green-500 text-white rounded-full text-[10px] font-black uppercase tracking-widest transition-all animate-pulse shadow-lg shadow-green-900/40 flex items-center gap-2"
+                 className="px-3 sm:px-6 py-1.5 sm:py-2 bg-green-600 hover:bg-green-500 text-white rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-widest transition-all animate-pulse shadow-lg shadow-green-900/40 flex items-center gap-1 sm:gap-2"
                >
-                 <CheckCircle2 size={14} /> Finalizar Área
+                 <CheckCircle2 size={12} /> {isMobile ? 'Finalizar' : 'Finalizar Área'}
                </button>
              )}
-             
              {isDrawingMode && (
                <button 
                  onClick={() => { 
@@ -723,18 +709,15 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                    clearCurrentPoints(); 
                    setIsConsoleMinimized(false);
                  }}
-                 className="p-2 bg-rose-500/10 text-rose-500 rounded-full border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all"
+                 className="p-1.5 sm:p-2 bg-rose-500/10 text-rose-500 rounded-full border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all"
                >
-                 <X size={16} />
+                 <X size={14} />
                </button>
              )}
           </div>
         </div>
       )}
 
-      {/* SIG CONTROLS (Solo en Admin Mode) - Eliminado de posición absoluta sidebar para mover a horizontal */}
-      
-      {/* Footer info (Solo admin mode simple indicator) */}
       {isAdminMode && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20">
            <p className="text-[8px] text-slate-600 font-black uppercase tracking-[0.5em] bg-black/40 px-6 py-2 rounded-full border border-white/5">
@@ -743,169 +726,159 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
         </div>
       )}
 
-      {/* Area del Mapa (Escenario Completo) */}
-      <main className="flex-1 relative flex flex-col overflow-hidden bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#112035] to-[#0A111E]">
-        
-
-
-        {/* El Mapa Vectorial (Fondo Oscuro con Capas de Colores) */}
-        <div className="flex-1 flex items-center justify-center relative">
+      <main className={`flex-1 relative flex overflow-hidden bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#112035] to-[#0A111E]
+        ${isLandscape && isMobile ? 'flex-row' : 'flex-col'}
+      `}>
+        <div className="flex-1 flex items-center justify-center relative p-2 sm:p-4">
           <div className="absolute inset-0 flex items-center justify-center opacity-40 pointer-events-none">
-             <div className="w-[800px] h-[800px] bg-blue-500/10 rounded-full blur-[150px]"></div>
+            <div className="w-[400px] h-[400px] sm:w-[600px] sm:h-[600px] md:w-[800px] md:h-[800px] bg-blue-500/10 rounded-full blur-[150px]"></div>
           </div>
-          
-          {/* Fondo de Grilla Técnica */}
           <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
 
-          {/* Mensaje de Guía de Dibujo */}
           <AnimatePresence>
             {isDrawingMode && (
               <motion.div 
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="absolute top-20 left-1/2 -translate-x-1/2 z-[30] bg-blue-600 px-6 py-2 rounded-full border border-blue-400 shadow-2xl pointer-events-none"
+                className={`absolute z-[30] bg-blue-600 px-4 sm:px-6 py-1.5 sm:py-2 rounded-full border border-blue-400 shadow-2xl pointer-events-none
+                  ${isMobile ? 'top-16 left-4 right-4 text-center' : 'top-20 left-1/2 -translate-x-1/2'}
+                `}
               >
-                <span className="text-[10px] font-black text-white uppercase tracking-[0.2em]">
-                  Haga clic en el mapa para definir los puntos de la capa ({currentPoints.length})
+                <span className="text-[8px] sm:text-[10px] font-black text-white uppercase tracking-[0.2em]">
+                  {isMobile ? 'Toque el mapa para definir puntos' : `Haga clic en el mapa para definir los puntos de la capa (${currentPoints.length})`}
                 </span>
               </motion.div>
             )}
           </AnimatePresence>
 
-          <div className="w-full h-full max-w-5xl flex items-center justify-center p-4">
+          <div className="w-full h-full max-w-5xl flex items-center justify-center">
             <svg 
-              viewBox="0 0 800 500" 
-              className="w-full h-auto max-h-full drop-shadow-[0_40px_120px_rgba(0,0,0,1)] relative z-10 p-4 bg-black/20 rounded-[2rem] border border-white/5"
+              viewBox={`0 0 ${mapDimensions.width} ${mapDimensions.height}`}
+              className="w-full h-auto max-h-full drop-shadow-[0_40px_120px_rgba(0,0,0,1)] relative z-10 bg-black/20 rounded-xl sm:rounded-[2rem] border border-white/5"
               onClick={handleSvgClick}
               id="interactive-svg-map"
               preserveAspectRatio="xMidYMid meet"
             >
-            {/* Imagen de Fondo Cargada */}
-            {backgroundImage && (
-              <image 
-                href={backgroundImage} 
-                x="0" 
-                y="0" 
-                width="800" 
-                height="500" 
-                preserveAspectRatio="xMidYMid meet"
-                className="opacity-90 pointer-events-none" 
-              />
-            )}
-
-            {/* Polígonos Guardados Dinómicos */}
-            {customPolygons.map((poly) => {
-              const eje = ejes.find(e => e.id === poly.ejeId) || activeEje;
-              const isSelected = selectedPolygonId === poly.id;
+              <rect width={mapDimensions.width} height={mapDimensions.height} fill="transparent" />
               
-              return (
-                <g key={poly.id} className="cursor-pointer group">
-                  <polygon 
-                    points={poly.points.map(p => `${p.x},${p.y}`).join(' ')}
-                    fill={isSelected ? `${eje.color}90` : (hoveredMunicipio === poly.id ? eje.color : `${eje.color}60`)}
-                    stroke={isSelected ? '#FFFFFF' : eje.color}
-                    strokeWidth={isSelected ? "4" : "3"}
-                    strokeOpacity={isSelected || hoveredMunicipio === poly.id ? 1 : 0.8}
-                    strokeDasharray={isSelected ? "5,5" : "none"}
-                    onMouseEnter={() => setHoveredMunicipio(poly.id)}
-                    onMouseLeave={() => setHoveredMunicipio(null)}
-                    onClick={(e) => { 
-                      e.stopPropagation(); 
-                      if (isAdminMode) {
-                        setSelectedPolygonId(isSelected ? null : poly.id);
-                      } else {
-                        window.open(eje.url, '_blank'); 
-                      }
-                    }}
-                    className="transition-all duration-300"
-                    style={{ 
-                      filter: (isSelected || hoveredMunicipio === poly.id) 
-                        ? `drop-shadow(0 0 30px ${eje.color})` 
-                        : 'none' 
-                    }}
-                  />
-                  {isAdminMode && isSelected && (
-                    <foreignObject 
-                      x={poly.points[0].x - 40} 
-                      y={poly.points[0].y - 80} 
-                      width="100" 
-                      height="120"
-                      className="overflow-visible"
-                    >
-                      <div className="flex flex-col items-center gap-3">
-                        {/* Selector de Eje Flotante */}
-                        <div className="flex gap-1.5 p-2 bg-[#0B1525]/90 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl">
-                          {ejes.map(e => (
-                            <button
-                              key={e.id}
-                              onClick={(e_evt) => { e_evt.stopPropagation(); updatePolygonEje(poly.id, e.id); }}
-                              className={`w-6 h-6 rounded-lg border-2 transition-all ${
-                                poly.ejeId === e.id ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-40 hover:opacity-100'
-                              }`}
-                              style={{ backgroundColor: e.color }}
-                              title={e.name}
-                            />
-                          ))}
+              {backgroundImage && (
+                <image 
+                  href={backgroundImage} 
+                  x="0" 
+                  y="0" 
+                  width={mapDimensions.width} 
+                  height={mapDimensions.height} 
+                  preserveAspectRatio="xMidYMid meet"
+                  className="opacity-90 pointer-events-none" 
+                />
+              )}
+
+              {customPolygons.map((poly) => {
+                const eje = ejes.find(e => e.id === poly.ejeId) || activeEje;
+                const isSelected = selectedPolygonId === poly.id;
+                return (
+                  <g key={poly.id} className="cursor-pointer group">
+                    <polygon 
+                      points={poly.points.map(p => `${p.x},${p.y}`).join(' ')}
+                      fill={isSelected ? `${eje.color}90` : (hoveredMunicipio === poly.id ? eje.color : `${eje.color}60`)}
+                      stroke={isSelected ? '#FFFFFF' : eje.color}
+                      strokeWidth={isSelected ? "4" : "3"}
+                      strokeOpacity={isSelected || hoveredMunicipio === poly.id ? 1 : 0.8}
+                      strokeDasharray={isSelected ? "5,5" : "none"}
+                      onMouseEnter={() => setHoveredMunicipio(poly.id)}
+                      onMouseLeave={() => setHoveredMunicipio(null)}
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        if (isAdminMode) {
+                          setSelectedPolygonId(isSelected ? null : poly.id);
+                        } else {
+                          window.open(eje.url, '_blank'); 
+                        }
+                      }}
+                      className="transition-all duration-300"
+                      style={{ 
+                        filter: (isSelected || hoveredMunicipio === poly.id) 
+                          ? `drop-shadow(0 0 30px ${eje.color})` 
+                          : 'none' 
+                      }}
+                    />
+                    {isAdminMode && isSelected && (
+                      <foreignObject 
+                        x={poly.points[0].x - 40} 
+                        y={poly.points[0].y - 80} 
+                        width="100" 
+                        height="120"
+                        className="overflow-visible"
+                      >
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="flex gap-1.5 p-2 bg-[#0B1525]/90 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl">
+                            {ejes.map(e => (
+                              <button
+                                key={e.id}
+                                onClick={(e_evt) => { e_evt.stopPropagation(); updatePolygonEje(poly.id, e.id); }}
+                                className={`w-6 h-6 rounded-lg border-2 transition-all ${
+                                  poly.ejeId === e.id ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-40 hover:opacity-100'
+                                }`}
+                                style={{ backgroundColor: e.color }}
+                                title={e.name}
+                              />
+                            ))}
+                          </div>
+                          <button 
+                            onClick={(e_evt) => { e_evt.stopPropagation(); deletePolygon(poly.id); }}
+                            className="w-12 h-12 flex items-center justify-center bg-rose-600 text-white rounded-full shadow-[0_10px_30px_rgba(225,29,72,0.4)] hover:bg-rose-500 transition-all hover:scale-110 active:scale-95 border-4 border-[#0B1525]"
+                            title="Eliminar Polígono"
+                          >
+                            <Trash2 size={20} />
+                          </button>
                         </div>
+                      </foreignObject>
+                    )}
+                  </g>
+                );
+              })}
 
-                        {/* Botón Central de Borrar */}
-                        <button 
-                          onClick={(e_evt) => { e_evt.stopPropagation(); deletePolygon(poly.id); }}
-                          className="w-12 h-12 flex items-center justify-center bg-rose-600 text-white rounded-full shadow-[0_10px_30px_rgba(225,29,72,0.4)] hover:bg-rose-500 transition-all hover:scale-110 active:scale-95 border-4 border-[#0B1525]"
-                          title="Eliminar Polígono"
-                        >
-                          <Trash2 size={20} />
-                        </button>
-                      </div>
-                    </foreignObject>
-                  )}
+              {currentPoints.length > 0 && (
+                <g>
+                  <polyline 
+                    points={currentPoints.map(p => `${p.x},${p.y}`).join(' ')}
+                    fill="none"
+                    stroke={activeEje.color}
+                    strokeWidth="3"
+                    className="animate-pulse"
+                  />
+                  {currentPoints.map((p, i) => (
+                    <circle key={i} cx={p.x} cy={p.y} r="5" fill="white" stroke={activeEje.color} strokeWidth="2" />
+                  ))}
                 </g>
-              );
-            })}
+              )}
 
-            {/* Polígono en Construcción (Dibujando) */}
-            {currentPoints.length > 0 && (
-              <g>
-                <polyline 
-                  points={currentPoints.map(p => `${p.x},${p.y}`).join(' ')}
-                  fill="none"
-                  stroke={activeEje.color}
-                  strokeWidth="3"
-                  className="animate-pulse"
-                />
-                {currentPoints.map((p, i) => (
-                  <circle key={i} cx={p.x} cy={p.y} r="5" fill="white" stroke={activeEje.color} strokeWidth="2" />
-                ))}
-              </g>
-            )}
-
-            {/* Marcadores de Ejemplo (Solo si no hay polígonos ni imagen) */}
-            {!backgroundImage && customPolygons.length === 0 && (
-              <g id="mapa-placeholder" className="opacity-40 animate-pulse">
-                <path
-                  d="M150,150 L250,120 L300,180 L280,260 L180,280 Z"
-                  fill={`${activeEje.color}60`}
-                  stroke={activeEje.color}
-                  strokeWidth="3"
-                />
-                <text x="180" y="215" fill="white" className="text-[12px] font-black pointer-events-none opacity-80 uppercase tracking-widest select-none shadow-black drop-shadow-md">Panel de Dibujo Activo (Suba un fondo)</text>
-              </g>
-            )}
-          </svg>
+              {!backgroundImage && customPolygons.length === 0 && (
+                <g id="mapa-placeholder" className="opacity-40 animate-pulse">
+                  <path
+                    d="M150,150 L250,120 L300,180 L280,260 L180,280 Z"
+                    fill={`${activeEje.color}60`}
+                    stroke={activeEje.color}
+                    strokeWidth="3"
+                  />
+                  <text x="180" y="215" fill="white" className="text-[12px] font-black pointer-events-none opacity-80 uppercase tracking-widest select-none shadow-black drop-shadow-md">Panel de Dibujo Activo (Suba un fondo)</text>
+                </g>
+              )}
+            </svg>
           </div>
           
-          {/* Tooltip Dinámico (SaaS Style) */}
           <AnimatePresence>
             {hoveredMunicipio && (
               <motion.div
                 initial={{ opacity: 0, y: 15, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="absolute shadow-[0_20px_50px_rgba(0,0,0,0.6)] z-50 pointer-events-none"
-                style={{ top: '25%', left: '50%', transform: 'translateX(-50%)' }}
+                className={`absolute shadow-[0_20px_50px_rgba(0,0,0,0.6)] z-50 pointer-events-none
+                  ${isMobile ? 'bottom-20 left-4 right-4' : 'top-[25%] left-[50%] -translate-x-1/2'}
+                `}
               >
-                <div className="bg-[#0A111E] border border-white/10 p-6 rounded-3xl min-w-[280px]">
+                <div className="bg-[#0A111E] border border-white/10 p-3 sm:p-6 rounded-2xl sm:rounded-3xl">
                    <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: activeEje.color }}></div>
@@ -913,7 +886,6 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                       </div>
                       <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Activo</span>
                    </div>
-                   
                    <div className="space-y-4">
                       <div className="flex justify-between items-center">
                          <span className="text-[11px] font-bold text-slate-400">Estado del Eje:</span>
@@ -932,87 +904,90 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                       </p>
                    </div>
                 </div>
-                {/* Flecha del tooltip */}
-                <div className="w-4 h-4 bg-[#0A111E] rotate-45 border-r border-b border-white/10 mx-auto -mt-2"></div>
+                {!isMobile && (
+                  <div className="w-4 h-4 bg-[#0A111E] rotate-45 border-r border-b border-white/10 mx-auto -mt-2"></div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
-        {/* Footer info Area Mapa */}
-        <div className="mt-8 flex justify-between items-center border-t border-white/5 pt-6 opacity-40">
-           <div className="flex gap-1.5">
-              {['METRO', 'ALTOS', 'TUY', 'G-G', 'BARLO'].map(m => (
-                <div key={m} className="px-2 py-0.5 border border-white/10 rounded-sm text-[8px] font-black text-slate-600">{m}</div>
-              ))}
-           </div>
-           <div className="flex items-center gap-6">
-              <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Capa de Redirección: {activeEje.url.substring(0, 30)}...</span>
-              <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">v2.6.01_STABLE</span>
-           </div>
+        <div className={`flex justify-between items-center border-t border-white/5 opacity-40
+          ${isMobile ? 'px-3 py-2 text-[7px]' : 'px-6 pt-6 text-[8px]'}
+          ${isLandscape && isMobile ? 'flex-col border-l border-t-0 px-2 w-auto' : 'flex-row'}
+        `}>
+          <div className="flex gap-1 sm:gap-1.5 flex-wrap">
+            {['METRO', 'ALTOS', 'TUY', 'G-G', 'BARLO'].map(m => (
+              <div key={m} className="px-1.5 py-0.5 border border-white/10 rounded-sm text-[6px] sm:text-[8px] font-black text-slate-600">{m}</div>
+            ))}
+          </div>
+          {!isMobile && (
+            <div className="flex items-center gap-4 sm:gap-6">
+              <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Capa: {activeEje.url.substring(0, 30)}...</span>
+              <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">v2.7.0_MOBILE</span>
+            </div>
+          )}
         </div>
       </main>
-
-      {/* CONSOLA HORIZONTAL DE ADMINISTRACIÓN (ZONA SEGURA) */}
-      {isAdminMode && (
+            {isAdminMode && (
         <div 
-          className={`bg-[#0A111E] border-t border-white/10 shrink-0 z-[60] shadow-[0_-20px_50px_rgba(0,0,0,0.5)] transition-all duration-500 ease-in-out relative ${
-            isConsoleMinimized ? 'h-10' : 'h-auto p-4'
-          }`}
-        >
-           {/* Botón de Toggle Consola */}
-           <button 
-             onClick={() => setIsConsoleMinimized(!isConsoleMinimized)}
-             className="absolute -top-10 right-10 bg-[#0A111E] border border-white/10 border-b-0 rounded-t-xl px-4 py-2 flex items-center gap-2 text-slate-400 hover:text-white transition-all shadow-2xl"
-           >
+          className={`bg-[#0A111E] border-t border-white/10 shrink-0 z-[60] shadow-[0_-20px_50px_rgba(0,0,0,0.5)] transition-all duration-500 ease-in-out relative
+            ${isConsoleMinimized ? 'h-10' : isMobile ? 'h-auto max-h-[50vh] p-2' : 'h-auto p-4'}
+            ${isLandscape && isMobile ? 'absolute bottom-0 left-0 right-0 max-h-[40vh] overflow-y-auto' : ''}
+          `}>
+            <button 
+              onClick={() => setIsConsoleMinimized(!isConsoleMinimized)}
+              className={`absolute -top-10 bg-[#0A111E] border border-white/10 border-b-0 rounded-t-xl px-3 sm:px-4 py-1.5 sm:py-2 flex items-center gap-1 sm:gap-2 text-slate-400 hover:text-white transition-all shadow-2xl
+                ${isMobile ? 'right-2' : 'right-10'}
+              `}
+            >
               {isConsoleMinimized ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              <span className="text-[10px] font-black uppercase tracking-widest">
-                {isConsoleMinimized ? 'Mostrar Herramientas' : 'Minimizar Panel'}
+              <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest">
+                {isConsoleMinimized ? 'Herramientas' : 'Minimizar'}
               </span>
-           </button>
-           
-            <div className={`flex flex-col gap-4 overflow-hidden ${isConsoleMinimized ? 'hidden' : 'flex'}`}>
-               {/* Header de la Consola */}
-               <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-4">
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                       <Terminal size={14} className="text-blue-400" />
-                       <span className="text-[10px] font-black text-white uppercase tracking-widest">BARRA DE HERRAMIENTAS SIG MIRANDA</span>
-                    </div>
-                    <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5">
-                       <div className={`w-2 h-2 rounded-full ${dbStatus === 'ok' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]'} animate-pulse`}></div>
-                       <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">{dbStatus === 'ok' ? 'Sincronizado' : 'Error de Conexión'}</span>
-                    </div>
+            </button>
+            <div className={`flex flex-col gap-2 sm:gap-4 overflow-hidden ${isConsoleMinimized ? 'hidden' : 'flex'}`}>
+              <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Terminal size={14} className="text-blue-400" />
+                    <span className="text-[10px] font-black text-white uppercase tracking-widest">BARRA DE HERRAMIENTAS SIG MIRANDA</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                     <button onClick={runConnectionTest} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors group" title="Reintentar">
-                        <span className="text-[8px] font-black uppercase opacity-0 group-hover:opacity-100 transition-opacity">Refrescar DB</span>
-                        <RefreshCw size={12} className={dbStatus === 'testing' ? 'animate-spin' : ''} />
-                     </button>
-                     <button
-                        onClick={() => saveMapConfig()}
-                        disabled={isSaving}
-                        className="py-1.5 px-6 bg-blue-600/20 border border-blue-500/30 text-blue-400 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all flex items-center gap-2 shadow-lg shadow-blue-900/20"
-                     >
-                        {isSaving ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
-                        Guardar Cambios SIG
-                     </button>
+                  <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5">
+                    <div className={`w-2 h-2 rounded-full ${dbStatus === 'ok' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]'} animate-pulse`}></div>
+                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">{dbStatus === 'ok' ? 'Sincronizado' : 'Error de Conexión'}</span>
                   </div>
-               </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button onClick={runConnectionTest} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors group" title="Reintentar">
+                    <span className="text-[8px] font-black uppercase opacity-0 group-hover:opacity-100 transition-opacity">Refrescar DB</span>
+                    <RefreshCw size={12} className={dbStatus === 'testing' ? 'animate-spin' : ''} />
+                  </button>
+                  <button
+                    onClick={() => saveMapConfig()}
+                    disabled={isSaving}
+                    className="py-1.5 px-6 bg-blue-600/20 border border-blue-500/30 text-blue-400 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all flex items-center gap-2 shadow-lg shadow-blue-900/20"
+                  >
+                    {isSaving ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
+                    Guardar Cambios SIG
+                  </button>
+                </div>
+              </div>
 
-               <div className="flex flex-row items-stretch gap-6 overflow-x-auto pb-2 custom-scrollbar">
-                  
-                  {/* Sección A: Herramientas de Dibujo y Ejes */}
-                  <div className="flex flex-col gap-3 min-w-[280px] shrink-0 bg-white/5 p-4 rounded-2xl border border-white/5 relative overflow-hidden group">
-                 <div className="absolute top-0 right-0 p-2 opacity-5">
+              <div className={`flex gap-2 sm:gap-6 overflow-x-auto pb-2 custom-scrollbar
+                ${isMobile ? 'flex-nowrap' : 'flex-wrap'}
+              `}>
+                <div className={`flex flex-col gap-2 sm:gap-3 bg-white/5 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-white/5
+                  ${isMobile ? 'min-w-[200px]' : 'min-w-[280px]'}
+                `}>
+                  <div className="absolute top-0 right-0 p-2 opacity-5">
                     <MousePointer2 size={40} />
-                 </div>
-                 <div className="flex items-center gap-2">
+                  </div>
+                  <div className="flex items-center gap-2">
                     <MousePointer2 size={12} className="text-blue-400" />
                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Creación Geográfica</span>
-                 </div>
-                 
-                 <div className="grid grid-cols-1 gap-2">
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
                     {!isDrawingMode ? (
                       <div className="flex flex-col gap-2">
                         <button 
@@ -1054,121 +1029,116 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                           <Save size={12} /> GUARDAR ÁREA ({currentPoints.length})
                         </button>
                         <div className="flex gap-2">
-                           <button onClick={clearCurrentPoints} className="flex-1 py-2 bg-white/10 text-slate-300 rounded-lg text-[8px] font-black uppercase border border-white/10 hover:bg-white/20">Limpiar</button>
-                           <button onClick={() => { setIsDrawingMode(false); clearCurrentPoints(); setIsConsoleMinimized(false); }} className="flex-1 py-2 bg-rose-500/10 text-rose-500 rounded-lg text-[8px] font-black uppercase border border-rose-500/20 hover:bg-rose-500 hover:text-white">Cancelar</button>
+                          <button onClick={clearCurrentPoints} className="flex-1 py-2 bg-white/10 text-slate-300 rounded-lg text-[8px] font-black uppercase border border-white/10 hover:bg-white/20">Limpiar</button>
+                          <button onClick={() => { setIsDrawingMode(false); clearCurrentPoints(); setIsConsoleMinimized(false); }} className="flex-1 py-2 bg-rose-500/10 text-rose-500 rounded-lg text-[8px] font-black uppercase border border-rose-500/20 hover:bg-rose-500 hover:text-white">Cancelar</button>
                         </div>
                       </div>
                     )}
-                 </div>
-              </div>
+                  </div>
+                </div>
 
-              {/* Sección B: Capas y Ejes */}
-              <div className="flex flex-col gap-3 min-w-[320px] shrink-0 bg-white/5 p-4 rounded-2xl border border-white/5">
-                 <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-3 min-w-[320px] shrink-0 bg-white/5 p-4 rounded-2xl border border-white/5">
+                  <div className="flex items-center gap-2">
                     <Layout size={12} className="text-emerald-400" />
                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Capas de Datos Miranda</span>
-                 </div>
-                 
-                 <div className="space-y-3">
+                  </div>
+                  <div className="space-y-3">
                     <div className="flex gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
-                       {ejes.map((eje) => (
-                          <button
-                            key={eje.id}
-                            onClick={() => setActiveEje(eje)}
-                            className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all border-2 ${
-                              activeEje.id === eje.id ? 'border-white scale-110 shadow-[0_0_15px_rgba(255,255,255,0.2)]' : 'border-transparent opacity-40 hover:opacity-100'
-                            }`}
-                            style={{ backgroundColor: eje.color }}
-                            title={eje.name}
-                          >
-                            {React.cloneElement(eje.icon as React.ReactElement, { size: 16 })}
-                          </button>
-                       ))}
+                      {ejes.map((eje) => (
+                        <button
+                          key={eje.id}
+                          onClick={() => setActiveEje(eje)}
+                          className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all border-2 ${
+                            activeEje.id === eje.id ? 'border-white scale-110 shadow-[0_0_15px_rgba(255,255,255,0.2)]' : 'border-transparent opacity-40 hover:opacity-100'
+                          }`}
+                          style={{ backgroundColor: eje.color }}
+                          title={eje.name}
+                        >
+                          {React.cloneElement(eje.icon as React.ReactElement, { size: 16 })}
+                        </button>
+                      ))}
                     </div>
                     <div className="bg-black/40 p-2 rounded-lg border border-white/5">
-                       <span className="text-[10px] font-black text-blue-400 uppercase tracking-tight">{activeEje.name}</span>
+                      <span className="text-[10px] font-black text-blue-400 uppercase tracking-tight">{activeEje.name}</span>
                     </div>
-                 </div>
-              </div>
+                  </div>
+                </div>
 
-              {/* Sección C: Mapa Mental / Fondo */}
-              <div className="flex flex-col gap-3 w-72 shrink-0 bg-white/5 p-4 rounded-2xl border border-white/5">
-                 <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-3 w-72 shrink-0 bg-white/5 p-4 rounded-2xl border border-white/5">
+                  <div className="flex items-center gap-2">
                     <Database size={12} className="text-amber-400" />
                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Cartografía (Fondo)</span>
-                 </div>
-                 <div className="flex flex-col gap-2">
+                  </div>
+                  <div className="flex flex-col gap-2">
                     <div className="flex gap-2">
-                       <input 
-                          type="text"
-                          placeholder="URL Fondo ImgBB"
-                          value={bgUrlInput}
-                          onChange={(e) => setBgUrlInput(e.target.value)}
-                          onBlur={handleUrlUpdate}
-                          className="flex-1 bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-[9px] font-bold text-white focus:border-blue-500/50 outline-none transition-colors"
-                       />
-                       <label className="w-10 h-10 flex items-center justify-center bg-white/10 border border-white/10 rounded-lg cursor-pointer hover:bg-white/20 transition-all">
-                          <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
-                          <Upload size={14} className="text-slate-300" />
-                       </label>
+                      <input 
+                        type="text"
+                        placeholder="URL Fondo ImgBB"
+                        value={bgUrlInput}
+                        onChange={(e) => setBgUrlInput(e.target.value)}
+                        onBlur={handleUrlUpdate}
+                        className="flex-1 bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-[9px] font-bold text-white focus:border-blue-500/50 outline-none transition-colors"
+                      />
+                      <label className="w-10 h-10 flex items-center justify-center bg-white/10 border border-white/10 rounded-lg cursor-pointer hover:bg-white/20 transition-all">
+                        <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                        <Upload size={14} className="text-slate-300" />
+                      </label>
                     </div>
-                 </div>
-              </div>
-
-              {/* Sección D: Capas Creadas Mini-Lista */}
-              {customPolygons.length > 0 && (
-                <div className="flex flex-col gap-3 flex-1 min-w-[400px] bg-white/5 p-4 rounded-2xl border border-white/5">
-                   <div className="flex items-center justify-between">
-                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Inventario de Capas ({customPolygons.length})</span>
-                     {selectedPolygonId && <button onClick={() => setSelectedPolygonId(null)} className="text-[8px] text-blue-400 font-black hover:underline uppercase">Deseleccionar</button>}
-                   </div>
-                   <div className="flex gap-3 overflow-x-auto pb-1 custom-scrollbar">
-                      {customPolygons.map(poly => {
-                          const eje = ejes.find(e => e.id === poly.ejeId);
-                          const isSelected = selectedPolygonId === poly.id;
-                          return (
-                            <div key={poly.id} className={`flex flex-col gap-2 p-3 rounded-2xl border shrink-0 min-w-[150px] transition-all ${isSelected ? 'bg-blue-500/10 border-blue-500/50 ring-2 ring-blue-500/20' : 'bg-white/5 border-white/10'}`}>
-                               <div className="flex items-center justify-between gap-3">
-                                  <button onClick={() => setSelectedPolygonId(isSelected ? null : poly.id)} className="flex items-center gap-2 flex-1 overflow-hidden group">
-                                     <div className="w-3 h-3 shrink-0 rounded-full shadow-inner" style={{ backgroundColor: eje?.color }}></div>
-                                     <span className={`text-[9px] font-black uppercase truncate ${isSelected ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>{eje?.name}</span>
-                                  </button>
-                                  <button onClick={() => deletePolygon(poly.id)} className="w-6 h-6 flex items-center justify-center bg-rose-500/10 text-rose-500 rounded-lg hover:bg-rose-600 hover:text-white transition-all">
-                                     <Trash2 size={12} />
-                                  </button>
-                               </div>
-                               {isSelected && (
-                                 <div className="flex flex-col gap-2 pt-2 border-t border-white/5">
-                                    <span className="text-[7px] text-slate-600 font-bold uppercase tracking-widest">Cambiar Eje:</span>
-                                    <div className="flex gap-1 flex-wrap">
-                                      {ejes.map(e => (
-                                        <button 
-                                          key={e.id}
-                                          onClick={() => updatePolygonEje(poly.id, e.id)}
-                                          className={`w-4 h-4 rounded-sm border transition-all ${poly.ejeId === e.id ? 'border-white scale-110' : 'border-transparent opacity-30 hover:opacity-100'}`}
-                                          style={{ backgroundColor: e.color }}
-                                          title={e.name}
-                                        />
-                                      ))}
-                                    </div>
-                                 </div>
-                               )}
-                            </div>
-                          );
-                      })}
-                   </div>
+                  </div>
                 </div>
-              )}
-               </div>
 
-           </div>
-        </div>
+                {customPolygons.length > 0 && (
+                  <div className="flex flex-col gap-3 flex-1 min-w-[400px] bg-white/5 p-4 rounded-2xl border border-white/5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Inventario de Capas ({customPolygons.length})</span>
+                      {selectedPolygonId && <button onClick={() => setSelectedPolygonId(null)} className="text-[8px] text-blue-400 font-black hover:underline uppercase">Deseleccionar</button>}
+                    </div>
+                    <div className="flex gap-3 overflow-x-auto pb-1 custom-scrollbar">
+                      {customPolygons.map(poly => {
+                        const eje = ejes.find(e => e.id === poly.ejeId);
+                        const isSelected = selectedPolygonId === poly.id;
+                        return (
+                          <div key={poly.id} className={`flex flex-col gap-2 p-3 rounded-2xl border shrink-0 min-w-[150px] transition-all ${isSelected ? 'bg-blue-500/10 border-blue-500/50 ring-2 ring-blue-500/20' : 'bg-white/5 border-white/10'}`}>
+                            <div className="flex items-center justify-between gap-3">
+                              <button onClick={() => setSelectedPolygonId(isSelected ? null : poly.id)} className="flex items-center gap-2 flex-1 overflow-hidden group">
+                                <div className="w-3 h-3 shrink-0 rounded-full shadow-inner" style={{ backgroundColor: eje?.color }}></div>
+                                <span className={`text-[9px] font-black uppercase truncate ${isSelected ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>{eje?.name}</span>
+                              </button>
+                              <button onClick={() => deletePolygon(poly.id)} className="w-6 h-6 flex items-center justify-center bg-rose-500/10 text-rose-500 rounded-lg hover:bg-rose-600 hover:text-white transition-all">
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                            {isSelected && (
+                              <div className="flex flex-col gap-2 pt-2 border-t border-white/5">
+                                <span className="text-[7px] text-slate-600 font-bold uppercase tracking-widest">Cambiar Eje:</span>
+                                <div className="flex gap-1 flex-wrap">
+                                  {ejes.map(e => (
+                                    <button 
+                                      key={e.id}
+                                      onClick={() => updatePolygonEje(poly.id, e.id)}
+                                      className={`w-4 h-4 rounded-sm border transition-all ${poly.ejeId === e.id ? 'border-white scale-110' : 'border-transparent opacity-30 hover:opacity-100'}`}
+                                      style={{ backgroundColor: e.color }}
+                                      title={e.name}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
       )}
-
 
       <style dangerouslySetInnerHTML={{ __html: `
         .custom-scrollbar::-webkit-scrollbar {
           width: 4px;
+          height: 4px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
           background: rgba(255, 255, 255, 0.02);
@@ -1179,6 +1149,31 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
         }
         #interactive-svg-map {
            cursor: ${isDrawingMode ? 'crosshair' : 'default'};
+           touch-action: ${isDrawingMode ? 'none' : 'auto'};
+           max-width: 100vw;
+           max-height: 90vh;
+        }
+        @media screen and (max-width: 768px) {
+          .map-container {
+            height: 100vh;
+            height: 100dvh;
+          }
+        }
+        @media screen and (orientation: portrait) {
+          #interactive-svg-map {
+            max-height: 60vh;
+          }
+        }
+        @media screen and (orientation: landscape) {
+          #interactive-svg-map {
+            max-height: 80vh;
+            max-width: 80vw;
+          }
+        }
+        @media screen and (max-width: 768px) {
+          input, select, textarea {
+            font-size: 16px !important;
+          }
         }
       `}} />
     </div>
