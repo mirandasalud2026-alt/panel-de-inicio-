@@ -722,4 +722,416 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
             <main className="flex-1 relative flex flex-col overflow-hidden bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#112035] to-[#0A111E]" style={{ minHeight: 0 }}>
         <div className="flex-1 flex items-center justify-center relative p-1 sm:p-4" style={{ minHeight: 0 }}>
           <div className="absolute inset-0 flex items-center justify-center opacity-40 pointer-events-none">
-            <div className="w-[400px] h-[400px] sm:w-[600px] sm:h-[600px] md
+            <div className="w-[300px] h-[300px] sm:w-[600px] sm:h-[600px] md:w-[800px] md:h-[800px] bg-blue-500/10 rounded-full blur-[150px]"></div>
+          </div>
+          <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
+
+          <AnimatePresence>
+            {isDrawingMode && (
+              <motion.div 
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className={`absolute z-[30] bg-blue-600 px-4 sm:px-6 py-1.5 sm:py-2 rounded-full border border-blue-400 shadow-2xl pointer-events-none
+                  ${isMobile ? 'top-16 left-4 right-4 text-center' : 'top-20 left-1/2 -translate-x-1/2'}
+                `}
+              >
+                <span className="text-[8px] sm:text-[10px] font-black text-white uppercase tracking-[0.2em]">
+                  {isMobile ? 'Toque el mapa para definir puntos' : `Haga clic en el mapa para definir los puntos de la capa (${currentPoints.length})`}
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="w-full h-full flex items-center justify-center" style={{ minHeight: 0, maxHeight: isMobile ? '60vh' : '80vh' }}>
+            <svg 
+              viewBox={`0 0 ${mapDimensions.width} ${mapDimensions.height}`}
+              className="w-full h-auto max-w-full max-h-full drop-shadow-[0_40px_120px_rgba(0,0,0,1)] relative z-10 bg-black/20 rounded-xl sm:rounded-[2rem] border border-white/5"
+              onClick={handleSvgClick}
+              id="interactive-svg-map"
+              preserveAspectRatio="xMidYMid meet"
+              style={{ maxWidth: '100%', maxHeight: isMobile ? '60vh' : '80vh', width: '100%', height: 'auto' }}
+            >
+              <rect width={mapDimensions.width} height={mapDimensions.height} fill="transparent" />
+              
+              {backgroundImage && (
+                <image 
+                  href={backgroundImage} 
+                  x="0" 
+                  y="0" 
+                  width={mapDimensions.width} 
+                  height={mapDimensions.height} 
+                  preserveAspectRatio="xMidYMid meet"
+                  className="opacity-90 pointer-events-none" 
+                />
+              )}
+
+              {customPolygons.map((poly) => {
+                const eje = ejes.find(e => e.id === poly.ejeId) || activeEje;
+                const isSelected = selectedPolygonId === poly.id;
+                return (
+                  <g key={poly.id} className="cursor-pointer group">
+                    <polygon 
+                      points={poly.points.map(p => `${p.x},${p.y}`).join(' ')}
+                      fill={isSelected ? `${eje.color}90` : (hoveredMunicipio === poly.id ? eje.color : `${eje.color}60`)}
+                      stroke={isSelected ? '#FFFFFF' : eje.color}
+                      strokeWidth={isSelected ? "4" : "3"}
+                      strokeOpacity={isSelected || hoveredMunicipio === poly.id ? 1 : 0.8}
+                      strokeDasharray={isSelected ? "5,5" : "none"}
+                      onMouseEnter={() => setHoveredMunicipio(poly.id)}
+                      onMouseLeave={() => setHoveredMunicipio(null)}
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        if (isAdminMode) {
+                          setSelectedPolygonId(isSelected ? null : poly.id);
+                        } else {
+                          window.open(eje.url, '_blank'); 
+                        }
+                      }}
+                      className="transition-all duration-300"
+                      style={{ 
+                        filter: (isSelected || hoveredMunicipio === poly.id) 
+                          ? `drop-shadow(0 0 30px ${eje.color})` 
+                          : 'none' 
+                      }}
+                    />
+                    {isAdminMode && isSelected && (
+                      <foreignObject 
+                        x={poly.points[0].x - 40} 
+                        y={poly.points[0].y - 80} 
+                        width="100" 
+                        height="120"
+                        className="overflow-visible"
+                      >
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="flex gap-1.5 p-2 bg-[#0B1525]/90 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl">
+                            {ejes.map(e => (
+                              <button
+                                key={e.id}
+                                onClick={(e_evt) => { e_evt.stopPropagation(); updatePolygonEje(poly.id, e.id); }}
+                                className={`w-6 h-6 rounded-lg border-2 transition-all ${
+                                  poly.ejeId === e.id ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-40 hover:opacity-100'
+                                }`}
+                                style={{ backgroundColor: e.color }}
+                                title={e.name}
+                              />
+                            ))}
+                          </div>
+                          <button 
+                            onClick={(e_evt) => { e_evt.stopPropagation(); deletePolygon(poly.id); }}
+                            className="w-12 h-12 flex items-center justify-center bg-rose-600 text-white rounded-full shadow-[0_10px_30px_rgba(225,29,72,0.4)] hover:bg-rose-500 transition-all hover:scale-110 active:scale-95 border-4 border-[#0B1525]"
+                            title="Eliminar Polígono"
+                          >
+                            <Trash2 size={20} />
+                          </button>
+                        </div>
+                      </foreignObject>
+                    )}
+                  </g>
+                );
+              })}
+
+              {currentPoints.length > 0 && (
+                <g>
+                  <polyline 
+                    points={currentPoints.map(p => `${p.x},${p.y}`).join(' ')}
+                    fill="none"
+                    stroke={activeEje.color}
+                    strokeWidth="3"
+                    className="animate-pulse"
+                  />
+                  {currentPoints.map((p, i) => (
+                    <circle key={i} cx={p.x} cy={p.y} r="5" fill="white" stroke={activeEje.color} strokeWidth="2" />
+                  ))}
+                </g>
+              )}
+
+              {!backgroundImage && customPolygons.length === 0 && (
+                <g id="mapa-placeholder" className="opacity-40 animate-pulse">
+                  <path
+                    d="M150,150 L250,120 L300,180 L280,260 L180,280 Z"
+                    fill={`${activeEje.color}60`}
+                    stroke={activeEje.color}
+                    strokeWidth="3"
+                  />
+                  <text x="180" y="215" fill="white" className="text-[12px] font-black pointer-events-none opacity-80 uppercase tracking-widest select-none shadow-black drop-shadow-md">Panel de Dibujo Activo (Suba un fondo)</text>
+                </g>
+              )}
+            </svg>
+          </div>
+          
+          <AnimatePresence>
+            {hoveredMunicipio && (
+              <motion.div
+                initial={{ opacity: 0, y: 15, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className={`absolute shadow-[0_20px_50px_rgba(0,0,0,0.6)] z-50 pointer-events-none
+                  ${isMobile ? 'bottom-20 left-4 right-4' : 'top-[25%] left-[50%] -translate-x-1/2'}
+                `}
+              >
+                <div className="bg-[#0A111E] border border-white/10 p-3 sm:p-6 rounded-2xl sm:rounded-3xl">
+                   <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: activeEje.color }}></div>
+                         <span className="text-[10px] font-black text-white uppercase tracking-[0.2em]">{hoveredMunicipio}</span>
+                      </div>
+                      <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Activo</span>
+                   </div>
+                   <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                         <span className="text-[11px] font-bold text-slate-400">Estado del Eje:</span>
+                         <span className="text-[11px] font-black text-white" style={{ color: activeEje.color }}>45.8% (Medio)</span>
+                      </div>
+                      <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden border border-white/5">
+                         <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: '45.8%' }}
+                            className="h-full" 
+                            style={{ backgroundColor: activeEje.color }}
+                         ></motion.div>
+                      </div>
+                      <p className="text-[9px] text-slate-500 leading-tight border-t border-white/5 pt-3 font-medium">
+                        Reporte automático vía SIM: Recibido hace 12m desde el CDI principal.
+                      </p>
+                   </div>
+                </div>
+                {!isMobile && (
+                  <div className="w-4 h-4 bg-[#0A111E] rotate-45 border-r border-b border-white/10 mx-auto -mt-2"></div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <div className={`flex justify-between items-center border-t border-white/5 opacity-40
+          ${isMobile ? 'px-3 py-2 text-[7px]' : 'px-6 pt-6 text-[8px]'}
+        `}>
+          <div className="flex gap-1 sm:gap-1.5 flex-wrap">
+            {['METRO', 'ALTOS', 'TUY', 'G-G', 'BARLO'].map(m => (
+              <div key={m} className="px-1.5 py-0.5 border border-white/10 rounded-sm text-[6px] sm:text-[8px] font-black text-slate-600">{m}</div>
+            ))}
+          </div>
+          {!isMobile && (
+            <div className="flex items-center gap-4 sm:gap-6">
+              <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Capa: {activeEje.url.substring(0, 30)}...</span>
+              <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">v2.8.0_MOBILE</span>
+            </div>
+          )}
+        </div>
+      </main>
+            {isAdminMode && (
+        <div 
+          className={`bg-[#0A111E] border-t border-white/10 shrink-0 z-[60] shadow-[0_-20px_50px_rgba(0,0,0,0.5)] transition-all duration-500 ease-in-out relative
+            ${isConsoleMinimized ? 'h-10' : 'h-auto max-h-[50vh] p-2 sm:p-4 overflow-y-auto'}
+          `}>
+            <button 
+              onClick={() => setIsConsoleMinimized(!isConsoleMinimized)}
+              className={`absolute -top-10 bg-[#0A111E] border border-white/10 border-b-0 rounded-t-xl px-3 sm:px-4 py-1.5 sm:py-2 flex items-center gap-1 sm:gap-2 text-slate-400 hover:text-white transition-all shadow-2xl
+                ${isMobile ? 'right-2' : 'right-10'}
+              `}
+            >
+              {isConsoleMinimized ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest">
+                {isConsoleMinimized ? 'Herramientas' : 'Minimizar'}
+              </span>
+            </button>
+            <div className={`flex flex-col gap-2 sm:gap-4 overflow-hidden ${isConsoleMinimized ? 'hidden' : 'flex'}`}>
+              <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-4 flex-wrap gap-2">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Terminal size={14} className="text-blue-400" />
+                    <span className="text-[10px] font-black text-white uppercase tracking-widest">HERRAMIENTAS SIG</span>
+                  </div>
+                  <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5">
+                    <div className={`w-2 h-2 rounded-full ${dbStatus === 'ok' ? 'bg-green-500' : 'bg-rose-500'} animate-pulse`}></div>
+                    <span className="text-[8px] font-bold text-slate-400 uppercase">{dbStatus === 'ok' ? 'OK' : 'ERROR'}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button onClick={runConnectionTest} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
+                    <RefreshCw size={12} className={dbStatus === 'testing' ? 'animate-spin' : ''} />
+                  </button>
+                  <button
+                    onClick={() => saveMapConfig()}
+                    disabled={isSaving}
+                    className="py-1.5 px-6 bg-blue-600/20 border border-blue-500/30 text-blue-400 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all flex items-center gap-2"
+                  >
+                    {isSaving ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
+                    Guardar
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-2 sm:gap-6 overflow-x-auto pb-2 custom-scrollbar flex-nowrap">
+                <div className="flex flex-col gap-2 sm:gap-3 bg-white/5 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-white/5 min-w-[200px] sm:min-w-[280px]">
+                  <div className="flex items-center gap-2">
+                    <MousePointer2 size={12} className="text-blue-400" />
+                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Dibujo</span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    {!isDrawingMode ? (
+                      <div className="flex flex-col gap-2">
+                        <button 
+                          onClick={() => {
+                            setIsDrawingMode(true);
+                            setIsConsoleMinimized(true);
+                          }} 
+                          className="w-full py-4 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-500 transition-all flex items-center justify-center gap-2"
+                        >
+                          <Play size={12} /> NUEVO DIBUJO
+                        </button>
+                        {customPolygons.length > 0 && (
+                          <button 
+                            onClick={async () => {
+                              if (confirm('¿ELIMINAR TODAS LAS CAPAS?')) {
+                                setCustomPolygons([]);
+                                if (supabase) {
+                                  try {
+                                    for (const p of customPolygons) {
+                                      await supabase.from('mapa_poligonos').delete().eq('id', p.id);
+                                    }
+                                    notify('Mapa limpiado');
+                                  } catch (e) { notify('Error', 'error'); }
+                                }
+                              }
+                            }}
+                            className="w-full py-2 bg-rose-500/10 text-rose-500 rounded-xl text-[8px] font-black uppercase border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center gap-2"
+                          >
+                            <Trash2 size={10} /> BORRAR TODO
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <button 
+                          onClick={finishPolygon} 
+                          className="w-full py-4 bg-green-600 text-white rounded-xl text-[10px] font-black uppercase animate-pulse flex items-center justify-center gap-2"
+                        >
+                          <Save size={12} /> GUARDAR ({currentPoints.length})
+                        </button>
+                        <div className="flex gap-2">
+                          <button onClick={clearCurrentPoints} className="flex-1 py-2 bg-white/10 text-slate-300 rounded-lg text-[8px] font-black uppercase">Limpiar</button>
+                          <button onClick={() => { setIsDrawingMode(false); clearCurrentPoints(); setIsConsoleMinimized(false); }} className="flex-1 py-2 bg-rose-500/10 text-rose-500 rounded-lg text-[8px] font-black uppercase">Cancelar</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 min-w-[250px] sm:min-w-[320px] bg-white/5 p-4 rounded-2xl border border-white/5">
+                  <div className="flex items-center gap-2">
+                    <Layout size={12} className="text-emerald-400" />
+                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Capas</span>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+                      {ejes.map((eje) => (
+                        <button
+                          key={eje.id}
+                          onClick={() => setActiveEje(eje)}
+                          className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all border-2 ${
+                            activeEje.id === eje.id ? 'border-white scale-110' : 'border-transparent opacity-40 hover:opacity-100'
+                          }`}
+                          style={{ backgroundColor: eje.color }}
+                          title={eje.name}
+                        >
+                          {React.cloneElement(eje.icon as React.ReactElement, { size: 16 })}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="bg-black/40 p-2 rounded-lg border border-white/5">
+                      <span className="text-[10px] font-black text-blue-400 uppercase">{activeEje.name}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 w-56 sm:w-72 bg-white/5 p-4 rounded-2xl border border-white/5">
+                  <div className="flex items-center gap-2">
+                    <Database size={12} className="text-amber-400" />
+                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Fondo</span>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <input 
+                        type="text"
+                        placeholder="URL Imagen"
+                        value={bgUrlInput}
+                        onChange={(e) => setBgUrlInput(e.target.value)}
+                        onBlur={handleUrlUpdate}
+                        className="flex-1 bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-[9px] font-bold text-white focus:border-blue-500/50 outline-none"
+                      />
+                      <label className="w-10 h-10 flex items-center justify-center bg-white/10 border border-white/10 rounded-lg cursor-pointer hover:bg-white/20 transition-all">
+                        <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                        <Upload size={14} className="text-slate-300" />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+      )}
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+          height: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.02);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 10px;
+        }
+        #interactive-svg-map {
+          cursor: ${isDrawingMode ? 'crosshair' : 'default'};
+          touch-action: ${isDrawingMode ? 'none' : 'auto'};
+          max-width: 100% !important;
+          max-height: ${isMobile ? '60vh' : '80vh'} !important;
+          width: 100% !important;
+          height: auto !important;
+        }
+        @media screen and (max-width: 768px) {
+          #interactive-svg-map {
+            max-height: 55vh !important;
+          }
+          input, select, textarea {
+            font-size: 16px !important;
+          }
+        }
+        @media screen and (orientation: portrait) and (max-width: 768px) {
+          #interactive-svg-map {
+            max-height: 50vh !important;
+          }
+        }
+        @media screen and (orientation: landscape) and (max-width: 768px) {
+          #interactive-svg-map {
+            max-height: 65vh !important;
+          }
+        }
+      `}} />
+    </div>
+  );
+}
+
+function MapPin({ size, style }: { size: number, style?: React.CSSProperties }) {
+  return (
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      width={size} 
+      height={size} 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+      style={style}
+    >
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+      <circle cx="12" cy="10" r="3"></circle>
+    </svg>
+  );
+}
