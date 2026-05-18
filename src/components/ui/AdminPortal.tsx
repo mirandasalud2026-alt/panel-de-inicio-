@@ -16,7 +16,6 @@ import {
   Mountain,
   Palmtree, 
   BarChart,
-  HardDrive,
   Eraser,
   PenBox,
   CheckCircle2,
@@ -252,7 +251,6 @@ export default function AdminPortal() {
     { id: 'syncVT', name: 'Valles del Tuy', desc: 'Sincronizar solo ASICs de Valles del Tuy', icon: <Palmtree />, color: 'bg-indigo-500' },
     { id: 'report', name: 'Generar Reporte', desc: 'Crea reporte semanal consolidado en PDF', icon: <BarChart />, color: 'bg-amber-500' },
     { id: 'cache', name: 'Limpiar Caché', desc: 'Limpia la caché de datos y fuerza actualización', icon: <Eraser />, color: 'bg-rose-500' },
-    { id: 'backup', name: 'Respaldo Completo', desc: 'Backup de todas las hojas a Google Drive', icon: <HardDrive />, color: 'bg-slate-700' },
   ];
 
   return (

@@ -4,21 +4,13 @@ import DirectorDashboard from '../components/ui/DirectorDashboard';
 import OficinaDashboard from '../components/ui/OficinaDashboard';
 import AdminPortal from '../components/ui/AdminPortal';
 import InteractiveMirandaMap from '../components/InteractiveMirandaMap';
-import DrivePicker from '../components/DrivePicker';
+import { WorkspaceManager } from '../components/ui/WorkspaceManager';
 import { supabase } from '../lib/supabase';
-import { initGoogleAuth } from '../lib/googleAuth';
 import { LogOut, User, ShieldCheck, Clock, FileCheck, ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 export default function AdminDashboard() {
   const { user, profile, loading } = useAuth();
-  const [selectedFile, setSelectedFile] = useState<any>(null);
-
-  useEffect(() => {
-    // Initialize Google Auth (for Picker)
-    const unsubscribe = initGoogleAuth();
-    return () => unsubscribe();
-  }, []);
 
   if (loading) {
     return (
@@ -123,50 +115,7 @@ export default function AdminDashboard() {
         {profile.rol === 'directivo' && <DirectorDashboard />}
         {profile.rol === 'oficina' && <OficinaDashboard />}
 
-        {/* Google Drive Integration Testing Section */}
-        <section className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
-            <div>
-              <h3 className="text-xl font-black text-gray-800 uppercase tracking-tight flex items-center gap-3">
-                <FileCheck className="text-blue-500" />
-                Recursos Externos (Google Drive)
-              </h3>
-              <p className="text-xs text-gray-400 font-medium mt-1">Conecta y selecciona documentos oficiales para el SIG Miranda</p>
-            </div>
-            <DrivePicker 
-              onFileSelect={(file) => setSelectedFile(file)} 
-              buttonLabel="Abrir Selector Google Drive"
-              className="w-full md:w-auto py-3 px-8 shadow-lg shadow-blue-500/20"
-            />
-          </div>
-
-          {selectedFile ? (
-            <div className="bg-blue-50/50 border border-blue-100 p-6 rounded-2xl flex flex-col sm:flex-row items-center gap-6 animate-in fade-in slide-in-from-bottom-4">
-              <div className="w-16 h-16 bg-white rounded-xl shadow-sm flex items-center justify-center border border-blue-100">
-                <img src={selectedFile.iconUrl} alt="icon" className="w-8 h-8" />
-              </div>
-              <div className="flex-1 text-center sm:text-left">
-                <h4 className="text-sm font-black text-[#0B3D5C] truncate max-w-xs md:max-w-md">{selectedFile.name}</h4>
-                <div className="flex flex-wrap justify-center sm:justify-start gap-4 mt-2">
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">ID: {selectedFile.id}</span>
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">TIPO: {selectedFile.mimeType.split('.').pop()}</span>
-                </div>
-              </div>
-              <a 
-                href={selectedFile.url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-blue-600 hover:text-blue-800 font-black text-[10px] uppercase tracking-widest group"
-              >
-                Ver Documento <ExternalLink size={12} className="group-hover:translate-x-1 transition-transform" />
-              </a>
-            </div>
-          ) : (
-            <div className="border-2 border-dashed border-gray-100 rounded-3xl p-12 text-center">
-              <p className="text-xs text-gray-300 font-bold uppercase tracking-[0.2em]">No hay archivos vinculados</p>
-            </div>
-          )}
-        </section>
+        {profile.rol === 'admin' && <WorkspaceManager />}
       </main>
 
       <footer className="mt-8 px-6 text-center opacity-30">
