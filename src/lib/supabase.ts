@@ -28,6 +28,7 @@ export interface UserProfile {
   nombre: string;
   email: string;
   rol: UserRole;
+  estado?: 'pendiente' | 'aprobado' | 'rechazado';
 }
 
 export interface HealthReport {

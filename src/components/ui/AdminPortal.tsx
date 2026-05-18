@@ -97,8 +97,11 @@ export default function AdminPortal() {
       const { data, error } = await supabase.from('usuarios').select('*');
       if (error) throw error;
       setSystemUsers(data || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching users:', err);
+      if (err.message?.includes('recursion')) {
+        agregarLog('⚠️ Error RLS Detectado: Ejecute el SQL de database-setup.sql en Supabase.');
+      }
     }
   };
 
@@ -465,20 +468,42 @@ export default function AdminPortal() {
           >
             <div className="flex items-center gap-3 mb-6">
                <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-blue-400">
-                  <Settings />
+                  <Database />
                </div>
                <div>
-                  <h3 className="text-lg font-bold text-gray-800 uppercase tracking-tight">Preferencias del Sistema</h3>
-                  <p className="text-[10px] text-gray-400 font-medium">Control de capas y comportamiento global</p>
+                  <h3 className="text-lg font-bold text-gray-800 uppercase tracking-tight">Estructura del Sistema</h3>
+                  <p className="text-[10px] text-gray-400 font-medium">Configuración de tablas y seguridad RLS</p>
+               </div>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 p-6 rounded-[2.5rem] mb-6">
+               <h4 className="text-sm font-bold text-amber-800 flex items-center gap-2 mb-2">
+                 <AlertCircle size={16} /> Acción Requerida en Supabase
+               </h4>
+               <p className="text-xs text-amber-700 leading-relaxed mb-4">
+                 Para que el portal funcione correctamente (Noticias, Usuarios y SIG), debe ejecutar el script SQL de configuración en su consola de Supabase. Esto solucionará el error de <b>"infinite recursion"</b>.
+               </p>
+               <div className="bg-slate-900 rounded-xl p-4 overflow-hidden relative">
+                  <pre className="text-[9px] text-blue-300 font-mono overflow-x-auto custom-scrollbar">
+                    {`-- SQL DE EMERGENCIA (Fragmento)
+CREATE OR REPLACE FUNCTION public.get_user_role()
+RETURNS TEXT AS $$
+BEGIN
+  RETURN (SELECT rol FROM public.usuarios 
+          WHERE id = auth.uid() LIMIT 1);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;`}
+                  </pre>
+                  <div className="absolute top-2 right-2 px-2 py-1 bg-white/10 rounded text-[8px] font-bold text-white uppercase">Ver archivo database-setup.sql</div>
                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
                {[
-                  { label: 'Sincronización Automática', desc: 'Cada 15 minutos sincroniza ASICs', active: true },
-                  { label: 'Alertas de Brotes', desc: 'Notifica urgencias al canal regional', active: true },
-                  { label: 'Acceso Invitado', desc: 'Permite visualización sin login', active: false },
-                  { label: 'Modo Offline', desc: 'Carga datos de respaldo si falla API', active: true },
+                  { label: 'Sincronización Cloud', desc: 'Conectado a la tabla mapa_config', active: !!supabase },
+                  { label: 'Gestión de Noticias', desc: 'Tabla "noticias" operacional', active: noticias.length > 0 },
+                  { label: 'Seguridad RLS', desc: 'Protección de capas por rol admin', active: true },
+                  { label: 'Control de Usuarios', desc: 'Acreditación manual activada', active: systemUsers.length > 0 },
                ].map((c, i) => (
                   <div key={i} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
                      <div className="flex justify-between items-start mb-4">
