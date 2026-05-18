@@ -105,6 +105,7 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const [editingEje, setEditingEje] = useState<Eje | null>(null);
   const [editForm, setEditForm] = useState({ name: '', url: '', color: '', description: '' });
   const [hoveredMunicipio, setHoveredMunicipio] = useState<string | null>(null);
+  const [selectedPolygonId, setSelectedPolygonId] = useState<string | null>(null);
   const [isExecuting, setIsExecuting] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -315,13 +316,42 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
   };
 
   const deletePolygon = async (id: string) => {
+    if (!isAdminMode) return;
+    if (!confirm('¿Seguro que desea eliminar esta capa?')) return;
+    
     setCustomPolygons(prev => prev.filter(p => p.id !== id));
-    if (supabase && isAdminMode) {
+    if (selectedPolygonId === id) setSelectedPolygonId(null);
+    
+    if (supabase) {
       try {
         await supabase.from('mapa_poligonos').delete().eq('id', id);
+        notify('Capa eliminada');
       } catch (err) {
         console.error('Delete error:', err);
+        notify('Error al eliminar', 'error');
       }
+    }
+  };
+
+  const updatePolygonEje = async (polyId: string, newEjeId: string) => {
+    if (!isAdminMode || !supabase) return;
+    
+    const updatedPolys = customPolygons.map(p => 
+      p.id === polyId ? { ...p, ejeId: newEjeId } : p
+    );
+    setCustomPolygons(updatedPolys);
+
+    try {
+      const { error } = await supabase
+        .from('mapa_poligonos')
+        .update({ eje_id: newEjeId })
+        .eq('id', polyId);
+      
+      if (error) throw error;
+      notify('Vínculo actualizado');
+    } catch (err) {
+      console.error('Update poly error:', err);
+      notify('Error al actualizar', 'error');
     }
   };
 
@@ -802,27 +832,77 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
               </div>
            </div>
 
-           {/* Lista de Polígonos */}
+           {/* Lista de Polígonos y Editor de Capas */}
            {customPolygons.length > 0 && (
-              <div className="bg-[#0A111E]/90 backdrop-blur-xl border border-white/10 p-6 rounded-[2rem] shadow-2xl flex flex-col gap-4 max-h-[250px] overflow-y-auto custom-scrollbar shrink-0">
-                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-white/5 pb-3">Capas Dibujadas</span>
-                 {customPolygons.map(poly => {
-                    const eje = ejes.find(e => e.id === poly.ejeId);
-                    return (
-                      <div key={poly.id} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
-                         <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: eje?.color }}></div>
-                            <span className="text-[8px] font-black text-slate-300 uppercase truncate max-w-[100px]">{eje?.name}</span>
-                         </div>
-                         <button 
-                          onClick={() => deletePolygon(poly.id)}
-                          className="text-slate-600 hover:text-rose-500 transition-colors"
-                         >
-                            <Trash2 size={12} />
-                         </button>
-                      </div>
-                    );
-                 })}
+              <div className="bg-[#0A111E]/90 backdrop-blur-xl border border-white/10 p-6 rounded-[2rem] shadow-2xl flex flex-col gap-4 max-h-[350px] overflow-y-auto custom-scrollbar shrink-0">
+                 <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Capas Dibujadas ({customPolygons.length})</span>
+                    {selectedPolygonId && (
+                      <button onClick={() => setSelectedPolygonId(null)} className="text-[8px] text-blue-400 font-bold hover:underline">Limpiar Selección</button>
+                    )}
+                 </div>
+                 
+                 <div className="space-y-2">
+                  {customPolygons.map(poly => {
+                      const eje = ejes.find(e => e.id === poly.ejeId);
+                      const isSelected = selectedPolygonId === poly.id;
+                      
+                      return (
+                        <div 
+                          key={poly.id} 
+                          className={`flex flex-col gap-3 p-3 rounded-2xl border transition-all ${
+                            isSelected ? 'bg-blue-500/10 border-blue-500/50' : 'bg-white/5 border-white/5'
+                          }`}
+                        >
+                           <div className="flex items-center justify-between">
+                              <button 
+                                onClick={() => setSelectedPolygonId(isSelected ? null : poly.id)}
+                                className="flex items-center gap-2 flex-1 text-left"
+                              >
+                                 <div className="w-3 h-3 rounded-md shadow-sm" style={{ backgroundColor: eje?.color }}></div>
+                                 <span className={`text-[9px] font-black uppercase truncate ${isSelected ? 'text-white' : 'text-slate-400'}`}>
+                                    {eje?.name}
+                                 </span>
+                              </button>
+                              <div className="flex items-center gap-2">
+                                <button 
+                                  onClick={() => deletePolygon(poly.id)}
+                                  className="text-slate-600 hover:text-rose-500 transition-colors"
+                                  title="Eliminar"
+                                >
+                                    <Trash2 size={12} />
+                                </button>
+                              </div>
+                           </div>
+
+                           {/* Mini editor si está seleccionado */}
+                           {isSelected && (
+                             <motion.div 
+                               initial={{ opacity: 0, height: 0 }}
+                               animate={{ opacity: 1, height: 'auto' }}
+                               className="space-y-3 pt-2 border-t border-white/5"
+                             >
+                                <label className="text-[8px] font-black text-slate-500 uppercase block">Vincular a Eje:</label>
+                                <div className="grid grid-cols-5 gap-1.5">
+                                  {ejes.map(e => (
+                                    <button 
+                                      key={e.id}
+                                      onClick={() => updatePolygonEje(poly.id, e.id)}
+                                      className={`w-full aspect-square rounded-lg border transition-all ${
+                                        poly.ejeId === e.id ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-40 hover:opacity-100'
+                                      }`}
+                                      style={{ backgroundColor: e.color }}
+                                      title={e.name}
+                                    />
+                                  ))}
+                                </div>
+                                <p className="text-[7px] text-slate-500 italic">Clic en el mapa para anular selección</p>
+                             </motion.div>
+                           )}
+                        </div>
+                      );
+                  })}
+                 </div>
               </div>
            )}
 
@@ -935,33 +1015,51 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
             {/* Polígonos Guardados Dinómicos */}
             {customPolygons.map((poly) => {
               const eje = ejes.find(e => e.id === poly.ejeId) || activeEje;
+              const isSelected = selectedPolygonId === poly.id;
+              
               return (
                 <g key={poly.id} className="cursor-pointer group">
                   <polygon 
                     points={poly.points.map(p => `${p.x},${p.y}`).join(' ')}
-                    fill={hoveredMunicipio === poly.id ? eje.color : `${eje.color}60`}
-                    stroke={eje.color}
-                    strokeWidth="3"
-                    strokeOpacity={hoveredMunicipio === poly.id ? 1 : 0.8}
+                    fill={isSelected ? `${eje.color}90` : (hoveredMunicipio === poly.id ? eje.color : `${eje.color}60`)}
+                    stroke={isSelected ? '#FFFFFF' : eje.color}
+                    strokeWidth={isSelected ? "4" : "3"}
+                    strokeOpacity={isSelected || hoveredMunicipio === poly.id ? 1 : 0.8}
+                    strokeDasharray={isSelected ? "5,5" : "none"}
                     onMouseEnter={() => setHoveredMunicipio(poly.id)}
                     onMouseLeave={() => setHoveredMunicipio(null)}
-                    onClick={(e) => { e.stopPropagation(); if(!isAdminMode) window.open(eje.url, '_blank'); }}
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      if (isAdminMode) {
+                        setSelectedPolygonId(isSelected ? null : poly.id);
+                      } else {
+                        window.open(eje.url, '_blank'); 
+                      }
+                    }}
                     className="transition-all duration-300"
-                    style={{ filter: hoveredMunicipio === poly.id ? `drop-shadow(0 0 30px ${eje.color})` : 'none' }}
+                    style={{ 
+                      filter: (isSelected || hoveredMunicipio === poly.id) 
+                        ? `drop-shadow(0 0 30px ${eje.color})` 
+                        : 'none' 
+                    }}
                   />
-                  {isAdminMode && hoveredMunicipio === poly.id && (
+                  {isAdminMode && isSelected && (
                     <foreignObject 
-                      x={poly.points[0].x} 
-                      y={poly.points[0].y} 
-                      width="40" 
-                      height="40"
+                      x={poly.points[0].x - 20} 
+                      y={poly.points[0].y - 20} 
+                      width="50" 
+                      height="50"
+                      className="overflow-visible"
                     >
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); deletePolygon(poly.id); }}
-                        className="bg-rose-600 text-white p-1.5 rounded-lg shadow-lg hover:bg-rose-500 transition-colors"
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                      <div className="flex flex-col gap-2">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); deletePolygon(poly.id); }}
+                          className="bg-rose-600 text-white p-2 rounded-full shadow-2xl hover:bg-rose-500 transition-all hover:scale-110 active:scale-95"
+                          title="Eliminar Polígono"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </foreignObject>
                   )}
                 </g>
