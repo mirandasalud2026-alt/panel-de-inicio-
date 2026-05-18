@@ -93,6 +93,17 @@ const INITIAL_EJES: Eje[] = [
     description: 'URL: /estado-ambulatorios'
   },
 ];
+
+// Obtiene dimensiones reales de una imagen (URL o base64)
+const getImageDimensions = (src: string): Promise<{ width: number; height: number }> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = reject;
+    img.src = src;
+  });
+};
+
 export default function InteractiveMirandaMap({ isAdminMode = false }: InteractiveMirandaMapProps) {
   const [activeEje, setActiveEje] = useState<Eje>(INITIAL_EJES[0]);
   const [ejes, setEjes] = useState<Eje[]>(INITIAL_EJES);
@@ -137,25 +148,11 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
     USING (auth.uid() = id OR (SELECT true FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin'));
 `;
 
-  // Detectar pantalla y ajustar dimensiones
+  // Solo detecta móvil/orientación, NO modifica viewBox
   useEffect(() => {
     const checkScreen = () => {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      setIsMobile(width < 768);
-      setIsLandscape(width > height);
-      
-      if (width < 380) {
-        setMapDimensions({ width: 300, height: 200 });
-      } else if (width < 480) {
-        setMapDimensions({ width: 350, height: 250 });
-      } else if (width < 768) {
-        setMapDimensions({ width: 500, height: 350 });
-      } else if (width < 1024) {
-        setMapDimensions({ width: 700, height: 450 });
-      } else {
-        setMapDimensions({ width: 800, height: 500 });
-      }
+      setIsMobile(window.innerWidth < 768);
+      setIsLandscape(window.innerWidth > window.innerHeight);
     };
     checkScreen();
     window.addEventListener('resize', checkScreen);
@@ -204,6 +201,7 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
     }
   };
 
+  // Carga inicial desde Supabase
   useEffect(() => {
     let mounted = true;
     const fetchMapData = async () => {
@@ -231,6 +229,17 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
         if (config && mounted) {
           setBackgroundImage(config.background_image);
           setBgUrlInput(config.background_image || '');
+          
+          // Obtener dimensiones reales de la imagen cargada
+          if (config.background_image) {
+            try {
+              const dims = await getImageDimensions(config.background_image);
+              if (mounted) setMapDimensions({ width: dims.width, height: dims.height });
+            } catch (err) {
+              console.warn('No se pudieron obtener dimensiones de la imagen remota, usando default');
+            }
+          }
+          
           if (config.ejes_data) {
              const loadedEjes = config.ejes_data.map((e: any) => ({
                 ...e,
@@ -398,6 +407,15 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
         const result = event.target?.result as string;
         setBackgroundImage(result);
         setBgUrlInput(result.startsWith('data:') ? 'Imagen Base64' : result);
+        
+        // Fijar viewBox al tamaño real de la imagen
+        try {
+          const dims = await getImageDimensions(result);
+          setMapDimensions({ width: dims.width, height: dims.height });
+        } catch (err) {
+          console.error('No se pudo obtener dimensiones de la imagen');
+        }
+        
         await saveMapConfig(undefined, result);
       };
       reader.onerror = () => notify('Error al leer el archivo', 'error');
@@ -408,6 +426,15 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
   const handleUrlUpdate = async () => {
     if (bgUrlInput === 'Imagen Base64' || bgUrlInput === backgroundImage) return;
     setBackgroundImage(bgUrlInput);
+    
+    // Fijar viewBox al tamaño real de la imagen URL
+    try {
+      const dims = await getImageDimensions(bgUrlInput);
+      setMapDimensions({ width: dims.width, height: dims.height });
+    } catch (err) {
+      console.error('No se pudo obtener dimensiones de la imagen URL');
+    }
+    
     await saveMapConfig(undefined, bgUrlInput);
   };
 
@@ -440,8 +467,10 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
   };
 
   const clearCurrentPoints = () => setCurrentPoints([]);
-    return (
-    <div className="flex flex-col w-full h-full bg-[#0B1525] text-slate-200 overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)] border border-white/5 relative">
+
+  // ---------- JSX ----------
+  return (
+    <div className="flex flex-col w-full h-full bg-[#0B1525] text-slate-200 overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)] border border-white/5 relative" style={{ maxWidth: '100vw', maxHeight: '100dvh' }}>
       
       {isMobile && (
         <button
@@ -591,7 +620,8 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
            )}
         </div>
       )}
-            {!isNewsOpen && (
+
+      {!isNewsOpen && (
         <div className="absolute bottom-6 left-6 z-50">
            <button 
              onClick={() => setIsNewsOpen(true)}
@@ -719,7 +749,8 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
            </p>
         </div>
       )}
-            <main className="flex-1 relative flex flex-col overflow-hidden bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#112035] to-[#0A111E]" style={{ minHeight: 0 }}>
+
+      <main className="flex-1 relative flex flex-col overflow-hidden bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#112035] to-[#0A111E]" style={{ minHeight: 0, maxHeight: '100%' }}>
         <div className="flex-1 flex items-center justify-center relative p-1 sm:p-4" style={{ minHeight: 0 }}>
           <div className="absolute inset-0 flex items-center justify-center opacity-40 pointer-events-none">
             <div className="w-[300px] h-[300px] sm:w-[600px] sm:h-[600px] md:w-[800px] md:h-[800px] bg-blue-500/10 rounded-full blur-[150px]"></div>
@@ -743,14 +774,18 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
             )}
           </AnimatePresence>
 
-          <div className="w-full h-full flex items-center justify-center" style={{ minHeight: 0, maxHeight: isMobile ? '60vh' : '80vh' }}>
+          <div className="w-full flex items-center justify-center overflow-hidden" style={{ 
+            minHeight: 0, 
+            height: isMobile ? (isLandscape ? '70vh' : '55vh') : '80vh',
+            maxHeight: isMobile ? (isLandscape ? '70vh' : '55vh') : '80vh'
+          }}>
             <svg 
               viewBox={`0 0 ${mapDimensions.width} ${mapDimensions.height}`}
-              className="w-full h-auto max-w-full max-h-full drop-shadow-[0_40px_120px_rgba(0,0,0,1)] relative z-10 bg-black/20 rounded-xl sm:rounded-[2rem] border border-white/5"
+              preserveAspectRatio="xMidYMid meet"
+              className="w-full h-auto max-w-full"
+              style={{ maxHeight: '100%', maxWidth: '100%' }}
               onClick={handleSvgClick}
               id="interactive-svg-map"
-              preserveAspectRatio="xMidYMid meet"
-              style={{ maxWidth: '100%', maxHeight: isMobile ? '60vh' : '80vh', width: '100%', height: 'auto' }}
             >
               <rect width={mapDimensions.width} height={mapDimensions.height} fill="transparent" />
               
@@ -920,7 +955,8 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
           )}
         </div>
       </main>
-            {isAdminMode && (
+
+      {isAdminMode && (
         <div 
           className={`bg-[#0A111E] border-t border-white/10 shrink-0 z-[60] shadow-[0_-20px_50px_rgba(0,0,0,0.5)] transition-all duration-500 ease-in-out relative
             ${isConsoleMinimized ? 'h-10' : 'h-auto max-h-[50vh] p-2 sm:p-4 overflow-y-auto'}
@@ -1074,42 +1110,16 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
       )}
 
       <style dangerouslySetInnerHTML={{ __html: `
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 4px;
-          height: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: rgba(255, 255, 255, 0.02);
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.1);
-          border-radius: 10px;
-        }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
         #interactive-svg-map {
           cursor: ${isDrawingMode ? 'crosshair' : 'default'};
           touch-action: ${isDrawingMode ? 'none' : 'auto'};
-          max-width: 100% !important;
-          max-height: ${isMobile ? '60vh' : '80vh'} !important;
-          width: 100% !important;
-          height: auto !important;
         }
+        html, body, #root { margin: 0; padding: 0; overflow: hidden; width: 100%; height: 100%; }
         @media screen and (max-width: 768px) {
-          #interactive-svg-map {
-            max-height: 55vh !important;
-          }
-          input, select, textarea {
-            font-size: 16px !important;
-          }
-        }
-        @media screen and (orientation: portrait) and (max-width: 768px) {
-          #interactive-svg-map {
-            max-height: 50vh !important;
-          }
-        }
-        @media screen and (orientation: landscape) and (max-width: 768px) {
-          #interactive-svg-map {
-            max-height: 65vh !important;
-          }
+          input, select, textarea { font-size: 16px !important; }
         }
       `}} />
     </div>
