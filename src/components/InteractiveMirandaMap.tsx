@@ -108,9 +108,20 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
 
   // Cargar Datos desde Supabase
   useEffect(() => {
+    let mounted = true;
     const fetchMapData = async () => {
       setIsLoading(true);
+      
+      // Safety Timeout: if DB takes > 8s, unlock UI
+      const timeoutId = setTimeout(() => {
+        if (mounted) {
+          setIsLoading(false);
+          addLog('Tiempo de espera de base de datos excedido (Modo Local).');
+        }
+      }, 8000);
+
       if (!supabase) {
+        clearTimeout(timeoutId);
         setIsLoading(false);
         return;
       }
@@ -121,9 +132,9 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
           .from('mapa_config')
           .select('*')
           .eq('id', 'default')
-          .single();
+          .maybeSingle(); // maybeSingle instead of single prevents error when not found
 
-        if (config) {
+        if (config && mounted) {
           setBackgroundImage(config.background_image);
           if (config.ejes_data) {
              const loadedEjes = config.ejes_data.map((e: any) => ({
@@ -140,7 +151,7 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
           .from('mapa_poligonos')
           .select('*');
 
-        if (polygons) {
+        if (polygons && mounted) {
           setCustomPolygons(polygons.map(p => ({
             id: p.id,
             ejeId: p.eje_id,
@@ -148,16 +159,20 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
           })));
         }
         
-        addLog('Datos del mapa cargados desde la base de datos.');
+        if (mounted) addLog('Datos del mapa sincronizados.');
       } catch (err) {
         console.error('Error loading map data:', err);
-        addLog('Error al conectar con la base de datos.');
+        if (mounted) addLog('Error de sincronización (Modo Local habilitado).');
       } finally {
-        setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+          clearTimeout(timeoutId);
+        }
       }
     };
 
     fetchMapData();
+    return () => { mounted = false; };
   }, []);
 
   const saveMapConfig = async (currentEjes?: Eje[], currentBg?: string | null) => {
