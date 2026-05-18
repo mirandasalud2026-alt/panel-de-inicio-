@@ -108,6 +108,8 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const [isLoading, setIsLoading] = useState(true);
   const [dbStatus, setDbStatus] = useState<'testing' | 'ok' | 'error' | 'disconnected'>('disconnected');
   const [lastAction, setLastAction] = useState<{ msg: string, type: 'success' | 'error' } | null>(null);
+  const [noticias, setNoticias] = useState<any[]>([]);
+  const [isNewsOpen, setIsNewsOpen] = useState(false);
 
   const notify = (msg: string, type: 'success' | 'error' = 'success') => {
     console.log(`Notification [${type}]: ${msg}`);
@@ -189,10 +191,25 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
             points: p.points as { x: number, y: number }[]
           })));
         }
+
+        // 3. Cargar Noticias
+        const { data: newsData } = await supabase
+          .from('noticias')
+          .select('*')
+          .order('fecha', { ascending: false })
+          .limit(5);
+        
+        if (newsData && mounted) {
+          setNoticias(newsData);
+        }
         
         if (mounted) console.log('Map data synchronized');
       } catch (err: any) {
         console.error('Error loading map data:', err);
+        if (err.message?.includes('recursion')) {
+          setDbStatus('error');
+          notify('Error de Seguridad RLS en Base de Datos. Contacte Admin.', 'error');
+        }
       } finally {
         if (mounted) {
           setIsLoading(false);
@@ -348,19 +365,114 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
            </div>
            <div className="flex flex-col items-center gap-2">
               <span className="text-[10px] font-black text-white uppercase tracking-[0.4em] animate-pulse">Sincronizando SIG...</span>
+              {dbStatus === 'error' && (
+                <span className="text-[8px] text-rose-500 font-bold uppercase tracking-widest mt-2">Error en base de datos. Ver consola.</span>
+              )}
            </div>
            
-           <button 
-             onClick={() => {
-               setIsLoading(false);
-               notify('Modo Local Activado', 'error');
-             }}
-             className="mt-8 px-6 py-2 bg-white/5 border border-white/10 rounded-full text-[8px] font-black text-slate-500 hover:text-white hover:bg-white/10 uppercase transition-all tracking-widest"
-           >
-             Omitir Sincronización
-           </button>
+           <div className="flex gap-4">
+              <button 
+                onClick={() => {
+                  setIsLoading(false);
+                  notify('Modo Local Activado', 'error');
+                }}
+                className="px-6 py-2 bg-white/5 border border-white/10 rounded-full text-[8px] font-black text-slate-500 hover:text-white hover:bg-white/10 uppercase transition-all tracking-widest"
+              >
+                Omitir Sincronización
+              </button>
+              
+              <button 
+                onClick={runConnectionTest}
+                className="px-6 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full text-[8px] font-black text-blue-400 hover:text-white hover:bg-blue-500/30 uppercase transition-all tracking-widest flex items-center gap-2"
+              >
+                <RefreshCw size={10} className={dbStatus === 'testing' ? 'animate-spin' : ''} />
+                Reintentar
+              </button>
+           </div>
         </div>
       )}
+
+      {/* Botón de Noticias (Noticias Sidebar) */}
+      <div className="absolute bottom-10 left-10 z-50">
+         <button 
+           onClick={() => setIsNewsOpen(true)}
+           className="relative p-4 bg-[#0A111E]/80 backdrop-blur-2xl border border-white/10 rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all text-blue-400 group"
+         >
+            <Newspaper size={20} />
+            {noticias.some(n => n.categoria === 'urgente') && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-rose-500 border-2 border-[#0A111E] text-[8px] font-black text-white items-center justify-center">!</span>
+              </span>
+            )}
+            <div className="absolute left-full ml-4 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+              <div className="bg-[#0A111E]/80 backdrop-blur-xl px-4 py-2 rounded-xl border border-white/10 whitespace-nowrap">
+                <span className="text-[10px] font-black text-white uppercase tracking-widest">Boletín Miranda</span>
+              </div>
+            </div>
+         </button>
+      </div>
+
+      {/* Drawer de Noticias */}
+      <AnimatePresence>
+        {isNewsOpen && (
+          <motion.div
+            initial={{ x: -400 }}
+            animate={{ x: 0 }}
+            exit={{ x: -400 }}
+            className="absolute top-0 left-0 bottom-0 w-80 bg-[#0A111E]/95 backdrop-blur-2xl border-r border-white/10 z-[60] shadow-[40px_0_100px_rgba(0,0,0,0.5)] flex flex-col"
+          >
+             <div className="p-8 border-b border-white/5 flex justify-between items-center bg-blue-500/5">
+                <div className="flex items-center gap-3">
+                   <Newspaper className="text-blue-400" size={20} />
+                   <h3 className="text-sm font-black text-white uppercase tracking-[0.2em]">Boletín SIG</h3>
+                </div>
+                <button onClick={() => setIsNewsOpen(false)} className="text-slate-500 hover:text-white transition-colors">
+                   <X size={20} />
+                </button>
+             </div>
+             
+             <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+                {noticias.length === 0 ? (
+                  <div className="text-center py-12">
+                     <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Sin noticias recientes</p>
+                  </div>
+                ) : (
+                  noticias.map((n, i) => (
+                    <motion.div 
+                      key={n.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.1 }}
+                      className="group p-4 bg-white/5 rounded-[2rem] border border-white/5 hover:bg-white/[0.08] transition-all cursor-default"
+                    >
+                       <div className="flex items-center gap-2 mb-3">
+                          <span className={`text-[7px] font-black uppercase px-2 py-0.5 rounded-full ${
+                             n.categoria === 'urgente' ? 'bg-rose-500/20 text-rose-500 border border-rose-500/30' : 
+                             n.categoria === 'informativa' ? 'bg-blue-500/20 text-blue-500 border border-blue-500/30' : 
+                             'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30'
+                          }`}>
+                            {n.categoria}
+                          </span>
+                          <span className="text-[8px] font-bold text-slate-600">
+                             {new Date(n.fecha).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' })}
+                          </span>
+                       </div>
+                       <h4 className="text-[11px] font-black text-white uppercase tracking-tight leading-tight mb-2">{n.titulo}</h4>
+                       <p className="text-[10px] text-slate-400 leading-relaxed line-clamp-3 font-medium">{n.texto}</p>
+                    </motion.div>
+                  ))
+                )}
+             </div>
+             
+             <div className="p-6 border-t border-white/5 bg-black/20">
+                <p className="text-[9px] text-slate-500 italic text-center leading-relaxed">
+                   Actualización automática vía SIM Miranda • <span className="text-blue-400 font-bold uppercase tracking-widest">SIG-CLOUD</span>
+                </p>
+             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Header de Gestión Maestra (Admin Mode) */}
       {isAdminMode && (

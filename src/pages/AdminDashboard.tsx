@@ -22,6 +22,31 @@ export default function AdminDashboard() {
     return <Navigate to="/login" />;
   }
 
+  if (profile.rol !== 'admin' && profile.estado === 'pendiente') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F3F4F6] p-6">
+        <div className="bg-white p-12 rounded-[3rem] shadow-2xl border border-gray-100 max-w-lg text-center">
+           <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
+              <Clock size={40} />
+           </div>
+           <h2 className="text-2xl font-black text-gray-800 uppercase tracking-tight mb-4">Acreditación en Proceso</h2>
+           <p className="text-gray-500 leading-relaxed mb-8">
+             Hola <b>{profile.nombre}</b>. Tu solicitud de acceso al sistema SIM Miranda está siendo revisada por un administrador.
+           </p>
+           <button 
+             onClick={() => {
+               supabase?.auth.signOut();
+               window.location.href = '/login';
+             }}
+             className="px-8 py-4 bg-gray-50 text-gray-400 font-bold rounded-2xl hover:bg-red-50 hover:text-red-500 transition-all uppercase text-xs tracking-widest"
+           >
+             Cerrar Sesión
+           </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F3F4F6] pb-10 font-sans">
       {/* Header */}

@@ -98,3 +98,36 @@ DROP POLICY IF EXISTS "Admins escriben poligonos" ON public.mapa_poligonos;
 CREATE POLICY "Admins escriben poligonos" ON public.mapa_poligonos
     FOR ALL TO authenticated
     USING (get_user_role() = 'admin');
+
+-- 6. TRIGGER DE AUTOMATIZACIÓN DE REGISTRO (Acreditación)
+-- Crea automáticamente el perfil en public.usuarios cuando alguien se registra en Auth
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.usuarios (id, nombre, email, rol, estado)
+  VALUES (
+    NEW.id, 
+    COALESCE(NEW.raw_user_meta_data->>'nombre', 'Usuario Nuevo'), 
+    NEW.email, 
+    'oficina', 
+    'pendiente'
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+-- 7. DATOS INICIALES
+INSERT INTO public.mapa_config (id, background_image)
+VALUES ('default', 'https://images.unsplash.com/photo-1516738901171-8eb4fc13bd20?auto=format&fit=crop&q=80&w=2000')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.noticias (titulo, categoria, texto)
+VALUES 
+('Sistema SIG Miranda Activado', 'informativa', 'El sistema de información geográfica ha sido desplegado exitosamente.'),
+('Alerta de Brote en Eje Metropolitano', 'urgente', 'Se reporta incremento de casos en la red ambulatoria. Favor verificar capas de SIG.')
+ON CONFLICT DO NOTHING;

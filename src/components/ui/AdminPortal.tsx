@@ -42,6 +42,7 @@ export default function AdminPortal() {
   const [activeTab, setActiveTab] = useState<'scripts' | 'noticias' | 'config' | 'mapa' | 'usuarios'>('scripts');
   const [noticias, setNoticias] = useState<Noticia[]>([]);
   const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
+  const [mapGlobalConfig, setMapGlobalConfig] = useState({ title: 'Miranda Salud SIG', bgUrl: '' });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingNoticia, setEditingNoticia] = useState<Noticia | null>(null);
   const [logs, setLogs] = useState<{ time: string, msg: string }[]>([]);
@@ -52,8 +53,48 @@ export default function AdminPortal() {
   useEffect(() => {
     fetchNoticias();
     fetchUsers();
+    fetchConfig();
     agregarLog('Panel de Administración sincronizado.');
   }, []);
+
+  const fetchConfig = async () => {
+    if (!supabase) return;
+    try {
+      const { data } = await supabase.from('mapa_config').select('*').eq('id', 'default').maybeSingle();
+      if (data) {
+        setMapGlobalConfig(prev => ({ ...prev, bgUrl: data.background_image || '' }));
+      }
+    } catch (err) {
+      console.error('Error fetching config:', err);
+    }
+  };
+
+  const saveConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supabase) return;
+    setIsDbLoading(true);
+    try {
+      const { error } = await supabase
+        .from('mapa_config')
+        .upsert({
+          id: 'default',
+          background_image: mapGlobalConfig.bgUrl,
+          updated_at: new Date().toISOString()
+        });
+      if (error) throw error;
+      agregarLog('⚙️ Configuración global actualizada.');
+      notify('Configuración guardada');
+    } catch (err: any) {
+      agregarLog(`❌ Error config: ${err.message}`);
+    } finally {
+      setIsDbLoading(false);
+    }
+  };
+
+  // Mock satisfy notify for consistency if needed or use local feedback
+  const notify = (msg: string) => {
+    console.log(msg);
+  };
 
   const fetchNoticias = async () => {
     if (!supabase) {
@@ -410,18 +451,31 @@ export default function AdminPortal() {
                      </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                     {systemUsers.map(u => (
-                        <tr key={u.id}>
+                     {systemUsers.length === 0 ? (
+                        <tr>
+                           <td colSpan={4} className="px-6 py-20 text-center text-[10px] font-black text-gray-300 uppercase tracking-widest">
+                              No hay usuarios registrados
+                           </td>
+                        </tr>
+                     ) : systemUsers.map(u => (
+                        <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">
                            <td className="px-6 py-4">
-                              <div className="flex flex-col">
-                                 <span className="text-sm font-bold text-gray-800">{u.nombre}</span>
-                                 <span className="text-[10px] text-gray-400">{u.email}</span>
+                              <div className="flex items-center gap-3">
+                                 <div className="w-8 h-8 rounded-full bg-[#0B3D5C]/10 flex items-center justify-center text-[#0B3D5C] font-bold text-xs">
+                                    {u.nombre.charAt(0).toUpperCase()}
+                                 </div>
+                                 <div className="flex flex-col">
+                                    <span className="text-sm font-bold text-gray-800">{u.nombre}</span>
+                                    <span className="text-[10px] text-gray-400">{u.email}</span>
+                                 </div>
                               </div>
                            </td>
                            <td className="px-6 py-4">
-                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
-                                 u.rol === 'admin' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
-                              }`}>{u.rol}</span>
+                              <div className="flex flex-col gap-1">
+                                 <span className={`w-fit text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
+                                    u.rol === 'admin' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
+                                 }`}>{u.rol}</span>
+                              </div>
                            </td>
                            <td className="px-6 py-4">
                               <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
@@ -476,46 +530,68 @@ export default function AdminPortal() {
                </div>
             </div>
 
-            <div className="bg-amber-50 border border-amber-200 p-6 rounded-[2.5rem] mb-6">
-               <h4 className="text-sm font-bold text-amber-800 flex items-center gap-2 mb-2">
-                 <AlertCircle size={16} /> Acción Requerida en Supabase
-               </h4>
-               <p className="text-xs text-amber-700 leading-relaxed mb-4">
-                 Para que el portal funcione correctamente (Noticias, Usuarios y SIG), debe ejecutar el script SQL de configuración en su consola de Supabase. Esto solucionará el error de <b>"infinite recursion"</b>.
-               </p>
-               <div className="bg-slate-900 rounded-xl p-4 overflow-hidden relative">
-                  <pre className="text-[9px] text-blue-300 font-mono overflow-x-auto custom-scrollbar">
-                    {`-- SQL DE EMERGENCIA (Fragmento)
-CREATE OR REPLACE FUNCTION public.get_user_role()
-RETURNS TEXT AS $$
-BEGIN
-  RETURN (SELECT rol FROM public.usuarios 
-          WHERE id = auth.uid() LIMIT 1);
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;`}
-                  </pre>
-                  <div className="absolute top-2 right-2 px-2 py-1 bg-white/10 rounded text-[8px] font-bold text-white uppercase">Ver archivo database-setup.sql</div>
-               </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
-               {[
-                  { label: 'Sincronización Cloud', desc: 'Conectado a la tabla mapa_config', active: !!supabase },
-                  { label: 'Gestión de Noticias', desc: 'Tabla "noticias" operacional', active: noticias.length > 0 },
-                  { label: 'Seguridad RLS', desc: 'Protección de capas por rol admin', active: true },
-                  { label: 'Control de Usuarios', desc: 'Acreditación manual activada', active: systemUsers.length > 0 },
-               ].map((c, i) => (
-                  <div key={i} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                     <div className="flex justify-between items-start mb-4">
-                        <span className={`w-3 h-3 rounded-full ${c.active ? 'bg-green-500' : 'bg-gray-200'}`}></span>
-                        <div className={`w-10 h-5 rounded-full relative transition-colors ${c.active ? 'bg-blue-600' : 'bg-gray-200'}`}>
-                           <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${c.active ? 'left-6' : 'left-1'}`}></div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+               <div className="md:col-span-2 space-y-6">
+                  <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                     <h4 className="text-xs font-black text-gray-800 uppercase tracking-widest mb-6 border-b border-gray-50 pb-4">Preferencias Globales</h4>
+                     <form onSubmit={saveConfig} className="space-y-6">
+                        <div>
+                           <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">URL Fondo del Mapa</label>
+                           <input 
+                             value={mapGlobalConfig.bgUrl}
+                             onChange={e => setMapGlobalConfig(prev => ({ ...prev, bgUrl: e.target.value }))}
+                             placeholder="Ex: https://..."
+                             className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 text-sm font-medium focus:outline-none"
+                           />
                         </div>
-                     </div>
-                     <h4 className="text-xs font-black text-gray-800 uppercase tracking-widest">{c.label}</h4>
-                     <p className="text-[10px] text-gray-400 mt-1">{c.desc}</p>
+                        <button 
+                          type="submit"
+                          disabled={isDbLoading}
+                          className="w-full py-4 bg-[#0B3D5C] text-white rounded-2xl font-bold text-[10px] uppercase tracking-widest shadow-xl shadow-[#0B3D5C]/10 flex items-center justify-center gap-2"
+                        >
+                           {isDbLoading ? <Loader2 size={14} className="animate-spin" /> : <Database size={14} />}
+                           Actualizar Cloud SIG
+                        </button>
+                     </form>
                   </div>
-               ))}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {[
+                        { label: 'Sincronización Cloud', desc: 'Conectado a la tabla mapa_config', active: !!supabase },
+                        { label: 'Gestión de Noticias', desc: 'Tabla "noticias" operacional', active: noticias.length > 0 },
+                        { label: 'Seguridad RLS', desc: 'Protección de capas por rol admin', active: true },
+                        { label: 'Control de Usuarios', desc: 'Acreditación manual activada', active: systemUsers.length > 0 },
+                    ].map((c, i) => (
+                        <div key={i} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                            <div className="flex justify-between items-start mb-4">
+                                <span className={`w-3 h-3 rounded-full ${c.active ? 'bg-green-500' : 'bg-gray-200'}`}></span>
+                                <div className={`w-10 h-5 rounded-full relative transition-colors ${c.active ? 'bg-blue-600' : 'bg-gray-200'}`}>
+                                    <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${c.active ? 'left-6' : 'left-1'}`}></div>
+                                </div>
+                            </div>
+                            <h4 className="text-xs font-black text-gray-800 uppercase tracking-widest">{c.label}</h4>
+                            <p className="text-[10px] text-gray-400 mt-1">{c.desc}</p>
+                        </div>
+                    ))}
+                  </div>
+               </div>
+
+               <div className="space-y-6">
+                  <div className="bg-amber-50 border border-amber-200 p-6 rounded-[2.5rem]">
+                     <h4 className="text-sm font-bold text-amber-800 flex items-center gap-2 mb-2">
+                       <AlertCircle size={16} /> Acción SQL
+                     </h4>
+                     <p className="text-[10px] text-amber-700 leading-relaxed mb-4">
+                       Si el portal muestra errores de <b>"infinite recursion"</b>, ejecute el SQL de <b>database-setup.sql</b>.
+                     </p>
+                     <div className="bg-slate-900 rounded-xl p-4 overflow-hidden relative">
+                        <pre className="text-[8px] text-blue-300 font-mono overflow-x-auto custom-scrollbar">
+                          {`CREATE OR REPLACE FUNCTION 
+get_user_role() ...`}
+                        </pre>
+                     </div>
+                  </div>
+               </div>
             </div>
           </motion.div>
         )}
