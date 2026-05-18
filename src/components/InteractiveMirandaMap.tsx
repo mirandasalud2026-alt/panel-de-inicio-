@@ -17,6 +17,7 @@ import {
   Layout,
   Upload,
   RefreshCw,
+  CheckCircle2,
   Mountain,
   Palmtree,
   BarChart,
@@ -30,7 +31,9 @@ import {
   Save,
   Trash2,
   Database,
-  AlertCircle
+  AlertCircle,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 
 interface Eje {
@@ -106,6 +109,7 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const [editForm, setEditForm] = useState({ name: '', url: '', color: '', description: '' });
   const [hoveredMunicipio, setHoveredMunicipio] = useState<string | null>(null);
   const [selectedPolygonId, setSelectedPolygonId] = useState<string | null>(null);
+  const [isConsoleMinimized, setIsConsoleMinimized] = useState(false);
   const [isExecuting, setIsExecuting] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -148,8 +152,14 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
     }
     setDbStatus('testing');
     try {
-      const { error } = await supabase.from('mapa_config').select('id').eq('id', 'default').maybeSingle();
-      if (error) throw error;
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Test timeout')), 5000)
+      );
+      const fetchPromise = supabase.from('mapa_config').select('id').eq('id', 'default').maybeSingle();
+      
+      const response: any = await Promise.race([fetchPromise, timeoutPromise]);
+      if (response.error) throw response.error;
+      
       setDbStatus('ok');
       return true;
     } catch (err: any) {
@@ -411,6 +421,7 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
     setCustomPolygons([...customPolygons, newPolygon]);
     setCurrentPoints([]);
     setIsDrawingMode(false);
+    setIsConsoleMinimized(false);
     await savePolygon(newPolygon);
   };
 
@@ -421,7 +432,7 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
   };
 
   return (
-    <div className="flex flex-col w-full h-full min-h-[500px] md:min-h-[700px] bg-[#0B1525] text-slate-200 rounded-[3rem] overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)] border border-white/5 relative">
+    <div className="flex flex-col w-full h-full bg-[#0B1525] text-slate-200 rounded-[3rem] overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)] border border-white/5 relative">
       
       {isLoading && (
         <div className="absolute inset-0 z-[100] bg-[#0B1525]/95 backdrop-blur-3xl flex flex-col items-center justify-center p-8 text-center">
@@ -572,26 +583,23 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
         </div>
       )}
 
-      {/* Botón de Noticias (Noticias Sidebar) */}
-      <div className="absolute bottom-10 left-10 z-50">
-         <button 
-           onClick={() => setIsNewsOpen(true)}
-           className="relative p-4 bg-[#0A111E]/80 backdrop-blur-2xl border border-white/10 rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all text-blue-400 group"
-         >
-            <Newspaper size={20} />
-            {noticias.some(n => n.categoria === 'urgente') && (
-              <span className="absolute -top-1 -right-1 flex h-4 w-4">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-4 w-4 bg-rose-500 border-2 border-[#0A111E] text-[8px] font-black text-white items-center justify-center">!</span>
-              </span>
-            )}
-            <div className="absolute left-full ml-4 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-              <div className="bg-[#0A111E]/80 backdrop-blur-xl px-4 py-2 rounded-xl border border-white/10 whitespace-nowrap">
-                <span className="text-[10px] font-black text-white uppercase tracking-widest">Boletín Miranda</span>
-              </div>
-            </div>
-         </button>
-      </div>
+      {/* Panel de Noticias (Floating) */}
+      {!isNewsOpen && (
+        <div className="absolute bottom-6 left-6 z-50">
+           <button 
+             onClick={() => setIsNewsOpen(true)}
+             className="relative p-3 bg-[#0A111E]/80 backdrop-blur-2xl border border-white/10 rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all text-blue-400"
+           >
+              <Newspaper size={18} />
+              {noticias.some(n => n.categoria === 'urgente') && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-4 w-4 bg-rose-500 border-2 border-[#0A111E] text-[8px] font-black text-white items-center justify-center">!</span>
+                </span>
+              )}
+           </button>
+        </div>
+      )}
 
       {/* Drawer de Noticias */}
       <AnimatePresence>
@@ -656,244 +664,53 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
 
       {/* Header de Gestión Maestra (Admin Mode) */}
       {isAdminMode && (
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[40] flex items-center gap-4 px-8 py-3 bg-[#0A111E]/80 backdrop-blur-2xl border border-white/10 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] active:scale-95 transition-all">
-          <div className="flex items-center gap-3 pr-4 border-r border-white/10">
-             <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]"></div>
-             <span className="text-[10px] font-black text-white uppercase tracking-[0.2em] whitespace-nowrap">Gestión Maestra Activa</span>
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[40] flex items-center gap-6 px-10 py-4 bg-[#0A111E]/90 backdrop-blur-3xl border border-white/20 rounded-[2rem] shadow-[0_30px_70px_rgba(0,0,0,0.8)] transition-all">
+          <div className="flex items-center gap-3 pr-6 border-r border-white/10">
+             <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse shadow-[0_0_15px_rgba(34,197,94,0.6)]"></div>
+             <div className="flex flex-col">
+                <span className="text-[10px] font-black text-white uppercase tracking-[0.2em] whitespace-nowrap">Gestión Maestra SIM</span>
+                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Sincronizado Cloud</span>
+             </div>
           </div>
-          <div className="flex items-center gap-2">
-             <Users size={14} className="text-blue-400" />
-             <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Admin: miranda.salud2026@gmail.com</span>
-          </div>
-        </div>
-      )}
-
-      {/* SIG CONTROLS (Solo en Admin Mode) - Integrados en página */}
-      {isAdminMode && (
-        <div className="absolute top-24 right-8 bottom-24 z-30 flex flex-col gap-4 w-72 overflow-y-auto pr-2 custom-scrollbar">
-           <div className="bg-[#0A111E]/90 backdrop-blur-xl border border-white/10 p-6 rounded-[2rem] shadow-2xl flex flex-col gap-5 shrink-0">
-              <div className="flex items-center justify-between border-b border-white/5 pb-4">
-                 <div className="flex flex-col">
-                    <div className="flex items-center gap-2">
-                       <Edit3 size={16} className="text-blue-400" />
-                       <span className="text-[10px] font-black text-white uppercase tracking-widest">Editor SIG</span>
-                    </div>
-                    <div className="flex gap-2 mt-1">
-                     {dbStatus === 'disconnected' ? (
-                        <span className="text-[7px] text-rose-500 font-bold uppercase">Sin Configurar</span>
-                     ) : dbStatus === 'testing' ? (
-                        <span className="text-[7px] text-blue-400 font-bold uppercase animate-pulse">Probando...</span>
-                     ) : dbStatus === 'ok' ? (
-                        <div className="flex items-center gap-2">
-                           <span className="text-[7px] text-green-500 font-bold uppercase flex items-center gap-1">
-                              <ShieldCheck size={8} /> Sincronizado
-                           </span>
-                           <button onClick={runConnectionTest} className="text-slate-600 hover:text-white transition-colors">
-                             <RefreshCw size={8} />
-                           </button>
-                        </div>
-                     ) : (
-                        <button 
-                          onClick={runConnectionTest}
-                          className="text-[7px] text-rose-500 font-bold uppercase hover:underline flex items-center gap-1"
-                        >
-                          <RefreshCw size={8} className="animate-spin" /> Error/Reintentar
-                        </button>
-                     )}
-                  </div>
-               </div>
-                  <div className={`w-3 h-3 rounded-full shadow-[0_0_15px] ${dbStatus === 'ok' ? 'bg-green-500 shadow-green-500/50 animate-pulse' : 'bg-rose-500 shadow-rose-500/50'}`}></div>
-               </div>
-
-               {/* Botón Guardar Forzado */}
-               <button
-                 onClick={() => saveMapConfig()}
-                 disabled={isSaving}
-                 className="w-full py-2 bg-blue-600/20 border border-blue-500/30 text-blue-400 rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-blue-500/30 transition-all flex items-center justify-center gap-2"
+          
+          <div className="flex items-center gap-4">
+             {!isDrawingMode ? (
+               <button 
+                 onClick={() => {
+                   setIsDrawingMode(true);
+                   setIsConsoleMinimized(true);
+                 }}
+                 className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-full text-[10px] font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-lg shadow-blue-900/40 flex items-center gap-2"
                >
-                 {isSaving ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
-                 Sincronizar Cloud
+                 <Play size={14} fill="currentColor" /> Iniciar Dibujo
                </button>
-
-               {/* Feedback Directo */}
-               <AnimatePresence>
-                 {lastAction && (
-                   <motion.div 
-                     initial={{ opacity: 0, scale: 0.9 }}
-                     animate={{ opacity: 1, scale: 1 }}
-                     exit={{ opacity: 0 }}
-                     className={`p-2 rounded-lg text-center text-[7px] font-black uppercase tracking-widest ${
-                       lastAction.type === 'success' ? 'bg-green-500/10 text-green-500 border border-green-500/20' : 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
-                     }`}
-                   >
-                     {lastAction.msg}
-                   </motion.div>
-                 )}
-               </AnimatePresence>
-
-              {/* Selector de Eje Activo */}
-              <div className="space-y-2">
-                 <div className="flex items-center justify-between px-1">
-                    <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Eje de Datos</label>
-                    {isSaving && <Loader2 size={10} className="animate-spin text-blue-400" />}
-                 </div>
-                 <div className="grid grid-cols-5 gap-1.5">
-                    {ejes.map((eje) => (
-                       <button
-                         key={eje.id}
-                         onClick={() => setActiveEje(eje)}
-                         title={eje.name}
-                         className={`w-full aspect-square rounded-xl flex items-center justify-center transition-all border ${
-                           activeEje.id === eje.id 
-                             ? 'border-white/30 shadow-lg scale-110' 
-                             : 'border-white/5 opacity-40 hover:opacity-100'
-                         }`}
-                         style={{ backgroundColor: eje.color }}
-                       >
-                         {eje.icon}
-                       </button>
-                    ))}
-                 </div>
-                 <div className="px-1 mt-1">
-                    <span className="text-[9px] font-black text-blue-400 uppercase tracking-tighter">{activeEje.name}</span>
-                 </div>
-              </div>
-
-              {/* Image Configuration */}
-              <div className="flex flex-col gap-3">
-                 <div className="flex items-center justify-between px-1">
-                    <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Fondo de Mapa (ImgBB/URL)</label>
-                    <Layout size={10} className="text-slate-500" />
-                 </div>
-                 
-                 <div className="flex gap-1.5">
-                    <input 
-                       type="text"
-                       placeholder="URL de imagen (ej: ImgBB)"
-                       value={bgUrlInput}
-                       onChange={(e) => setBgUrlInput(e.target.value)}
-                       onBlur={handleUrlUpdate}
-                       onKeyDown={(e) => e.key === 'Enter' && handleUrlUpdate()}
-                       className="flex-1 bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-[9px] font-bold text-white focus:outline-none focus:border-blue-500/50"
-                    />
-                    <label className="p-1.5 bg-white/5 border border-white/10 rounded-lg cursor-pointer hover:bg-white/10 transition-colors">
-                       <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
-                       <Upload size={12} className="text-slate-400" />
-                    </label>
-                 </div>
-
-                 {backgroundImage && (
-                    <button 
-                      onClick={async () => {
-                        setBackgroundImage(null);
-                        setBgUrlInput('');
-                        await saveMapConfig(undefined, null);
-                      }}
-                      className="text-[7px] font-black text-rose-500 uppercase tracking-[0.2em] hover:underline flex items-center justify-center gap-1.5 bg-rose-500/5 py-1 rounded-md"
-                    >
-                      <X size={10} /> ELIMINAR FONDO
-                    </button>
-                 )}
-              </div>
-
-              {/* Drawing Controls */}
-              <div className="flex flex-col gap-2">
-                {!isDrawingMode ? (
-                  <button 
-                    onClick={() => setIsDrawingMode(true)}
-                    className="w-full py-4 bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-500 transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20"
-                  >
-                    <MousePointer2 size={12} /> Empezar a Dibujar
-                  </button>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    <button 
-                      onClick={finishPolygon}
-                      className="w-full py-4 bg-green-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-green-500 transition-all shadow-lg shadow-green-900/20"
-                    >
-                      Guardar Área ({currentPoints.length})
-                    </button>
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={clearCurrentPoints}
-                        className="flex-1 py-3 bg-white/5 text-slate-400 rounded-xl text-[8px] font-black uppercase tracking-widest border border-white/5"
-                      >
-                        Limpiar
-                      </button>
-                      <button 
-                        onClick={() => { setIsDrawingMode(false); clearCurrentPoints(); }}
-                        className="flex-1 py-3 bg-rose-500/10 text-rose-500 rounded-xl text-[8px] font-black uppercase tracking-widest"
-                      >
-                        Salir
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-           </div>
-
-           {/* Editor de Propiedades del Eje Activo */}
-           <div className="bg-[#0A111E]/90 backdrop-blur-xl border border-white/10 p-6 rounded-[2rem] shadow-2xl flex flex-col gap-4 mb-4 shrink-0">
-              <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                 <span className="text-[10px] font-black text-white uppercase tracking-widest">Config: {activeEje.name}</span>
-                 <Settings size={12} className="text-slate-500" />
-              </div>
-              <div className="space-y-3">
-                 <div>
-                    <label className="text-[7px] font-black text-slate-500 uppercase tracking-widest block mb-1">Nombre del Eje</label>
-                    <input 
-                      type="text" 
-                      value={activeEje.name}
-                      onChange={(e) => {
-                        const newName = e.target.value;
-                        const updatedEjes = ejes.map(ej => ej.id === activeEje.id ? { ...ej, name: newName } : ej);
-                        setEjes(updatedEjes);
-                        setActiveEje(prev => ({ ...prev, name: newName }));
-                      }}
-                      onBlur={() => saveMapConfig()}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[10px] font-bold text-white focus:outline-none focus:border-blue-500/50"
-                    />
-                 </div>
-                 <div>
-                    <label className="text-[7px] font-black text-slate-500 uppercase tracking-widest block mb-1">URL de Redirección</label>
-                    <div className="flex gap-2">
-                       <input 
-                        type="text" 
-                        value={activeEje.url}
-                        onChange={(e) => {
-                          const newUrl = e.target.value;
-                          const updatedEjes = ejes.map(ej => ej.id === activeEje.id ? { ...ej, url: newUrl } : ej);
-                          setEjes(updatedEjes);
-                          setActiveEje(prev => ({ ...prev, url: newUrl }));
-                        }}
-                        onBlur={() => saveMapConfig()}
-                        className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[10px] font-bold text-white focus:outline-none focus:border-blue-500/50"
-                       />
-                       <a href={activeEje.url} target="_blank" rel="noreferrer" className="p-2 bg-white/5 rounded-lg text-slate-400 hover:text-white transition-colors">
-                          <ExternalLink size={14} />
-                       </a>
-                    </div>
-                 </div>
-              <div className="flex gap-2">
-                <input 
-                  type="color" 
-                  value={activeEje.color}
-                  onChange={(e) => {
-                    const newColor = e.target.value;
-                    const updatedEjes = ejes.map(ej => ej.id === activeEje.id ? { ...ej, color: newColor } : ej);
-                    setEjes(updatedEjes);
-                    setActiveEje(prev => ({ ...prev, color: newColor }));
-                  }}
-                  onBlur={() => saveMapConfig()}
-                  className="w-10 h-8 bg-transparent border-none p-0 cursor-pointer"
-                />
-                <span className="text-[10px] font-bold text-slate-400 self-center">{activeEje.color}</span>
-              </div>
-            </div>
+             ) : (
+               <button 
+                 onClick={finishPolygon}
+                 className="px-6 py-2 bg-green-600 hover:bg-green-500 text-white rounded-full text-[10px] font-black uppercase tracking-widest transition-all animate-pulse shadow-lg shadow-green-900/40 flex items-center gap-2"
+               >
+                 <CheckCircle2 size={14} /> Finalizar Área
+               </button>
+             )}
+             
+             {isDrawingMode && (
+               <button 
+                 onClick={() => { 
+                   setIsDrawingMode(false); 
+                   clearCurrentPoints(); 
+                   setIsConsoleMinimized(false);
+                 }}
+                 className="p-2 bg-rose-500/10 text-rose-500 rounded-full border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all"
+               >
+                 <X size={16} />
+               </button>
+             )}
           </div>
         </div>
       )}
 
+      {/* SIG CONTROLS (Solo en Admin Mode) - Eliminado de posición absoluta sidebar para mover a horizontal */}
+      
       {/* Footer info (Solo admin mode simple indicator) */}
       {isAdminMode && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20">
@@ -904,7 +721,7 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
       )}
 
       {/* Area del Mapa (Escenario Completo) */}
-      <main className="flex-1 relative flex flex-col bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#112035] to-[#0A111E]">
+      <main className="flex-1 relative flex flex-col overflow-hidden bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#112035] to-[#0A111E]">
         
 
 
@@ -916,6 +733,22 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
           
           {/* Fondo de Grilla Técnica */}
           <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
+
+          {/* Mensaje de Guía de Dibujo */}
+          <AnimatePresence>
+            {isDrawingMode && (
+              <motion.div 
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="absolute top-20 left-1/2 -translate-x-1/2 z-[30] bg-blue-600 px-6 py-2 rounded-full border border-blue-400 shadow-2xl pointer-events-none"
+              >
+                <span className="text-[10px] font-black text-white uppercase tracking-[0.2em]">
+                  Haga clic en el mapa para definir los puntos de la capa ({currentPoints.length})
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <div className="w-full h-full max-w-5xl flex items-center justify-center p-4">
             <svg 
@@ -971,19 +804,35 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                   />
                   {isAdminMode && isSelected && (
                     <foreignObject 
-                      x={poly.points[0].x - 20} 
-                      y={poly.points[0].y - 20} 
-                      width="50" 
-                      height="50"
+                      x={poly.points[0].x - 40} 
+                      y={poly.points[0].y - 80} 
+                      width="100" 
+                      height="120"
                       className="overflow-visible"
                     >
-                      <div className="flex flex-col gap-2">
+                      <div className="flex flex-col items-center gap-3">
+                        {/* Selector de Eje Flotante */}
+                        <div className="flex gap-1.5 p-2 bg-[#0B1525]/90 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl">
+                          {ejes.map(e => (
+                            <button
+                              key={e.id}
+                              onClick={(e_evt) => { e_evt.stopPropagation(); updatePolygonEje(poly.id, e.id); }}
+                              className={`w-6 h-6 rounded-lg border-2 transition-all ${
+                                poly.ejeId === e.id ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-40 hover:opacity-100'
+                              }`}
+                              style={{ backgroundColor: e.color }}
+                              title={e.name}
+                            />
+                          ))}
+                        </div>
+
+                        {/* Botón Central de Borrar */}
                         <button 
-                          onClick={(e) => { e.stopPropagation(); deletePolygon(poly.id); }}
-                          className="bg-rose-600 text-white p-2 rounded-full shadow-2xl hover:bg-rose-500 transition-all hover:scale-110 active:scale-95"
+                          onClick={(e_evt) => { e_evt.stopPropagation(); deletePolygon(poly.id); }}
+                          className="w-12 h-12 flex items-center justify-center bg-rose-600 text-white rounded-full shadow-[0_10px_30px_rgba(225,29,72,0.4)] hover:bg-rose-500 transition-all hover:scale-110 active:scale-95 border-4 border-[#0B1525]"
                           title="Eliminar Polígono"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={20} />
                         </button>
                       </div>
                     </foreignObject>
@@ -1081,90 +930,196 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
         </div>
       </main>
 
-      {/* PANEL HORIZONTAL DE CAPAS DIBUJADAS (Solo Admin) */}
-      {isAdminMode && customPolygons.length > 0 && (
-        <div className="bg-[#0A111E] border-t border-white/10 p-6 flex flex-col gap-4 shrink-0 z-40">
-           <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                  <Layout size={14} /> Capas Dibujadas ({customPolygons.length})
-                </span>
-                {selectedPolygonId && (
-                  <span className="text-[8px] bg-blue-500 text-white px-2 py-0.5 rounded-full font-black uppercase animate-pulse">
-                    Capa Seleccionada
-                  </span>
-                )}
-              </div>
-              {selectedPolygonId && (
-                <button 
-                  onClick={() => setSelectedPolygonId(null)} 
-                  className="text-[8px] text-blue-400 font-bold hover:underline uppercase tracking-widest"
-                >
-                  Limpiar Selección
-                </button>
-              )}
-           </div>
+      {/* CONSOLA HORIZONTAL DE ADMINISTRACIÓN (ZONA SEGURA) */}
+      {isAdminMode && (
+        <div 
+          className={`bg-[#0A111E] border-t border-white/10 shrink-0 z-[60] shadow-[0_-20px_50px_rgba(0,0,0,0.5)] transition-all duration-500 ease-in-out relative ${
+            isConsoleMinimized ? 'h-10' : 'h-auto p-4'
+          }`}
+        >
+           {/* Botón de Toggle Consola */}
+           <button 
+             onClick={() => setIsConsoleMinimized(!isConsoleMinimized)}
+             className="absolute -top-10 right-10 bg-[#0A111E] border border-white/10 border-b-0 rounded-t-xl px-4 py-2 flex items-center gap-2 text-slate-400 hover:text-white transition-all shadow-2xl"
+           >
+              {isConsoleMinimized ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              <span className="text-[10px] font-black uppercase tracking-widest">
+                {isConsoleMinimized ? 'Mostrar Herramientas' : 'Minimizar Panel'}
+              </span>
+           </button>
            
-           <div className="flex flex-row gap-4 overflow-x-auto pb-4 custom-scrollbar">
-            {customPolygons.map(poly => {
-                const eje = ejes.find(e => e.id === poly.ejeId);
-                const isSelected = selectedPolygonId === poly.id;
-                
-                return (
-                  <motion.div 
-                    key={poly.id} 
-                    layout
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className={`flex flex-col gap-3 p-4 rounded-3xl border transition-all min-w-[220px] ${
-                      isSelected ? 'bg-blue-500/10 border-blue-500/50 shadow-[0_10px_30px_rgba(59,130,246,0.1)]' : 'bg-white/5 border-white/5'
-                    }`}
-                  >
-                     <div className="flex items-center justify-between gap-4">
-                        <button 
-                          onClick={() => setSelectedPolygonId(isSelected ? null : poly.id)}
-                          className="flex items-center gap-3 flex-1 text-left group"
-                        >
-                           <div className="w-5 h-5 rounded-lg shadow-inner group-hover:scale-110 transition-transform" style={{ backgroundColor: eje?.color }}></div>
-                           <div className="flex flex-col">
-                              <span className={`text-[10px] font-black uppercase truncate max-w-[120px] ${isSelected ? 'text-white' : 'text-slate-400'}`}>
-                                 {eje?.name}
-                              </span>
-                              <span className="text-[7px] text-slate-500 font-bold uppercase tracking-tighter">Polígono {poly.id}</span>
-                           </div>
-                        </button>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); deletePolygon(poly.id); }}
-                          className="w-8 h-8 flex items-center justify-center bg-rose-500/10 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all active:scale-95"
-                          title="Eliminar Capa"
-                        >
-                            <Trash2 size={14} />
-                        </button>
-                     </div>
+            <div className={`flex flex-col gap-4 overflow-hidden ${isConsoleMinimized ? 'hidden' : 'flex'}`}>
+               {/* Header de la Consola */}
+               <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-4">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                       <Terminal size={14} className="text-blue-400" />
+                       <span className="text-[10px] font-black text-white uppercase tracking-widest">BARRA DE HERRAMIENTAS SIG MIRANDA</span>
+                    </div>
+                    <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5">
+                       <div className={`w-2 h-2 rounded-full ${dbStatus === 'ok' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]'} animate-pulse`}></div>
+                       <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">{dbStatus === 'ok' ? 'Sincronizado' : 'Error de Conexión'}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                     <button onClick={runConnectionTest} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors group" title="Reintentar">
+                        <span className="text-[8px] font-black uppercase opacity-0 group-hover:opacity-100 transition-opacity">Refrescar DB</span>
+                        <RefreshCw size={12} className={dbStatus === 'testing' ? 'animate-spin' : ''} />
+                     </button>
+                     <button
+                        onClick={() => saveMapConfig()}
+                        disabled={isSaving}
+                        className="py-1.5 px-6 bg-blue-600/20 border border-blue-500/30 text-blue-400 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all flex items-center gap-2 shadow-lg shadow-blue-900/20"
+                     >
+                        {isSaving ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
+                        Guardar Cambios SIG
+                     </button>
+                  </div>
+               </div>
 
-                     {/* Selector de Eje integrado para cambio rápido */}
-                     <div className="flex flex-col gap-2 pt-3 border-t border-white/5">
-                        <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest">Re-vincular:</span>
-                        <div className="flex gap-1.5">
-                          {ejes.map(e => (
-                            <button 
-                              key={e.id}
-                              onClick={() => updatePolygonEje(poly.id, e.id)}
-                              className={`w-6 h-6 rounded-md border transition-all ${
-                                poly.ejeId === e.id ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-30 hover:opacity-100 hover:scale-105'
-                              }`}
-                              style={{ backgroundColor: e.color }}
-                              title={e.name}
-                            />
-                          ))}
+               <div className="flex flex-row items-stretch gap-6 overflow-x-auto pb-2 custom-scrollbar">
+                  
+                  {/* Sección A: Herramientas de Dibujo y Ejes */}
+                  <div className="flex flex-col gap-3 min-w-[280px] shrink-0 bg-white/5 p-4 rounded-2xl border border-white/5 relative overflow-hidden group">
+                 <div className="absolute top-0 right-0 p-2 opacity-5">
+                    <MousePointer2 size={40} />
+                 </div>
+                 <div className="flex items-center gap-2">
+                    <MousePointer2 size={12} className="text-blue-400" />
+                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Creación Geográfica</span>
+                 </div>
+                 
+                 <div className="grid grid-cols-1 gap-2">
+                    {!isDrawingMode ? (
+                      <button 
+                        onClick={() => {
+                          setIsDrawingMode(true);
+                          setIsConsoleMinimized(true);
+                        }} 
+                        className="w-full py-4 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-500 hover:scale-[1.02] active:scale-98 transition-all flex items-center justify-center gap-2 shadow-xl shadow-blue-900/40"
+                      >
+                        <Play size={12} /> INICIAR NUEVO DIBUJO
+                      </button>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <button 
+                          onClick={finishPolygon} 
+                          className="w-full py-4 bg-green-600 text-white rounded-xl text-[10px] font-black uppercase shadow-lg shadow-green-900/40 animate-pulse flex items-center justify-center gap-2"
+                        >
+                          <Save size={12} /> GUARDAR ÁREA ({currentPoints.length})
+                        </button>
+                        <div className="flex gap-2">
+                           <button onClick={clearCurrentPoints} className="flex-1 py-2 bg-white/10 text-slate-300 rounded-lg text-[8px] font-black uppercase border border-white/10 hover:bg-white/20">Limpiar</button>
+                           <button onClick={() => { setIsDrawingMode(false); clearCurrentPoints(); setIsConsoleMinimized(false); }} className="flex-1 py-2 bg-rose-500/10 text-rose-500 rounded-lg text-[8px] font-black uppercase border border-rose-500/20 hover:bg-rose-500 hover:text-white">Cancelar</button>
                         </div>
-                     </div>
-                  </motion.div>
-                );
-            })}
+                      </div>
+                    )}
+                 </div>
+              </div>
+
+              {/* Sección B: Capas y Ejes */}
+              <div className="flex flex-col gap-3 min-w-[320px] shrink-0 bg-white/5 p-4 rounded-2xl border border-white/5">
+                 <div className="flex items-center gap-2">
+                    <Layout size={12} className="text-emerald-400" />
+                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Capas de Datos Miranda</span>
+                 </div>
+                 
+                 <div className="space-y-3">
+                    <div className="flex gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+                       {ejes.map((eje) => (
+                          <button
+                            key={eje.id}
+                            onClick={() => setActiveEje(eje)}
+                            className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all border-2 ${
+                              activeEje.id === eje.id ? 'border-white scale-110 shadow-[0_0_15px_rgba(255,255,255,0.2)]' : 'border-transparent opacity-40 hover:opacity-100'
+                            }`}
+                            style={{ backgroundColor: eje.color }}
+                            title={eje.name}
+                          >
+                            {React.cloneElement(eje.icon as React.ReactElement, { size: 16 })}
+                          </button>
+                       ))}
+                    </div>
+                    <div className="bg-black/40 p-2 rounded-lg border border-white/5">
+                       <span className="text-[10px] font-black text-blue-400 uppercase tracking-tight">{activeEje.name}</span>
+                    </div>
+                 </div>
+              </div>
+
+              {/* Sección C: Mapa Mental / Fondo */}
+              <div className="flex flex-col gap-3 w-72 shrink-0 bg-white/5 p-4 rounded-2xl border border-white/5">
+                 <div className="flex items-center gap-2">
+                    <Database size={12} className="text-amber-400" />
+                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Cartografía (Fondo)</span>
+                 </div>
+                 <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                       <input 
+                          type="text"
+                          placeholder="URL Fondo ImgBB"
+                          value={bgUrlInput}
+                          onChange={(e) => setBgUrlInput(e.target.value)}
+                          onBlur={handleUrlUpdate}
+                          className="flex-1 bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-[9px] font-bold text-white focus:border-blue-500/50 outline-none transition-colors"
+                       />
+                       <label className="w-10 h-10 flex items-center justify-center bg-white/10 border border-white/10 rounded-lg cursor-pointer hover:bg-white/20 transition-all">
+                          <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                          <Upload size={14} className="text-slate-300" />
+                       </label>
+                    </div>
+                 </div>
+              </div>
+
+              {/* Sección D: Capas Creadas Mini-Lista */}
+              {customPolygons.length > 0 && (
+                <div className="flex flex-col gap-3 flex-1 min-w-[400px] bg-white/5 p-4 rounded-2xl border border-white/5">
+                   <div className="flex items-center justify-between">
+                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Inventario de Capas ({customPolygons.length})</span>
+                     {selectedPolygonId && <button onClick={() => setSelectedPolygonId(null)} className="text-[8px] text-blue-400 font-black hover:underline uppercase">Deseleccionar</button>}
+                   </div>
+                   <div className="flex gap-3 overflow-x-auto pb-1 custom-scrollbar">
+                      {customPolygons.map(poly => {
+                          const eje = ejes.find(e => e.id === poly.ejeId);
+                          const isSelected = selectedPolygonId === poly.id;
+                          return (
+                            <div key={poly.id} className={`flex flex-col gap-2 p-3 rounded-2xl border shrink-0 min-w-[150px] transition-all ${isSelected ? 'bg-blue-500/10 border-blue-500/50 ring-2 ring-blue-500/20' : 'bg-white/5 border-white/10'}`}>
+                               <div className="flex items-center justify-between gap-3">
+                                  <button onClick={() => setSelectedPolygonId(isSelected ? null : poly.id)} className="flex items-center gap-2 flex-1 overflow-hidden group">
+                                     <div className="w-3 h-3 shrink-0 rounded-full shadow-inner" style={{ backgroundColor: eje?.color }}></div>
+                                     <span className={`text-[9px] font-black uppercase truncate ${isSelected ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>{eje?.name}</span>
+                                  </button>
+                                  <button onClick={() => deletePolygon(poly.id)} className="w-6 h-6 flex items-center justify-center bg-rose-500/10 text-rose-500 rounded-lg hover:bg-rose-600 hover:text-white transition-all">
+                                     <Trash2 size={12} />
+                                  </button>
+                               </div>
+                               {isSelected && (
+                                 <div className="flex flex-col gap-2 pt-2 border-t border-white/5">
+                                    <span className="text-[7px] text-slate-600 font-bold uppercase tracking-widest">Cambiar Eje:</span>
+                                    <div className="flex gap-1 flex-wrap">
+                                      {ejes.map(e => (
+                                        <button 
+                                          key={e.id}
+                                          onClick={() => updatePolygonEje(poly.id, e.id)}
+                                          className={`w-4 h-4 rounded-sm border transition-all ${poly.ejeId === e.id ? 'border-white scale-110' : 'border-transparent opacity-30 hover:opacity-100'}`}
+                                          style={{ backgroundColor: e.color }}
+                                          title={e.name}
+                                        />
+                                      ))}
+                                    </div>
+                                 </div>
+                               )}
+                            </div>
+                          );
+                      })}
+                   </div>
+                </div>
+              )}
+               </div>
+
            </div>
         </div>
       )}
+
 
       <style dangerouslySetInnerHTML={{ __html: `
         .custom-scrollbar::-webkit-scrollbar {
