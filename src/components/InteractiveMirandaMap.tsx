@@ -95,6 +95,7 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const [activeEje, setActiveEje] = useState<Eje>(INITIAL_EJES[0]);
   const [ejes, setEjes] = useState<Eje[]>(INITIAL_EJES);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
+  const [bgUrlInput, setBgUrlInput] = useState('');
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [currentPoints, setCurrentPoints] = useState<{ x: number, y: number }[]>([]);
   const [customPolygons, setCustomPolygons] = useState<{ points: { x: number, y: number }[], ejeId: string, id: string }[]>([]);
@@ -128,14 +129,18 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
 
       try {
         // 1. Cargar Configuración General
+        console.log('Fetching map config...');
         const { data: config, error: configError } = await supabase
           .from('mapa_config')
           .select('*')
           .eq('id', 'default')
-          .maybeSingle(); // maybeSingle instead of single prevents error when not found
+          .maybeSingle();
+
+        if (configError) throw configError;
 
         if (config && mounted) {
           setBackgroundImage(config.background_image);
+          setBgUrlInput(config.background_image || '');
           if (config.ejes_data) {
              const loadedEjes = config.ejes_data.map((e: any) => ({
                 ...e,
@@ -147,9 +152,12 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
         }
 
         // 2. Cargar Polígonos
+        console.log('Fetching polygons...');
         const { data: polygons, error: polyError } = await supabase
           .from('mapa_poligonos')
           .select('*');
+
+        if (polyError) throw polyError;
 
         if (polygons && mounted) {
           setCustomPolygons(polygons.map(p => ({
@@ -159,10 +167,10 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
           })));
         }
         
-        if (mounted) addLog('Datos del mapa sincronizados.');
-      } catch (err) {
+        if (mounted) addLog('Datos del mapa sincronizados con Supabase.');
+      } catch (err: any) {
         console.error('Error loading map data:', err);
-        if (mounted) addLog('Error de sincronización (Modo Local habilitado).');
+        if (mounted) addLog(`Error de sincronización: ${err.message || 'Error desconocido'}`);
       } finally {
         if (mounted) {
           setIsLoading(false);
@@ -176,8 +184,14 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   }, []);
 
   const saveMapConfig = async (currentEjes?: Eje[], currentBg?: string | null) => {
-    if (!supabase || !isAdminMode) return;
+    if (!supabase) {
+      addLog('Error: Supabase no configurado.');
+      return;
+    }
+    if (!isAdminMode) return;
+    
     setIsSaving(true);
+    addLog('Guardando configuración en Supabase...');
     try {
       const ejesToSave = (currentEjes || ejes).map(e => ({
         id: e.id,
@@ -198,9 +212,9 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
 
       if (error) throw error;
       addLog('Configuración guardada exitosamente.');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Save error:', err);
-      addLog('Error al guardar configuración.');
+      addLog(`Error al guardar: ${err.message || 'Permiso denegado (RLS)'}`);
     } finally {
       setIsSaving(false);
     }
@@ -234,15 +248,26 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 1024 * 500) { // limit 500KB for base64 safety
+        addLog('Imagen muy pesada para DB. Use una URL externa preferiblemente.');
+      }
       const reader = new FileReader();
       reader.onload = async (event) => {
         const result = event.target?.result as string;
         setBackgroundImage(result);
-        addLog('Nueva imagen de fondo cargada.');
+        setBgUrlInput(result.startsWith('data:') ? 'Imagen Base64' : result);
+        addLog('Imagen cargada localmente.');
         await saveMapConfig(undefined, result);
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleUrlUpdate = async () => {
+    if (bgUrlInput === 'Imagen Base64' || bgUrlInput === backgroundImage) return;
+    setBackgroundImage(bgUrlInput);
+    addLog('URL de fondo actualizada.');
+    await saveMapConfig(undefined, bgUrlInput);
   };
 
   const handleSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -325,9 +350,17 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
                        <Edit3 size={16} className="text-blue-400" />
                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Editor SIG</span>
                     </div>
-                    {!supabase && (
-                       <span className="text-[7px] text-rose-500 font-bold uppercase mt-1">Sin conexión a DB</span>
-                    )}
+                    <div className="flex gap-2 mt-1">
+                       <button 
+                         onClick={() => window.location.reload()}
+                         className="text-[7px] text-slate-500 font-bold uppercase flex items-center gap-1 hover:text-white transition-colors"
+                       >
+                         <RefreshCw size={8} /> Recargar
+                       </button>
+                       {!supabase && (
+                          <span className="text-[7px] text-rose-500 font-bold uppercase">Sin DB</span>
+                       )}
+                    </div>
                  </div>
                  <div className={`w-2.5 h-2.5 rounded-full ${supabase ? 'bg-green-500 animate-pulse' : 'bg-rose-500'}`}></div>
               </div>
@@ -360,24 +393,39 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
                  </div>
               </div>
 
-              {/* Upload Image */}
-              <div className="flex flex-col gap-2">
-                 <label className="p-4 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center hover:border-blue-500/30 transition-colors cursor-pointer group bg-black/20">
-                    <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
-                    <Upload size={16} className="text-slate-600 group-hover:text-blue-400 mb-2" />
-                    <span className="text-[8px] font-black text-white uppercase tracking-widest text-center leading-tight">
-                       {backgroundImage ? 'Cambiar Mapa' : 'Subir Mapa Base'}
-                    </span>
-                 </label>
+              {/* Image Configuration */}
+              <div className="flex flex-col gap-3">
+                 <div className="flex items-center justify-between px-1">
+                    <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Fondo de Mapa (ImgBB/URL)</label>
+                    <Layout size={10} className="text-slate-500" />
+                 </div>
+                 
+                 <div className="flex gap-1.5">
+                    <input 
+                       type="text"
+                       placeholder="URL de imagen (ej: ImgBB)"
+                       value={bgUrlInput}
+                       onChange={(e) => setBgUrlInput(e.target.value)}
+                       onBlur={handleUrlUpdate}
+                       onKeyDown={(e) => e.key === 'Enter' && handleUrlUpdate()}
+                       className="flex-1 bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-[9px] font-bold text-white focus:outline-none focus:border-blue-500/50"
+                    />
+                    <label className="p-1.5 bg-white/5 border border-white/10 rounded-lg cursor-pointer hover:bg-white/10 transition-colors">
+                       <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                       <Upload size={12} className="text-slate-400" />
+                    </label>
+                 </div>
+
                  {backgroundImage && (
                     <button 
                       onClick={async () => {
                         setBackgroundImage(null);
+                        setBgUrlInput('');
                         await saveMapConfig(undefined, null);
                       }}
-                      className="text-[7px] font-black text-rose-500 uppercase tracking-widest hover:underline flex items-center justify-center gap-1"
+                      className="text-[7px] font-black text-rose-500 uppercase tracking-[0.2em] hover:underline flex items-center justify-center gap-1.5 bg-rose-500/5 py-1 rounded-md"
                     >
-                      <X size={10} /> Quitar Mapa
+                      <X size={10} /> ELIMINAR FONDO
                     </button>
                  )}
               </div>
@@ -484,8 +532,23 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
                        </a>
                     </div>
                  </div>
+              <div className="flex gap-2">
+                <input 
+                  type="color" 
+                  value={activeEje.color}
+                  onChange={(e) => {
+                    const newColor = e.target.value;
+                    const updatedEjes = ejes.map(ej => ej.id === activeEje.id ? { ...ej, color: newColor } : ej);
+                    setEjes(updatedEjes);
+                    setActiveEje(prev => ({ ...prev, color: newColor }));
+                  }}
+                  onBlur={() => saveMapConfig()}
+                  className="w-10 h-8 bg-transparent border-none p-0 cursor-pointer"
+                />
+                <span className="text-[10px] font-bold text-slate-400 self-center">{activeEje.color}</span>
               </div>
-           </div>
+            </div>
+          </div>
         </div>
       )}
 
