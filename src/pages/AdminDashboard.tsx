@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import DirectorDashboard from '../components/ui/DirectorDashboard';
 import OficinaDashboard from '../components/ui/OficinaDashboard';
 import AdminPortal from '../components/ui/AdminPortal';
+import InteractiveMirandaMap from '../components/InteractiveMirandaMap';
 import { supabase } from '../lib/supabase';
 import { LogOut, User, ShieldCheck } from 'lucide-react';
 

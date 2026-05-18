@@ -21,8 +21,10 @@ import {
   PenBox,
   CheckCircle2,
   AlertCircle,
-  Loader2
+  Loader2,
+  Map as MapIcon
 } from 'lucide-react';
+import InteractiveMirandaMap from '../InteractiveMirandaMap';
 
 interface Noticia {
   id: number;
@@ -33,7 +35,7 @@ interface Noticia {
 }
 
 export default function AdminPortal() {
-  const [activeTab, setActiveTab] = useState<'scripts' | 'noticias' | 'config'>('scripts');
+  const [activeTab, setActiveTab] = useState<'scripts' | 'noticias' | 'config' | 'mapa'>('scripts');
   const [noticias, setNoticias] = useState<Noticia[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingNoticia, setEditingNoticia] = useState<Noticia | null>(null);
@@ -124,9 +126,10 @@ export default function AdminPortal() {
   return (
     <div className="space-y-6">
       {/* TABS */}
-      <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-gray-100 max-w-lg">
+      <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-gray-100 max-w-2xl overflow-x-auto">
         {[
           { id: 'scripts', label: 'Automatizaciones', icon: <Settings size={16} /> },
+          { id: 'mapa', label: 'Editor de Mapa', icon: <MapIcon size={16} /> },
           { id: 'noticias', label: 'Noticias', icon: <Newspaper size={16} /> },
           { id: 'config', label: 'Configuración', icon: <Shield size={16} /> },
         ].map(tab => (
@@ -210,6 +213,18 @@ export default function AdminPortal() {
                 )}
               </div>
             </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'mapa' && (
+          <motion.div 
+            key="mapa"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="flex-1 min-h-[500px] h-[calc(100vh-250px)]"
+          >
+            <InteractiveMirandaMap isAdminMode={true} />
           </motion.div>
         )}
 

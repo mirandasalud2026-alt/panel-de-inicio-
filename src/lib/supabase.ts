@@ -17,7 +17,7 @@ export const getSupabase = (): SupabaseClient => {
 };
 
 // Singleton instance for convenience, but check before use or use getSupabase()
-export const supabase = (supabaseUrl && supabaseAnonKey) 
+export const supabase = (supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('your-project-url')) 
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
 

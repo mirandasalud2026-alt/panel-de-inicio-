@@ -24,6 +24,9 @@ export function useAuth() {
           .eq('id', uid)
           .single();
         
+        if (error) {
+          console.warn('Profile fetch error (using fallback):', error.message);
+        }
         if (mounted) {
           if (!error && data) {
             setProfile(data as UserProfile);
@@ -52,6 +55,9 @@ export function useAuth() {
       } else {
         setLoading(false);
       }
+    }).catch(err => {
+      console.error('Supabase session fetch failed:', err);
+      if (mounted) setLoading(false);
     });
 
     // Listen for changes

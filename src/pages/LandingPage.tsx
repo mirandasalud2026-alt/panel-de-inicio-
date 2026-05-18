@@ -48,32 +48,14 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* Stats RÃ¡pidas */}
-        <div className="relative z-10 grid grid-cols-3 gap-3 md:gap-6 mb-8 max-w-4xl">
-          <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-4 text-center">
-            <div className="text-xl md:text-3xl font-black">2,847</div>
-            <div className="text-[10px] md:text-xs opacity-70 uppercase tracking-widest mt-1">Establecimientos</div>
-          </div>
-          <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-4 text-center">
-            <div className="text-xl md:text-3xl font-black">47</div>
-            <div className="text-[10px] md:text-xs opacity-70 uppercase tracking-widest mt-1">ASICs Activos</div>
-          </div>
-          <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-4 text-center">
-            <div className="text-xl md:text-3xl font-black">89.3%</div>
-            <div className="text-[10px] md:text-xs opacity-70 uppercase tracking-widest mt-1">Cobertura</div>
-          </div>
-        </div>
-
         {/* CTAs */}
         <div className="relative z-10 flex flex-col sm:flex-row gap-4 max-w-lg">
-          <a 
-            href="https://sites.google.com/view/saludmiranda04" 
-            target="_blank" 
-            rel="noreferrer"
+          <Link 
+            to="/sitio-informativo"
             className="flex-1 bg-white text-[#0B3D5C] px-6 py-4 rounded-3xl font-bold text-sm flex items-center justify-center gap-3 shadow-2xl hover:bg-gray-50 transition-all hover:-translate-y-1"
           >
             <BookOpen size={20} /> Entrar al Sitio Informativo
-          </a>
+          </Link>
           <Link 
             to="/login"
             className="flex-1 bg-white/10 border border-white/20 backdrop-blur-md text-white px-6 py-4 rounded-3xl font-bold text-sm flex items-center justify-center gap-3 hover:bg-white/20 transition-all"
@@ -152,85 +134,6 @@ export default function LandingPage() {
                 <span>Dirección General</span>
               </div>
             </motion.div>
-          </div>
-        </section>
-
-        {/* BALANCE DE GESTIÓN */}
-        <section className="bg-gradient-to-br from-gray-50 to-gray-200/50 rounded-[2.5rem] p-8 mb-10 shadow-sm border border-white/50">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 bg-[#0B3D5C] rounded-xl flex items-center justify-center text-white">
-              <BarChart3 size={20} />
-            </div>
-            <h2 className="text-xl font-bold text-gray-800">Balance de Gestión – Mayo 2026</h2>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            {[
-              { label: 'Establecimientos', value: '2,847', icon: <Building2 className="text-blue-500" /> },
-              { label: 'Vacunas', value: '48,320', icon: <Syringe className="text-emerald-500" /> },
-              { label: 'Partos', value: '1,245', icon: <Baby className="text-amber-500" /> },
-              { label: 'Consultas', value: '127,890', icon: <Stethoscope className="text-rose-500" /> },
-            ].map((st, i) => (
-              <div key={i} className="bg-white p-5 rounded-3xl shadow-sm text-center">
-                <div className="flex justify-center mb-3">
-                  {st.icon}
-                </div>
-                <div className="text-xl font-black text-[#0B3D5C]">{st.value}</div>
-                <div className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-1">{st.label}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="bg-white p-6 rounded-3xl shadow-sm">
-            <div className="flex justify-between text-sm font-bold text-gray-700 mb-3">
-              <span>Meta de cobertura de reporte semanal</span>
-              <span className="text-[#0B3D5C]">89.3%</span>
-            </div>
-            <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden">
-              <motion.div 
-                initial={{ width: 0 }}
-                whileInView={{ width: '89.3%' }}
-                className="h-full bg-gradient-to-r from-emerald-500 to-green-400 rounded-full"
-              ></motion.div>
-            </div>
-            <p className="text-[10px] text-gray-400 font-bold mt-3 flex items-center gap-1.5 uppercase tracking-widest">
-              <ClipboardCheck size={12} /> 42 de 47 ASICs han reportado esta semana
-            </p>
-          </div>
-        </section>
-
-        {/* BOLETINES */}
-        <section className="mb-10">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold flex items-center gap-2 text-gray-800">
-              <span className="text-2xl">📋</span> Boletines y Descargas
-            </h2>
-          </div>
-
-          <div className="grid gap-3">
-            {[
-              { name: 'Boletín Epidemiológico Semanal N° 20', desc: 'Semana 20 – 11 al 17 de Mayo 2026', type: 'pdf', color: 'bg-rose-50 text-rose-600' },
-              { name: 'Reporte Mensual de Cobertura – Abril 2026', desc: 'Consolidado por ASIC y municipio', type: 'excel', color: 'bg-emerald-50 text-emerald-600' },
-              { name: 'Plan Operativo Anual 2026', desc: 'Documento rector de gestión en salud', type: 'doc', color: 'bg-blue-50 text-blue-600' }
-            ].map((doc, i) => (
-              <motion.div 
-                key={i}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => mostrarToast(`Descargando ${doc.name}...`)}
-                className="bg-white p-5 rounded-3xl shadow-sm flex items-center gap-4 cursor-pointer hover:shadow-md transition-shadow"
-              >
-                <div className={`w-12 h-12 ${doc.color} rounded-2xl flex items-center justify-center text-xl shrink-0`}>
-                  <FileText size={24} />
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-bold text-sm text-gray-800">{doc.name}</h4>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{doc.desc}</p>
-                </div>
-                <div className="w-10 h-10 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center hover:bg-[#0B3D5C] hover:text-white transition-colors shrink-0">
-                  <Download size={18} />
-                </div>
-              </motion.div>
-            ))}
           </div>
         </section>
 

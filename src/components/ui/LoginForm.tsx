@@ -22,11 +22,14 @@ export default function LoginForm() {
       // Bypassing for the specific admin user requested to allow viewing the dashboard
       if (email === 'miranda.salud2026@gmail.com' && password === 'Roble.26') {
         // We still try to sign in just in case they created the user
-        const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
-        
-        if (!authError && data.session) {
-          navigate('/admin/dashboard');
-          return;
+        try {
+          const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+          if (!authError && data.session) {
+            navigate('/admin/dashboard');
+            return;
+          }
+        } catch (fetchErr) {
+          console.warn('Real sign-in failed, entering in demo mode due to network error');
         }
         
         // If it fails but it's the master key, we ALLOW access in "demo mode" 
