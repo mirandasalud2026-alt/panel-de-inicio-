@@ -8,15 +8,22 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!supabase) {
-      setLoading(false);
-      return;
-    }
-
     let mounted = true;
 
     async function fetchProfile(uid: string, currentUserEmail: string | undefined) {
-      if (!supabase) return;
+      if (!supabase) {
+        // Even without Supabase, we can set a fallback profile if it's the demo admin
+        if (uid === 'demo-admin') {
+          setProfile({
+            id: 'demo-admin',
+            nombre: 'Administrador Central (Demo)',
+            email: 'miranda.salud2026@gmail.com',
+            rol: 'admin'
+          });
+        }
+        setLoading(false);
+        return;
+      }
       try {
         const { data, error } = await supabase
           .from('usuarios')

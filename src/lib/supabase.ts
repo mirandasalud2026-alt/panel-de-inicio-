@@ -3,23 +3,32 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
+// Logs for debugging environment variables (safe to show in dev)
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn('⚠️ SUPABASE_URL o SUPABASE_ANON_KEY no detectados.');
+  console.warn('Asegúrese de usar el prefijo VITE_ en el panel de Secretos (Ej: VITE_SUPABASE_URL).');
+}
+
 let cachedSupabase: SupabaseClient | null = null;
 
-export const getSupabase = (): SupabaseClient => {
+export const getSupabase = (): SupabaseClient | null => {
   if (cachedSupabase) return cachedSupabase;
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase credentials missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in the Secrets panel.');
+  if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('your-project-url')) {
+    return null;
   }
 
-  cachedSupabase = createClient(supabaseUrl, supabaseAnonKey);
-  return cachedSupabase;
+  try {
+    cachedSupabase = createClient(supabaseUrl, supabaseAnonKey);
+    return cachedSupabase;
+  } catch (err) {
+    console.error('Error creating Supabase client:', err);
+    return null;
+  }
 };
 
-// Singleton instance for convenience, but check before use or use getSupabase()
-export const supabase = (supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('your-project-url')) 
-  ? createClient(supabaseUrl, supabaseAnonKey) 
-  : null;
+// Singleton instance
+export const supabase = getSupabase();
 
 export type UserRole = 'admin' | 'directivo' | 'oficina';
 

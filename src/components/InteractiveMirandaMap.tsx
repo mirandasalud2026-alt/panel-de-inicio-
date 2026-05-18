@@ -394,7 +394,30 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                     Sincronizando capas geográficas y preferencias globales con la nube de salud...
                   </p>
                   
-                  {dbStatus === 'error' && (
+                  {!supabase && (
+                    <motion.div 
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="bg-amber-500/10 border border-amber-500/20 p-6 rounded-[2rem] mb-8"
+                    >
+                      <div className="flex items-center justify-center gap-2 text-amber-500 mb-2">
+                        <AlertCircle size={16} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Configuración Faltante</span>
+                      </div>
+                      <p className="text-[10px] text-amber-400/80 mb-2 font-medium">
+                         No se detectaron las credenciales de Supabase.
+                      </p>
+                      <div className="bg-black/20 p-3 rounded-xl text-[8px] font-mono text-slate-400 mb-2 text-left space-y-1">
+                        <div>VITE_SUPABASE_URL: {import.meta.env.VITE_SUPABASE_URL ? '✅' : '❌'}</div>
+                        <div>VITE_SUPABASE_ANON_KEY: {import.meta.env.VITE_SUPABASE_ANON_KEY ? '✅' : '❌'}</div>
+                      </div>
+                      <p className="text-[9px] text-slate-500 italic">
+                        Verifique que las variables tengan el prefijo <b>VITE_</b> en su proveedor (Vercel/AI Studio).
+                      </p>
+                    </motion.div>
+                  )}
+                  
+                  {dbStatus === 'error' && supabase && (
                     <motion.div 
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}

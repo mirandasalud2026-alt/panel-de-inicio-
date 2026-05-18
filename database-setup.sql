@@ -79,27 +79,33 @@ CREATE POLICY "Admins escriben noticias" ON public.noticias
     FOR ALL TO authenticated
     USING (get_user_role() = 'admin');
 
--- POLÍTICAS PARA CONFIGURACION
+-- POLÍTICAS PARA CONFIGURACION (mapa_config)
+-- Lectura: Pública (SELECT para todos)
+-- Escritura: Solo Admin (INSERT, UPDATE, DELETE)
 DROP POLICY IF EXISTS "Lectura pública config" ON public.mapa_config;
 CREATE POLICY "Lectura pública config" ON public.mapa_config
     FOR SELECT TO public
     USING (true);
 
-DROP POLICY IF EXISTS "Admins escriben config" ON public.mapa_config;
-CREATE POLICY "Admins escriben config" ON public.mapa_config
+DROP POLICY IF EXISTS "Admins gestionan config" ON public.mapa_config;
+CREATE POLICY "Admins gestionan config" ON public.mapa_config
     FOR ALL TO authenticated
-    USING (get_user_role() = 'admin');
+    USING (get_user_role() = 'admin')
+    WITH CHECK (get_user_role() = 'admin');
 
--- POLÍTICAS PARA POLIGONOS
+-- POLÍTICAS PARA POLIGONOS (mapa_poligonos)
+-- Lectura: Pública (SELECT para todos)
+-- Escritura: Solo Admin (INSERT, UPDATE, DELETE)
 DROP POLICY IF EXISTS "Lectura pública poligonos" ON public.mapa_poligonos;
 CREATE POLICY "Lectura pública poligonos" ON public.mapa_poligonos
     FOR SELECT TO public
     USING (true);
 
-DROP POLICY IF EXISTS "Admins escriben poligonos" ON public.mapa_poligonos;
-CREATE POLICY "Admins escriben poligonos" ON public.mapa_poligonos
+DROP POLICY IF EXISTS "Admins gestionan poligonos" ON public.mapa_poligonos;
+CREATE POLICY "Admins gestionan poligonos" ON public.mapa_poligonos
     FOR ALL TO authenticated
-    USING (get_user_role() = 'admin');
+    USING (get_user_role() = 'admin')
+    WITH CHECK (get_user_role() = 'admin');
 
 -- 6. TRIGGER DE AUTOMATIZACIÓN DE REGISTRO (Acreditación)
 -- Crea automáticamente el perfil en public.usuarios cuando alguien se registra en Auth
