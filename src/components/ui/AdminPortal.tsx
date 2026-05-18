@@ -14,7 +14,7 @@ import {
   Clock, 
   RefreshCw,
   Mountain,
-  Palmtree, // For Valles del Tuy icon equivalent
+  Palmtree, 
   BarChart,
   HardDrive,
   Eraser,
@@ -22,12 +22,16 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Map as MapIcon
+  Map as MapIcon,
+  UserCheck,
+  UserX,
+  Database
 } from 'lucide-react';
 import InteractiveMirandaMap from '../InteractiveMirandaMap';
+import { supabase, UserProfile } from '../../lib/supabase';
 
 interface Noticia {
-  id: number;
+  id: string | number;
   titulo: string;
   categoria: 'urgente' | 'informativa' | 'evento';
   texto: string;
@@ -35,34 +39,84 @@ interface Noticia {
 }
 
 export default function AdminPortal() {
-  const [activeTab, setActiveTab] = useState<'scripts' | 'noticias' | 'config' | 'mapa'>('scripts');
+  const [activeTab, setActiveTab] = useState<'scripts' | 'noticias' | 'config' | 'mapa' | 'usuarios'>('scripts');
   const [noticias, setNoticias] = useState<Noticia[]>([]);
+  const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingNoticia, setEditingNoticia] = useState<Noticia | null>(null);
   const [logs, setLogs] = useState<{ time: string, msg: string }[]>([]);
   const [executingScript, setExecutingScript] = useState<string | null>(null);
+  const [isDbLoading, setIsDbLoading] = useState(false);
 
-  // Load initial news
+  // Load initial data
   useEffect(() => {
-    const saved = localStorage.getItem('sim_miranda_noticias');
-    if (saved) {
-      setNoticias(JSON.parse(saved));
-    } else {
-      const defaultNoticias: Noticia[] = [
-        {
-          id: 1,
-          titulo: 'Bienvenido al Panel de Administración',
-          categoria: 'informativa',
-          texto: 'Desde este panel podrás gestionar noticias y ejecutar las sincronizaciones automáticas de los ASICs.',
-          fecha: new Date().toISOString().split('T')[0]
-        }
-      ];
-      setNoticias(defaultNoticias);
-      localStorage.setItem('sim_miranda_noticias', JSON.stringify(defaultNoticias));
+    fetchNoticias();
+    fetchUsers();
+    agregarLog('Panel de Administración sincronizado.');
+  }, []);
+
+  const fetchNoticias = async () => {
+    if (!supabase) {
+      const saved = localStorage.getItem('sim_miranda_noticias');
+      if (saved) setNoticias(JSON.parse(saved));
+      return;
     }
     
-    agregarLog('Panel iniciado. Esperando comandos...');
-  }, []);
+    setIsDbLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('noticias')
+        .select('*')
+        .order('fecha', { ascending: false });
+      
+      if (error) throw error;
+      if (data && data.length > 0) {
+        setNoticias(data);
+      } else {
+        const defaultNoticias: Noticia[] = [
+          {
+            id: 1,
+            titulo: 'Bienvenido al Panel de Administración',
+            categoria: 'informativa',
+            texto: 'Desde este panel podrás gestionar noticias y ejecutar las sincronizaciones automáticas de los ASICs.',
+            fecha: new Date().toISOString().split('T')[0]
+          }
+        ];
+        setNoticias(defaultNoticias);
+      }
+    } catch (err) {
+      console.error('Error fetching noticias:', err);
+    } finally {
+      setIsDbLoading(false);
+    }
+  };
+
+  const fetchUsers = async () => {
+    if (!supabase) return;
+    try {
+      const { data, error } = await supabase.from('usuarios').select('*');
+      if (error) throw error;
+      setSystemUsers(data || []);
+    } catch (err) {
+      console.error('Error fetching users:', err);
+    }
+  };
+
+  const handleUserStatus = async (userId: string, newStatus: string) => {
+    if (!supabase) return;
+    try {
+      const { error } = await supabase
+        .from('usuarios')
+        .update({ estado: newStatus })
+        .eq('id', userId);
+      
+      if (error) throw error;
+      agregarLog(`👤 Usuario actualizado a ${newStatus}.`);
+      fetchUsers();
+    } catch (err: any) {
+      agregarLog(`❌ Error usuarios: ${err.message}`);
+    }
+  };
 
   const agregarLog = (msg: string) => {
     const time = new Date().toLocaleTimeString('es-VE');
@@ -80,36 +134,70 @@ export default function AdminPortal() {
     agregarLog(`✅ Éxito: ${name} ejecutado correctamente.`);
   };
 
-  const saveNoticia = (e: React.FormEvent<HTMLFormElement>) => {
+  const saveNoticia = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const noticiaData: Noticia = {
-      id: editingNoticia ? editingNoticia.id : Date.now(),
+    const noticiaData: Partial<Noticia> = {
       titulo: formData.get('titulo') as string,
       categoria: formData.get('categoria') as any,
       texto: formData.get('texto') as string,
-      fecha: new Date().toISOString().split('T')[0]
+      fecha: new Date().toISOString()
     };
 
-    let updated;
-    if (editingNoticia) {
-      updated = noticias.map(n => n.id === noticiaData.id ? noticiaData : n);
+    if (supabase) {
+      setIsDbLoading(true);
+      try {
+        if (editingNoticia) {
+          const { error } = await supabase
+            .from('noticias')
+            .update(noticiaData)
+            .eq('id', editingNoticia.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('noticias')
+            .insert(noticiaData);
+          if (error) throw error;
+        }
+        await fetchNoticias();
+      } catch (err: any) {
+        agregarLog(`❌ Error DB Noticias: ${err.message}`);
+      } finally {
+        setIsDbLoading(false);
+      }
     } else {
-      updated = [noticiaData, ...noticias];
-    }
-
-    setNoticias(updated);
-    localStorage.setItem('sim_miranda_noticias', JSON.stringify(updated));
-    setIsModalOpen(false);
-    setEditingNoticia(null);
-    agregarLog(`📰 Noticia "${noticiaData.titulo}" guardada.`);
-  };
-
-  const deleteNoticia = (id: number) => {
-    if (confirm('¿Eliminar esta noticia?')) {
-      const updated = noticias.filter(n => n.id !== id);
+      // Local Fallback
+      let updated;
+      const fullNoticia = { ...noticiaData, id: editingNoticia ? editingNoticia.id : Date.now() } as Noticia;
+      if (editingNoticia) {
+        updated = noticias.map(n => n.id === fullNoticia.id ? fullNoticia : n);
+      } else {
+        updated = [fullNoticia, ...noticias];
+      }
       setNoticias(updated);
       localStorage.setItem('sim_miranda_noticias', JSON.stringify(updated));
+    }
+
+    setIsModalOpen(false);
+    setEditingNoticia(null);
+    agregarLog(`📰 Noticia "${noticiaData.titulo}" procesada.`);
+  };
+
+  const deleteNoticia = async (id: string | number) => {
+    if (confirm('¿Eliminar esta noticia?')) {
+      if (supabase) {
+        try {
+          const { error } = await supabase.from('noticias').delete().eq('id', id);
+          if (error) throw error;
+          await fetchNoticias();
+        } catch (err: any) {
+          agregarLog(`❌ Error eliminar: ${err.message}`);
+        }
+      } else {
+        const updated = noticias.filter(n => n.id !== id);
+        setNoticias(updated);
+        localStorage.setItem('sim_miranda_noticias', JSON.stringify(updated));
+      }
       agregarLog('🗑️ Noticia eliminada.');
     }
   };
@@ -126,20 +214,21 @@ export default function AdminPortal() {
   return (
     <div className="space-y-6">
       {/* TABS */}
-      <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-gray-100 max-w-2xl overflow-x-auto">
+      <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-gray-100 max-w-3xl overflow-x-auto custom-scrollbar">
         {[
-          { id: 'scripts', label: 'Automatizaciones', icon: <Settings size={16} /> },
-          { id: 'mapa', label: 'Editor de Mapa', icon: <MapIcon size={16} /> },
-          { id: 'noticias', label: 'Noticias', icon: <Newspaper size={16} /> },
-          { id: 'config', label: 'Configuración', icon: <Shield size={16} /> },
+          { id: 'scripts', label: 'Scripts/Sync', icon: <Settings size={14} /> },
+          { id: 'mapa', label: 'SIG/Mapa', icon: <MapIcon size={14} /> },
+          { id: 'noticias', label: 'Noticias', icon: <Newspaper size={14} /> },
+          { id: 'usuarios', label: 'Acreditación', icon: <Users size={14} /> },
+          { id: 'config', label: 'Configuración', icon: <Database size={14} /> },
         ].map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-bold transition-all ${
+            className={`flex-1 flex items-center justify-center gap-2 py-3 px-5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${
               activeTab === tab.id 
-                ? 'bg-[#0B3D5C] text-white shadow-lg' 
-                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                ? 'bg-[#0B3D5C] text-white shadow-[0_10px_20px_-5px_rgba(11,61,92,0.3)]' 
+                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
             }`}
           >
             {tab.icon} {tab.label}
@@ -288,19 +377,121 @@ export default function AdminPortal() {
           </motion.div>
         )}
 
+        {activeTab === 'usuarios' && (
+          <motion.div 
+            key="usuarios"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="space-y-6"
+          >
+            <div className="flex justify-between items-center">
+               <h2 className="text-xl font-bold flex items-center gap-2 text-gray-800">
+                <Users className="text-blue-600" /> Acreditación de Usuarios
+              </h2>
+              <div className="flex gap-2">
+                 <button onClick={fetchUsers} className="p-2 bg-gray-50 text-gray-400 rounded-lg hover:bg-gray-100 transition-colors">
+                    <RefreshCw size={14} className={isDbLoading ? 'animate-spin' : ''} />
+                 </button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm">
+               <table className="w-full text-left">
+                  <thead className="bg-gray-50 border-b border-gray-100">
+                     <tr>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400">Usuario</th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400">Rol</th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400">Estado</th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400 text-right">Acciones</th>
+                     </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                     {systemUsers.map(u => (
+                        <tr key={u.id}>
+                           <td className="px-6 py-4">
+                              <div className="flex flex-col">
+                                 <span className="text-sm font-bold text-gray-800">{u.nombre}</span>
+                                 <span className="text-[10px] text-gray-400">{u.email}</span>
+                              </div>
+                           </td>
+                           <td className="px-6 py-4">
+                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
+                                 u.rol === 'admin' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
+                              }`}>{u.rol}</span>
+                           </td>
+                           <td className="px-6 py-4">
+                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
+                                 (u as any).estado === 'aprobado' ? 'bg-green-50 text-green-600' : (u as any).estado === 'rechazado' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'
+                              }`}>{(u as any).estado || 'pendiente'}</span>
+                           </td>
+                           <td className="px-6 py-4 text-right">
+                              <div className="flex justify-end gap-2">
+                                 {(u as any).estado !== 'aprobado' && (
+                                    <button 
+                                      onClick={() => handleUserStatus(u.id, 'aprobado')}
+                                      className="p-1.5 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
+                                      title="Aprobar"
+                                    >
+                                       <UserCheck size={16} />
+                                    </button>
+                                 )}
+                                 {(u as any).estado !== 'rechazado' && (
+                                    <button 
+                                      onClick={() => handleUserStatus(u.id, 'rechazado')}
+                                      className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                                      title="Rechazar"
+                                    >
+                                       <UserX size={16} />
+                                    </button>
+                                 )}
+                              </div>
+                           </td>
+                        </tr>
+                     ))}
+                  </tbody>
+               </table>
+            </div>
+          </motion.div>
+        )}
+
         {activeTab === 'config' && (
           <motion.div 
             key="config"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="flex flex-col items-center justify-center py-20 bg-white rounded-[3rem] border border-dashed border-gray-200"
+            className="space-y-6"
           >
-            <div className="w-20 h-20 bg-gray-50 rounded-3xl flex items-center justify-center text-gray-200 mb-6">
-              <Shield size={40} />
+            <div className="flex items-center gap-3 mb-6">
+               <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-blue-400">
+                  <Settings />
+               </div>
+               <div>
+                  <h3 className="text-lg font-bold text-gray-800 uppercase tracking-tight">Preferencias del Sistema</h3>
+                  <p className="text-[10px] text-gray-400 font-medium">Control de capas y comportamiento global</p>
+               </div>
             </div>
-            <h3 className="text-lg font-bold text-gray-800">Panel en Desarrollo</h3>
-            <p className="text-sm text-gray-400 mt-2">La configuración avanzada estará disponible en la v1.3.0</p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+               {[
+                  { label: 'Sincronización Automática', desc: 'Cada 15 minutos sincroniza ASICs', active: true },
+                  { label: 'Alertas de Brotes', desc: 'Notifica urgencias al canal regional', active: true },
+                  { label: 'Acceso Invitado', desc: 'Permite visualización sin login', active: false },
+                  { label: 'Modo Offline', desc: 'Carga datos de respaldo si falla API', active: true },
+               ].map((c, i) => (
+                  <div key={i} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                     <div className="flex justify-between items-start mb-4">
+                        <span className={`w-3 h-3 rounded-full ${c.active ? 'bg-green-500' : 'bg-gray-200'}`}></span>
+                        <div className={`w-10 h-5 rounded-full relative transition-colors ${c.active ? 'bg-blue-600' : 'bg-gray-200'}`}>
+                           <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${c.active ? 'left-6' : 'left-1'}`}></div>
+                        </div>
+                     </div>
+                     <h4 className="text-xs font-black text-gray-800 uppercase tracking-widest">{c.label}</h4>
+                     <p className="text-[10px] text-gray-400 mt-1">{c.desc}</p>
+                  </div>
+               ))}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

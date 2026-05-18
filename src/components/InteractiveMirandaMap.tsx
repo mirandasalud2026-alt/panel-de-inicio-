@@ -103,10 +103,36 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const [editingEje, setEditingEje] = useState<Eje | null>(null);
   const [editForm, setEditForm] = useState({ name: '', url: '', color: '', description: '' });
   const [hoveredMunicipio, setHoveredMunicipio] = useState<string | null>(null);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isExecuting, setIsExecuting] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [dbStatus, setDbStatus] = useState<'testing' | 'ok' | 'error' | 'disconnected'>('disconnected');
+  const [lastAction, setLastAction] = useState<{ msg: string, type: 'success' | 'error' } | null>(null);
+
+  const notify = (msg: string, type: 'success' | 'error' = 'success') => {
+    console.log(`Notification [${type}]: ${msg}`);
+    setLastAction({ msg, type });
+    setTimeout(() => setLastAction(null), 5000);
+  };
+
+  // Test de Conexión Real
+  const runConnectionTest = async () => {
+    if (!supabase) {
+      setDbStatus('disconnected');
+      return false;
+    }
+    setDbStatus('testing');
+    try {
+      const { error } = await supabase.from('mapa_config').select('id').eq('id', 'default').maybeSingle();
+      if (error) throw error;
+      setDbStatus('ok');
+      return true;
+    } catch (err: any) {
+      console.error('Connection test failed:', err);
+      setDbStatus('error');
+      return false;
+    }
+  };
 
   // Cargar Datos desde Supabase
   useEffect(() => {
@@ -114,16 +140,12 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
     const fetchMapData = async () => {
       setIsLoading(true);
       
-      // Safety Timeout: if DB takes > 8s, unlock UI
-      const timeoutId = setTimeout(() => {
-        if (mounted) {
-          setIsLoading(false);
-          console.warn('DB Timeout - Local Mode');
-        }
-      }, 8000);
+      // Intentar conectar pero no bloquear el flujo infinito si falla
+      const hasConnection = await runConnectionTest();
+      
+      if (!mounted) return;
 
-      if (!supabase) {
-        clearTimeout(timeoutId);
+      if (!hasConnection || !supabase) {
         setIsLoading(false);
         return;
       }
@@ -174,7 +196,6 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
       } finally {
         if (mounted) {
           setIsLoading(false);
-          clearTimeout(timeoutId);
         }
       }
     };
@@ -196,18 +217,24 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
         description: e.description
       }));
 
+      const finalBg = currentBg !== undefined ? currentBg : backgroundImage;
+
       const { error } = await supabase
         .from('mapa_config')
         .upsert({
           id: 'default',
-          background_image: currentBg !== undefined ? currentBg : backgroundImage,
+          background_image: finalBg,
           ejes_data: ejesToSave,
           updated_at: new Date().toISOString()
         }, { onConflict: 'id' });
 
       if (error) throw error;
+      setDbStatus('ok');
+      notify('Configuración sincronizada');
     } catch (err: any) {
-      console.error('Save error details:', err);
+      console.error('Save error:', err);
+      setDbStatus('error');
+      notify(err.message || 'Error al guardar', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -225,8 +252,10 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
           }, { onConflict: 'id' });
         
         if (error) throw error;
+        notify('Capa guardada');
      } catch (err: any) {
         console.error('Save poly error:', err);
+        notify('Error en capa', 'error');
      }
   };
 
@@ -244,13 +273,19 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 1024 * 1024 * 5) { // 5MB limit
+        notify('Archivo muy pesado (>5MB)', 'error');
+        return;
+      }
       const reader = new FileReader();
       reader.onload = async (event) => {
         const result = event.target?.result as string;
         setBackgroundImage(result);
         setBgUrlInput(result.startsWith('data:') ? 'Imagen Base64' : result);
+        // Guardado persistente
         await saveMapConfig(undefined, result);
       };
+      reader.onerror = () => notify('Error al leer el archivo', 'error');
       reader.readAsDataURL(file);
     }
   };
@@ -304,9 +339,26 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
     <div className="flex flex-col w-full h-full min-h-[500px] md:min-h-[700px] bg-[#0B1525] text-slate-200 rounded-[3rem] overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)] border border-white/5 relative">
       
       {isLoading && (
-        <div className="absolute inset-0 z-[100] bg-[#0B1525]/80 backdrop-blur-md flex flex-col items-center justify-center gap-4">
-           <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
-           <span className="text-[10px] font-black text-white uppercase tracking-[0.3em] animate-pulse">Sincronizando SIG...</span>
+        <div className="absolute inset-0 z-[100] bg-[#0B1525]/90 backdrop-blur-xl flex flex-col items-center justify-center gap-6">
+           <div className="relative">
+              <div className="w-16 h-16 border-4 border-blue-500/10 border-t-blue-500 rounded-full animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                 <div className="w-2 h-2 bg-blue-400 rounded-full animate-ping"></div>
+              </div>
+           </div>
+           <div className="flex flex-col items-center gap-2">
+              <span className="text-[10px] font-black text-white uppercase tracking-[0.4em] animate-pulse">Sincronizando SIG...</span>
+           </div>
+           
+           <button 
+             onClick={() => {
+               setIsLoading(false);
+               notify('Modo Local Activado', 'error');
+             }}
+             className="mt-8 px-6 py-2 bg-white/5 border border-white/10 rounded-full text-[8px] font-black text-slate-500 hover:text-white hover:bg-white/10 uppercase transition-all tracking-widest"
+           >
+             Omitir Sincronización
+           </button>
         </div>
       )}
 
@@ -335,15 +387,57 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Editor SIG</span>
                     </div>
                     <div className="flex gap-2 mt-1">
-                       {!supabase ? (
-                          <span className="text-[7px] text-rose-500 font-bold uppercase">Sin DB</span>
-                       ) : (
-                          <span className="text-[7px] text-green-500 font-bold uppercase">Conectado</span>
-                       )}
-                    </div>
-                 </div>
-                 <div className={`w-2.5 h-2.5 rounded-full ${supabase ? 'bg-green-500 animate-pulse' : 'bg-rose-500'}`}></div>
-              </div>
+                     {dbStatus === 'disconnected' ? (
+                        <span className="text-[7px] text-rose-500 font-bold uppercase">Sin Configurar</span>
+                     ) : dbStatus === 'testing' ? (
+                        <span className="text-[7px] text-blue-400 font-bold uppercase animate-pulse">Probando...</span>
+                     ) : dbStatus === 'ok' ? (
+                        <div className="flex items-center gap-2">
+                           <span className="text-[7px] text-green-500 font-bold uppercase flex items-center gap-1">
+                              <ShieldCheck size={8} /> Sincronizado
+                           </span>
+                           <button onClick={runConnectionTest} className="text-slate-600 hover:text-white transition-colors">
+                             <RefreshCw size={8} />
+                           </button>
+                        </div>
+                     ) : (
+                        <button 
+                          onClick={runConnectionTest}
+                          className="text-[7px] text-rose-500 font-bold uppercase hover:underline flex items-center gap-1"
+                        >
+                          <RefreshCw size={8} className="animate-spin" /> Error/Reintentar
+                        </button>
+                     )}
+                  </div>
+               </div>
+                  <div className={`w-3 h-3 rounded-full shadow-[0_0_15px] ${dbStatus === 'ok' ? 'bg-green-500 shadow-green-500/50 animate-pulse' : 'bg-rose-500 shadow-rose-500/50'}`}></div>
+               </div>
+
+               {/* Botón Guardar Forzado */}
+               <button
+                 onClick={() => saveMapConfig()}
+                 disabled={isSaving}
+                 className="w-full py-2 bg-blue-600/20 border border-blue-500/30 text-blue-400 rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-blue-500/30 transition-all flex items-center justify-center gap-2"
+               >
+                 {isSaving ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
+                 Sincronizar Cloud
+               </button>
+
+               {/* Feedback Directo */}
+               <AnimatePresence>
+                 {lastAction && (
+                   <motion.div 
+                     initial={{ opacity: 0, scale: 0.9 }}
+                     animate={{ opacity: 1, scale: 1 }}
+                     exit={{ opacity: 0 }}
+                     className={`p-2 rounded-lg text-center text-[7px] font-black uppercase tracking-widest ${
+                       lastAction.type === 'success' ? 'bg-green-500/10 text-green-500 border border-green-500/20' : 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
+                     }`}
+                   >
+                     {lastAction.msg}
+                   </motion.div>
+                 )}
+               </AnimatePresence>
 
               {/* Selector de Eje Activo */}
               <div className="space-y-2">
@@ -601,10 +695,10 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
                       height="40"
                     >
                       <button 
-                        onClick={(e) => { e.stopPropagation(); removePolygon(poly.id); }}
+                        onClick={(e) => { e.stopPropagation(); deletePolygon(poly.id); }}
                         className="bg-rose-600 text-white p-1.5 rounded-lg shadow-lg hover:bg-rose-500 transition-colors"
                       >
-                        <X size={12} />
+                        <Trash2 size={12} />
                       </button>
                     </foreignObject>
                   )}
