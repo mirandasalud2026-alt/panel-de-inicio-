@@ -175,13 +175,22 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
       }
 
       try {
+        // Safe timeout for network requests
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Map fetch timeout')), 10000)
+        );
+
         // 1. Cargar Configuración General
         console.log('Fetching map config...');
-        const { data: config, error: configError } = await supabase
+        const fetchConfig = supabase
           .from('mapa_config')
           .select('*')
           .eq('id', 'default')
           .maybeSingle();
+
+        const configRes: any = await Promise.race([fetchConfig, timeoutPromise]);
+        const config = configRes.data;
+        const configError = configRes.error;
 
         if (configError) throw configError;
 
@@ -200,9 +209,13 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
 
         // 2. Cargar Polígonos
         console.log('Fetching polygons...');
-        const { data: polygons, error: polyError } = await supabase
+        const fetchPolys = supabase
           .from('mapa_poligonos')
           .select('*');
+        
+        const polyRes: any = await Promise.race([fetchPolys, timeoutPromise]);
+        const polygons = polyRes.data;
+        const polyError = polyRes.error;
 
         if (polyError) throw polyError;
 
@@ -215,11 +228,14 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
         }
 
         // 3. Cargar Noticias
-        const { data: newsData } = await supabase
+        const fetchNews = supabase
           .from('noticias')
           .select('*')
           .order('fecha', { ascending: false })
           .limit(5);
+
+        const newsRes: any = await Promise.race([fetchNews, timeoutPromise]);
+        const newsData = newsRes.data;
         
         if (newsData && mounted) {
           setNoticias(newsData);

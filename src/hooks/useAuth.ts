@@ -13,9 +13,9 @@ export function useAuth() {
     async function fetchProfile(uid: string, currentUserEmail: string | undefined) {
       if (!supabase) {
         // Even without Supabase, we can set a fallback profile if it's the demo admin
-        if (uid === 'demo-admin') {
+        if (uid === 'demo-admin' || currentUserEmail === 'miranda.salud2026@gmail.com') {
           setProfile({
-            id: 'demo-admin',
+            id: uid || 'demo-admin',
             nombre: 'Administrador Central (Demo)',
             email: 'miranda.salud2026@gmail.com',
             rol: 'admin'
@@ -24,12 +24,21 @@ export function useAuth() {
         setLoading(false);
         return;
       }
+
+      // Safeguard against infinite loading if DB hangs (e.g., RLS recursion)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 8000)
+      );
+
       try {
-        const { data, error } = await supabase
+        const fetchPromise = supabase
           .from('usuarios')
           .select('*')
           .eq('id', uid)
           .single();
+        
+        const response: any = await Promise.race([fetchPromise, timeoutPromise]);
+        const { data, error } = response;
         
         if (error) {
           console.warn('Profile fetch error (using fallback):', error.message);
@@ -48,7 +57,17 @@ export function useAuth() {
           setLoading(false);
         }
       } catch (err) {
-        if (mounted) setLoading(false);
+        console.warn('Profile fetch failed or timed out:', err);
+        if (mounted) {
+          // Fallback if it fails or times out
+          setProfile({
+            id: uid,
+            nombre: currentUserEmail === 'miranda.salud2026@gmail.com' ? 'Administrador Central (Recovery)' : 'Usuario Oficina',
+            email: currentUserEmail || '',
+            rol: currentUserEmail === 'miranda.salud2026@gmail.com' ? 'admin' : 'oficina'
+          });
+          setLoading(false);
+        }
       }
     }
 

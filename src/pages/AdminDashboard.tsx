@@ -12,8 +12,28 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F3F4F6]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0B3D5C]"></div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F3F4F6] p-10 text-center">
+        <div className="relative mb-8">
+           <div className="animate-spin rounded-full h-16 w-16 border-4 border-gray-100 border-t-[#0B3D5C]"></div>
+           <div className="absolute inset-0 flex items-center justify-center">
+              <ShieldCheck className="text-[#0B3D5C]/20" size={24} />
+           </div>
+        </div>
+        <h3 className="text-sm font-black text-[#0B3D5C] uppercase tracking-[0.3em] mb-2">Iniciando Sistema</h3>
+        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest max-w-xs leading-relaxed">
+          Sincronizando credenciales y políticas de seguridad...
+        </p>
+        
+        {/* Helper if it hangs */}
+        <div className="mt-12 text-[9px] text-gray-300 font-medium uppercase tracking-tighter">
+          Si esto demora más de 10 segundos, verifique su conexión o las variables VITE_ en Vercel.
+        </div>
+        <button 
+          onClick={() => window.location.reload()}
+          className="mt-6 px-4 py-2 bg-white border border-gray-200 rounded-xl text-[8px] font-black text-gray-400 uppercase tracking-widest hover:bg-gray-50 transition-all"
+        >
+          Forzar Recarga
+        </button>
       </div>
     );
   }
