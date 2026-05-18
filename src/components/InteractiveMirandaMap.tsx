@@ -117,7 +117,7 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
       const timeoutId = setTimeout(() => {
         if (mounted) {
           setIsLoading(false);
-          addLog('Tiempo de espera de base de datos excedido (Modo Local).');
+          console.warn('DB Timeout - Local Mode');
         }
       }, 8000);
 
@@ -167,10 +167,9 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
           })));
         }
         
-        if (mounted) addLog('Datos del mapa sincronizados con Supabase.');
+        if (mounted) console.log('Map data synchronized');
       } catch (err: any) {
         console.error('Error loading map data:', err);
-        if (mounted) addLog(`Error de sincronización: ${err.message || 'Error desconocido'}`);
       } finally {
         if (mounted) {
           setIsLoading(false);
@@ -184,14 +183,9 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   }, []);
 
   const saveMapConfig = async (currentEjes?: Eje[], currentBg?: string | null) => {
-    if (!supabase) {
-      addLog('Error: Supabase no detectado en el entorno.');
-      return;
-    }
-    if (!isAdminMode) return;
+    if (!supabase || !isAdminMode) return;
     
     setIsSaving(true);
-    addLog('Sincronizando configuración con la nube...');
     try {
       const ejesToSave = (currentEjes || ejes).map(e => ({
         id: e.id,
@@ -201,7 +195,6 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
         description: e.description
       }));
 
-      // Usamos upsert con onConflict para asegurar que sobreescriba el registro 'default'
       const { error } = await supabase
         .from('mapa_config')
         .upsert({
@@ -212,16 +205,8 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
         }, { onConflict: 'id' });
 
       if (error) throw error;
-      addLog('✅ Configuración guardada en Supabase.');
     } catch (err: any) {
       console.error('Save error details:', err);
-      addLog(`❌ Error DB: ${err.message || 'Error de permisos o red'}`);
-      
-      // Fallback: Si falla el upsert, intentamos un insert simple si es porque no existe
-      if (err.code === 'PGRST116') { // No rows found for updating
-        addLog('Reintentando creación inicial...');
-        // ... handled by upsert usually, but let's be safe
-      }
     } finally {
       setIsSaving(false);
     }
@@ -230,7 +215,6 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const savePolygon = async (poly: { id: string, points: { x: number, y: number }[], ejeId: string }) => {
      if (!supabase || !isAdminMode) return;
      try {
-        addLog(`Sincronizando capa ${poly.id}...`);
         const { error } = await supabase
           .from('mapa_poligonos')
           .upsert({
@@ -240,34 +224,30 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
           }, { onConflict: 'id' });
         
         if (error) throw error;
-        addLog('✅ Capa sincronizada.');
      } catch (err: any) {
         console.error('Save poly error:', err);
-        addLog(`❌ Error Capa: ${err.message}`);
      }
   };
 
-  const deletePolygonFromDB = async (id: string) => {
-     if (!supabase || !isAdminMode) return;
-     try {
+  const deletePolygon = async (id: string) => {
+    setCustomPolygons(prev => prev.filter(p => p.id !== id));
+    if (supabase && isAdminMode) {
+      try {
         await supabase.from('mapa_poligonos').delete().eq('id', id);
-     } catch (err) {
-        console.error('Delete poly error:', err);
-     }
+      } catch (err) {
+        console.error('Delete error:', err);
+      }
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 1024 * 500) { // limit 500KB for base64 safety
-        addLog('Imagen muy pesada para DB. Use una URL externa preferiblemente.');
-      }
       const reader = new FileReader();
       reader.onload = async (event) => {
         const result = event.target?.result as string;
         setBackgroundImage(result);
         setBgUrlInput(result.startsWith('data:') ? 'Imagen Base64' : result);
-        addLog('Imagen cargada localmente.');
         await saveMapConfig(undefined, result);
       };
       reader.readAsDataURL(file);
@@ -277,7 +257,6 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const handleUrlUpdate = async () => {
     if (bgUrlInput === 'Imagen Base64' || bgUrlInput === backgroundImage) return;
     setBackgroundImage(bgUrlInput);
-    addLog('URL de fondo actualizada.');
     await saveMapConfig(undefined, bgUrlInput);
   };
 
@@ -311,20 +290,13 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
     setCustomPolygons([...customPolygons, newPolygon]);
     setCurrentPoints([]);
     setIsDrawingMode(false);
-    addLog(`Nuevo polígono dibujado y asignado a ${activeEje.name}.`);
     await savePolygon(newPolygon);
   };
 
   const clearCurrentPoints = () => setCurrentPoints([]);
-  const removePolygon = async (id: string) => {
-    setCustomPolygons(customPolygons.filter(p => p.id !== id));
-    addLog('Polígono eliminado.');
-    await deletePolygonFromDB(id);
-  };
 
   const addLog = (msg: string) => {
-    const time = new Date().toLocaleTimeString('es-VE', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true });
-    setLogs(prev => [...prev, { time, msg }]);
+    console.log(`SIG Log: ${msg}`);
   };
 
   return (
@@ -362,21 +334,10 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Editor SIG</span>
                     </div>
                     <div className="flex gap-2 mt-1">
-                       <button 
-                         onClick={() => window.location.reload()}
-                         className="text-[7px] text-slate-500 font-bold uppercase flex items-center gap-1 hover:text-white transition-colors"
-                       >
-                         <RefreshCw size={8} /> Recargar
-                       </button>
-                       <button 
-                         onClick={() => saveMapConfig()}
-                         disabled={isSaving}
-                         className="text-[7px] text-blue-500 font-bold uppercase flex items-center gap-1 hover:text-blue-400 transition-colors disabled:opacity-50"
-                       >
-                         {isSaving ? <Loader2 size={8} className="animate-spin" /> : <Save size={8} />} Guardar Todo
-                       </button>
-                       {!supabase && (
+                       {!supabase ? (
                           <span className="text-[7px] text-rose-500 font-bold uppercase">Sin DB</span>
+                       ) : (
+                          <span className="text-[7px] text-green-500 font-bold uppercase">Conectado</span>
                        )}
                     </div>
                  </div>
@@ -497,10 +458,10 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
                             <span className="text-[8px] font-black text-slate-300 uppercase truncate max-w-[100px]">{eje?.name}</span>
                          </div>
                          <button 
-                          onClick={() => removePolygon(poly.id)}
+                          onClick={() => deletePolygon(poly.id)}
                           className="text-slate-600 hover:text-rose-500 transition-colors"
                          >
-                            <X size={12} />
+                            <Trash2 size={12} />
                          </button>
                       </div>
                     );
@@ -680,28 +641,7 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
             )}
           </svg>
           </div>
-
-          {/* Consola de Actividad SIG (Floating) */}
-          {isAdminMode && logs.length > 0 && (
-            <div className="absolute bottom-6 left-6 z-50 w-64 bg-[#0A111E]/95 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl">
-               <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2">
-                  <div className="flex items-center gap-2">
-                     <Terminal size={12} className="text-blue-400" />
-                     <span className="text-[8px] font-black text-white uppercase tracking-widest">Actividad SIG</span>
-                  </div>
-                  <button onClick={() => setLogs([])} className="text-[8px] text-slate-500 hover:text-white uppercase font-black">Limpiar</button>
-               </div>
-               <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar pr-1">
-                  {logs.slice().reverse().map((log, i) => (
-                    <div key={i} className="flex flex-col gap-0.5">
-                       <span className="text-[7px] text-slate-500 font-bold">{log.time}</span>
-                       <p className="text-[9px] text-slate-300 leading-tight font-medium bg-white/5 p-1.5 rounded-md border border-white/5">{log.msg}</p>
-                    </div>
-                  ))}
-               </div>
-            </div>
-          )}
-
+          
           {/* Tooltip Dinámico (SaaS Style) */}
           <AnimatePresence>
             {hoveredMunicipio && (
