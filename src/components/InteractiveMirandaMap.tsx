@@ -832,80 +832,6 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
               </div>
            </div>
 
-           {/* Lista de Polígonos y Editor de Capas */}
-           {customPolygons.length > 0 && (
-              <div className="bg-[#0A111E]/90 backdrop-blur-xl border border-white/10 p-6 rounded-[2rem] shadow-2xl flex flex-col gap-4 max-h-[350px] overflow-y-auto custom-scrollbar shrink-0">
-                 <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Capas Dibujadas ({customPolygons.length})</span>
-                    {selectedPolygonId && (
-                      <button onClick={() => setSelectedPolygonId(null)} className="text-[8px] text-blue-400 font-bold hover:underline">Limpiar Selección</button>
-                    )}
-                 </div>
-                 
-                 <div className="space-y-2">
-                  {customPolygons.map(poly => {
-                      const eje = ejes.find(e => e.id === poly.ejeId);
-                      const isSelected = selectedPolygonId === poly.id;
-                      
-                      return (
-                        <div 
-                          key={poly.id} 
-                          className={`flex flex-col gap-3 p-3 rounded-2xl border transition-all ${
-                            isSelected ? 'bg-blue-500/10 border-blue-500/50' : 'bg-white/5 border-white/5'
-                          }`}
-                        >
-                           <div className="flex items-center justify-between">
-                              <button 
-                                onClick={() => setSelectedPolygonId(isSelected ? null : poly.id)}
-                                className="flex items-center gap-2 flex-1 text-left"
-                              >
-                                 <div className="w-3 h-3 rounded-md shadow-sm" style={{ backgroundColor: eje?.color }}></div>
-                                 <span className={`text-[9px] font-black uppercase truncate ${isSelected ? 'text-white' : 'text-slate-400'}`}>
-                                    {eje?.name}
-                                 </span>
-                              </button>
-                              <div className="flex items-center gap-2">
-                                <button 
-                                  onClick={() => deletePolygon(poly.id)}
-                                  className="text-slate-600 hover:text-rose-500 transition-colors"
-                                  title="Eliminar"
-                                >
-                                    <Trash2 size={12} />
-                                </button>
-                              </div>
-                           </div>
-
-                           {/* Mini editor si está seleccionado */}
-                           {isSelected && (
-                             <motion.div 
-                               initial={{ opacity: 0, height: 0 }}
-                               animate={{ opacity: 1, height: 'auto' }}
-                               className="space-y-3 pt-2 border-t border-white/5"
-                             >
-                                <label className="text-[8px] font-black text-slate-500 uppercase block">Vincular a Eje:</label>
-                                <div className="grid grid-cols-5 gap-1.5">
-                                  {ejes.map(e => (
-                                    <button 
-                                      key={e.id}
-                                      onClick={() => updatePolygonEje(poly.id, e.id)}
-                                      className={`w-full aspect-square rounded-lg border transition-all ${
-                                        poly.ejeId === e.id ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-40 hover:opacity-100'
-                                      }`}
-                                      style={{ backgroundColor: e.color }}
-                                      title={e.name}
-                                    />
-                                  ))}
-                                </div>
-                                <p className="text-[7px] text-slate-500 italic">Clic en el mapa para anular selección</p>
-                             </motion.div>
-                           )}
-                        </div>
-                      );
-                  })}
-                 </div>
-              </div>
-           )}
-
            {/* Editor de Propiedades del Eje Activo */}
            <div className="bg-[#0A111E]/90 backdrop-blur-xl border border-white/10 p-6 rounded-[2rem] shadow-2xl flex flex-col gap-4 mb-4 shrink-0">
               <div className="flex items-center justify-between border-b border-white/5 pb-3">
@@ -1154,6 +1080,91 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
            </div>
         </div>
       </main>
+
+      {/* PANEL HORIZONTAL DE CAPAS DIBUJADAS (Solo Admin) */}
+      {isAdminMode && customPolygons.length > 0 && (
+        <div className="bg-[#0A111E] border-t border-white/10 p-6 flex flex-col gap-4 shrink-0 z-40">
+           <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                  <Layout size={14} /> Capas Dibujadas ({customPolygons.length})
+                </span>
+                {selectedPolygonId && (
+                  <span className="text-[8px] bg-blue-500 text-white px-2 py-0.5 rounded-full font-black uppercase animate-pulse">
+                    Capa Seleccionada
+                  </span>
+                )}
+              </div>
+              {selectedPolygonId && (
+                <button 
+                  onClick={() => setSelectedPolygonId(null)} 
+                  className="text-[8px] text-blue-400 font-bold hover:underline uppercase tracking-widest"
+                >
+                  Limpiar Selección
+                </button>
+              )}
+           </div>
+           
+           <div className="flex flex-row gap-4 overflow-x-auto pb-4 custom-scrollbar">
+            {customPolygons.map(poly => {
+                const eje = ejes.find(e => e.id === poly.ejeId);
+                const isSelected = selectedPolygonId === poly.id;
+                
+                return (
+                  <motion.div 
+                    key={poly.id} 
+                    layout
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className={`flex flex-col gap-3 p-4 rounded-3xl border transition-all min-w-[220px] ${
+                      isSelected ? 'bg-blue-500/10 border-blue-500/50 shadow-[0_10px_30px_rgba(59,130,246,0.1)]' : 'bg-white/5 border-white/5'
+                    }`}
+                  >
+                     <div className="flex items-center justify-between gap-4">
+                        <button 
+                          onClick={() => setSelectedPolygonId(isSelected ? null : poly.id)}
+                          className="flex items-center gap-3 flex-1 text-left group"
+                        >
+                           <div className="w-5 h-5 rounded-lg shadow-inner group-hover:scale-110 transition-transform" style={{ backgroundColor: eje?.color }}></div>
+                           <div className="flex flex-col">
+                              <span className={`text-[10px] font-black uppercase truncate max-w-[120px] ${isSelected ? 'text-white' : 'text-slate-400'}`}>
+                                 {eje?.name}
+                              </span>
+                              <span className="text-[7px] text-slate-500 font-bold uppercase tracking-tighter">Polígono {poly.id}</span>
+                           </div>
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); deletePolygon(poly.id); }}
+                          className="w-8 h-8 flex items-center justify-center bg-rose-500/10 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all active:scale-95"
+                          title="Eliminar Capa"
+                        >
+                            <Trash2 size={14} />
+                        </button>
+                     </div>
+
+                     {/* Selector de Eje integrado para cambio rápido */}
+                     <div className="flex flex-col gap-2 pt-3 border-t border-white/5">
+                        <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest">Re-vincular:</span>
+                        <div className="flex gap-1.5">
+                          {ejes.map(e => (
+                            <button 
+                              key={e.id}
+                              onClick={() => updatePolygonEje(poly.id, e.id)}
+                              className={`w-6 h-6 rounded-md border transition-all ${
+                                poly.ejeId === e.id ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-30 hover:opacity-100 hover:scale-105'
+                              }`}
+                              style={{ backgroundColor: e.color }}
+                              title={e.name}
+                            />
+                          ))}
+                        </div>
+                     </div>
+                  </motion.div>
+                );
+            })}
+           </div>
+        </div>
+      )}
 
       <style dangerouslySetInnerHTML={{ __html: `
         .custom-scrollbar::-webkit-scrollbar {
