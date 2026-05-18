@@ -27,7 +27,8 @@ import {
   Play,
   Loader2,
   Newspaper,
-  Save
+  Save,
+  Trash2
 } from 'lucide-react';
 
 interface Eje {
