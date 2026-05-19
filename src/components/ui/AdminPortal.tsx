@@ -794,7 +794,19 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
--- 2. ACCESO MANUAL
+-- 2. TABLA DE DATOS TERRITORIALES
+CREATE TABLE IF NOT EXISTS public.territorial_data (
+    eje_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    valor_principal FLOAT DEFAULT 0,
+    metadata JSONB DEFAULT '{}',
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE public.territorial_data ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Lectura pública" ON public.territorial_data FOR SELECT TO public USING (true);
+CREATE POLICY "Edición admin" ON public.territorial_data FOR ALL TO authenticated USING (public.get_user_role() = 'admin');
+
+-- 3. ACCESO MANUAL
 UPDATE public.usuarios SET rol = 'admin', estado = 'aprobado' WHERE email = 'EMAIL';`}
                         </pre>
                      </div>
