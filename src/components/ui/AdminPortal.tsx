@@ -582,7 +582,7 @@ export default function AdminPortal({ restricted = false }: AdminPortalProps) {
           >
             <div className="flex justify-between items-center">
                <h2 className="text-xl font-bold flex items-center gap-2 text-gray-800">
-                <Users className="text-blue-600" /> Acreditación de Usuarios
+                <Users className="text-blue-600" /> Acreditador
               </h2>
               <div className="flex gap-2">
                  <button onClick={fetchUsers} className="p-2 bg-gray-50 text-gray-400 rounded-lg hover:bg-gray-100 transition-colors">

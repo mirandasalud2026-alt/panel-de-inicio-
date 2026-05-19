@@ -47,12 +47,12 @@ export default function InformativoPage() {
 
       <main className="p-4 lg:p-8 max-w-[1600px] mx-auto">
         {/* Intro Hero */}
-        <div className="mb-8">
-           <h2 className="text-3xl font-black text-white tracking-tighter">Panel de Gestión Territorial</h2>
-           <p className="text-slate-400 text-sm mt-2 max-w-2xl font-medium">
-             Consola central de mando para la supervisión de los 5 ejes estratégicos de salud. Intervenga el mapa para obtener detalles por municipio o utilice la configuración lateral para redireccionar los flujos de datos.
-           </p>
-        </div>
+         <div className="mb-8">
+            <h2 className="text-3xl font-black text-white tracking-tighter">Panel de Gestión Territorial</h2>
+            <p className="text-slate-400 text-sm mt-2 max-w-2xl font-medium">
+              Toca tu eje o selecciona tu eje.
+            </p>
+         </div>
 
         {/* MAPA INTERACTIVO (Principal) */}
         <section className="w-full h-[700px] lg:h-[800px] mb-12">
