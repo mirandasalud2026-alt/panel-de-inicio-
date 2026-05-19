@@ -5,7 +5,7 @@ import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
 
 /**
- * SIM Miranda - App Principal
+ * Miranda Salud - App Principal
  * Arquitectura PWA con autenticación basada en roles.
  */
 export default function App() {

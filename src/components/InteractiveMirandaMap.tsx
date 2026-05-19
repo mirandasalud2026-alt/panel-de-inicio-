@@ -559,7 +559,7 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                   </div>
                </div>
                <div className="max-w-md">
-                  <h3 className="text-lg font-black text-white uppercase tracking-[0.3em] mb-2">SIM Miranda SIG</h3>
+                  <h3 className="text-lg font-black text-white uppercase tracking-[0.3em] mb-2">Miranda Salud SIG</h3>
                   <p className="text-xs text-slate-500 font-medium leading-relaxed mb-8">
                     Sincronizando capas geográficas y preferencias globales con la nube de salud...
                   </p>
@@ -688,126 +688,9 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
         </div>
       )}
 
-      {!isNewsOpen && (
-        <div className="absolute bottom-6 left-6 z-50">
-           <button 
-             onClick={() => setIsNewsOpen(true)}
-             className="relative p-3 bg-[#0A111E]/80 backdrop-blur-2xl border border-white/10 rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all text-blue-400"
-           >
-              <Newspaper size={18} />
-              {noticias.some(n => n.categoria === 'urgente') && (
-                <span className="absolute -top-1 -right-1 flex h-4 w-4">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-4 w-4 bg-rose-500 border-2 border-[#0A111E] text-[8px] font-black text-white items-center justify-center">!</span>
-                </span>
-              )}
-           </button>
-        </div>
-      )}
+      {/* Noticias Sidebar Omitida por solicitud de limpieza */}
 
-      <AnimatePresence>
-        {isNewsOpen && (
-          <motion.div
-            initial={{ x: isMobile ? '100%' : -400 }}
-            animate={{ x: 0 }}
-            exit={{ x: isMobile ? '100%' : -400 }}
-            className={`absolute top-0 bottom-0 bg-[#0A111E]/95 backdrop-blur-2xl border-white/10 z-[60] shadow-[40px_0_100px_rgba(0,0,0,0.5)] flex flex-col
-              ${isMobile ? 'right-0 left-0 border-l' : 'left-0 w-80 border-r'}
-            `}
-          >
-             <div className="p-6 sm:p-8 border-b border-white/5 flex justify-between items-center bg-blue-500/5">
-                <div className="flex items-center gap-3">
-                   <Newspaper className="text-blue-400" size={20} />
-                   <h3 className="text-sm font-black text-white uppercase tracking-[0.2em]">Boletín SIG</h3>
-                </div>
-                <button onClick={() => setIsNewsOpen(false)} className="text-slate-500 hover:text-white transition-colors">
-                   <X size={20} />
-                </button>
-             </div>
-             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 custom-scrollbar">
-                {noticias.length === 0 ? (
-                  <div className="text-center py-12">
-                     <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Sin noticias recientes</p>
-                  </div>
-                ) : (
-                  noticias.map((n, i) => (
-                    <motion.div 
-                      key={n.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.1 }}
-                      className="group p-4 bg-white/5 rounded-[2rem] border border-white/5 hover:bg-white/[0.08] transition-all cursor-default"
-                    >
-                       <div className="flex items-center gap-2 mb-3">
-                          <span className={`text-[7px] font-black uppercase px-2 py-0.5 rounded-full ${
-                             n.categoria === 'urgente' ? 'bg-rose-500/20 text-rose-500 border border-rose-500/30' : 
-                             n.categoria === 'informativa' ? 'bg-blue-500/20 text-blue-500 border border-blue-500/30' : 
-                             'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30'
-                          }`}>
-                            {n.categoria}
-                          </span>
-                          <span className="text-[8px] font-bold text-slate-600">
-                             {new Date(n.fecha).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' })}
-                          </span>
-                       </div>
-                       <h4 className="text-[11px] font-black text-white uppercase tracking-tight leading-tight mb-2">{n.titulo}</h4>
-                       <p className="text-[10px] text-slate-400 leading-relaxed line-clamp-3 font-medium">{n.texto}</p>
-                    </motion.div>
-                  ))
-                )}
-             </div>
-             <div className="p-4 sm:p-6 border-t border-white/5 bg-black/20">
-                <p className="text-[9px] text-slate-500 italic text-center leading-relaxed">
-                   Actualización automática vía SIM Miranda • <span className="text-blue-400 font-bold uppercase tracking-widest">SIG-CLOUD</span>
-                </p>
-             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {isAdminMode && (
-        <div className="z-[40] flex items-center bg-[#0A111E]/90 backdrop-blur-3xl border border-white/20 shadow-[0_30px_70px_rgba(0,0,0,0.8)] transition-all absolute top-4 left-4 right-4 px-3 py-2 sm:px-10 sm:py-4 rounded-2xl sm:rounded-[2rem] flex-wrap gap-2">
-          <div className="flex items-center gap-3">
-             <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse shadow-[0_0_15px_rgba(34,197,94,0.6)]"></div>
-             <div className="flex flex-col">
-                <span className="text-[8px] sm:text-[10px] font-black text-white uppercase tracking-[0.2em] whitespace-nowrap">Gestión Maestra SIM</span>
-                <span className="text-[6px] sm:text-[8px] text-slate-500 font-bold uppercase tracking-widest">Sincronizado Cloud</span>
-             </div>
-          </div>
-          <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
-             {!isDrawingMode ? (
-               <button 
-                 onClick={() => {
-                   setIsDrawingMode(true);
-                   setIsConsoleMinimized(true);
-                 }}
-                 className="px-3 sm:px-6 py-1.5 sm:py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-lg shadow-blue-900/40 flex items-center gap-1 sm:gap-2"
-               >
-                 <Play size={12} fill="currentColor" /> {isMobile ? 'Dibujar' : 'Iniciar Dibujo'}
-               </button>
-             ) : (
-               <button 
-                 onClick={finishPolygon}
-                 className="px-3 sm:px-6 py-1.5 sm:py-2 bg-green-600 hover:bg-green-500 text-white rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-widest transition-all animate-pulse shadow-lg shadow-green-900/40 flex items-center gap-1 sm:gap-2"
-               >
-                 <CheckCircle2 size={12} /> {isMobile ? 'Finalizar' : 'Finalizar Área'}
-               </button>
-             )}
-             {isDrawingMode && (
-               <button 
-                 onClick={() => { 
-                   setIsDrawingMode(false); 
-                   clearCurrentPoints(); 
-                   setIsConsoleMinimized(false);
-                 }}
-                 className="p-1.5 sm:p-2 bg-rose-500/10 text-rose-500 rounded-full border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all"
-               >
-                 <X size={14} />
-               </button>
-             )}
-          </div>
-        </div>
-      )}
+      {/* Toolbar Admin Omitida por solicitud */}
 
       {isAdminMode && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20">

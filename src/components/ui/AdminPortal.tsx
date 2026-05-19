@@ -43,7 +43,7 @@ interface AdminPortalProps {
 }
 
 export default function AdminPortal({ restricted = false }: AdminPortalProps) {
-  const [activeTab, setActiveTab] = useState<'scripts' | 'noticias' | 'calendario' | 'config' | 'mapa' | 'usuarios'>(restricted ? 'noticias' : 'usuarios');
+  const [activeTab, setActiveTab] = useState<'scripts' | 'mapa'>(restricted ? 'scripts' : 'scripts');
   const [noticias, setNoticias] = useState<Noticia[]>([]);
   const [eventos, setEventos] = useState<any[]>([]);
   const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
@@ -379,15 +379,11 @@ export default function AdminPortal({ restricted = false }: AdminPortalProps) {
   return (
     <div className="space-y-6">
       {/* TABS */}
-      <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-gray-100 max-w-4xl overflow-x-auto custom-scrollbar">
+      <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-gray-100 max-w-md">
         {[
-          { id: 'scripts', label: 'Scripts/Sync', icon: <Settings size={14} /> },
-          { id: 'mapa', label: 'SIG/Mapa', icon: <MapIcon size={14} /> },
-          { id: 'noticias', label: 'Noticias', icon: <Newspaper size={14} /> },
-          { id: 'calendario', label: 'Calendario', icon: <Calendar size={14} /> },
-          { id: 'usuarios', label: 'Acreditador', icon: <Users size={14} /> },
-          { id: 'config', label: 'Configuración', icon: <Database size={14} /> },
-        ].filter(tab => !restricted || ['noticias', 'calendario'].includes(tab.id)).map(tab => (
+          { id: 'scripts', label: 'Gestión de Sync', icon: <Settings size={14} /> },
+          { id: 'mapa', label: 'Monitor SIG', icon: <MapIcon size={14} /> },
+        ].map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}

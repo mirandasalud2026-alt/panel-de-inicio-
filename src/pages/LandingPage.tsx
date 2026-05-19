@@ -1,198 +1,56 @@
-import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { 
   BookOpen, 
-  Lock, 
-  Activity, 
-  Building2, 
-  ClipboardCheck, 
-  Bell, 
-  Calendar, 
-  Download, 
-  MapPin, 
-  BarChart3, 
-  FileText, 
-  TrendingUp,
-  ChevronRight,
-  Stethoscope,
-  Baby,
-  Syringe
+  Lock
 } from 'lucide-react';
-import CalendarView from '../components/ui/CalendarView';
-import { supabase } from '../lib/supabase';
-
-interface Noticia {
-  id: number;
-  titulo: string;
-  categoria: 'urgente' | 'informativa' | 'evento';
-  texto: string;
-  fecha: string;
-}
 
 export default function LandingPage() {
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [noticias, setNoticias] = useState<Noticia[]>([]);
-  const [loadingNoticias, setLoadingNoticias] = useState(true);
-
-  useEffect(() => {
-    fetchNoticias();
-  }, []);
-
-  const fetchNoticias = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('noticias')
-        .select('*')
-        .order('fecha', { ascending: false })
-        .limit(5);
-      if (error) throw error;
-      setNoticias(data || []);
-    } catch (err) {
-      console.error('Error fetching news:', err);
-    } finally {
-      setLoadingNoticias(false);
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-[#F0F4F8] font-sans pb-10 overflow-x-hidden">
+    <div className="min-h-screen bg-[#F0F4F8] font-sans overflow-hidden flex flex-col">
       {/* HERO HEADER */}
-      <header className="relative bg-gradient-to-br from-[#0B3D5C] via-[#0d4a6e] to-[#1A5F7A] text-white px-5 py-8 md:px-10 md:py-12 overflow-hidden shadow-xl">
+      <header className="relative flex-1 bg-gradient-to-br from-[#0B3D5C] via-[#0d4a6e] to-[#1A5F7A] text-white px-5 py-20 md:px-10 flex flex-col items-center justify-center text-center overflow-hidden shadow-xl">
         {/* Decorative elements */}
-        <div className="absolute -top-16 -right-16 w-48 h-48 bg-white/5 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-white/5 rounded-full blur-2xl"></div>
+        <div className="absolute -top-16 -right-16 w-64 h-64 bg-white/5 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-10 -left-10 w-64 h-64 bg-white/5 rounded-full blur-3xl"></div>
 
-        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-3xl border border-white/25">
-              🏥
-            </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight leading-none">SIM Miranda</h1>
-              <span className="text-xs opacity-80 uppercase tracking-widest font-medium">Sistema de Información en Salud</span>
-            </div>
-          </div>
-          <div className="bg-[#E8A838] text-[#0B3D5C] px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider animate-pulse self-end md:self-auto">
-            🟢 En línea
+        <div className="relative z-10 flex flex-col items-center gap-6 mb-12">
+          <motion.div 
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="w-20 h-20 bg-white/20 backdrop-blur-md rounded-[2.5rem] flex items-center justify-center text-4xl border border-white/25 shadow-2xl"
+          >
+            🏥
+          </motion.div>
+          <div>
+            <h1 className="text-4xl md:text-5xl font-black tracking-tight leading-none mb-3">Miranda Salud</h1>
+            <span className="text-xs opacity-60 uppercase tracking-[0.3em] font-black">Dirección Estadal de Salud</span>
           </div>
         </div>
 
         {/* CTAs */}
-        <div className="relative z-10 flex flex-col sm:flex-row gap-4 max-w-lg">
+        <div className="relative z-10 flex flex-col sm:flex-row gap-6 w-full max-w-xl">
           <Link 
             to="/sitio-informativo"
-            className="flex-1 bg-white text-[#0B3D5C] px-6 py-4 rounded-3xl font-bold text-sm flex items-center justify-center gap-3 shadow-2xl hover:bg-gray-50 transition-all hover:-translate-y-1"
+            className="flex-1 bg-white text-[#0B3D5C] px-8 py-5 rounded-[2rem] font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 shadow-2xl hover:bg-gray-50 transition-all hover:-translate-y-1"
           >
             <BookOpen size={20} /> Reporte de Atenciones
           </Link>
           <Link 
             to="/login"
-            className="flex-1 bg-white/10 border border-white/20 backdrop-blur-md text-white px-6 py-4 rounded-3xl font-bold text-sm flex items-center justify-center gap-3 hover:bg-white/20 transition-all"
+            className="flex-1 bg-white/10 border border-white/20 backdrop-blur-md text-white px-8 py-5 rounded-[2rem] font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-white/20 transition-all shadow-xl"
           >
             <Lock size={20} /> Acceso SIM
           </Link>
         </div>
-      </header>
 
-      {/* WAVE DECORATOR */}
-      <div className="h-8 bg-[#F0F4F8] relative -mt-1 overflow-hidden">
-        <svg viewBox="0 0 1440 30" preserveAspectRatio="none" className="absolute bottom-full w-full h-[30px]">
-          <path d="M0,15 C360,30 720,0 1080,15 C1260,22 1380,8 1440,10 L1440,30 L0,30 Z" fill="#F0F4F8" />
-        </svg>
-      </div>
-
-      <main className="max-w-5xl mx-auto px-5 py-2">
-        
-        {/* NOTICIAS */}
-        <section className="mb-10">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold flex items-center gap-2 text-gray-800">
-              <span className="text-2xl">📰</span> Noticias Destacadas
-            </h2>
-            <Link to="#" className="text-sm font-semibold text-[#0B3D5C] hover:underline">Ver todas →</Link>
-          </div>
-
-          <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-hide snap-x">
-            {loadingNoticias ? (
-              [1, 2, 3].map(i => (
-                <div key={i} className="min-w-[300px] md:min-w-[350px] bg-white rounded-3xl p-6 shadow-sm border border-gray-100 animate-pulse">
-                  <div className="h-4 w-20 bg-gray-100 rounded-full mb-4"></div>
-                  <div className="h-6 w-full bg-gray-100 rounded-lg mb-3"></div>
-                  <div className="h-4 w-3/4 bg-gray-50 rounded-lg"></div>
-                </div>
-              ))
-            ) : noticias.length === 0 ? (
-              <div className="w-full py-12 text-center bg-white rounded-[2.5rem] border border-dashed border-gray-200">
-                <p className="text-gray-400 font-bold text-sm uppercase tracking-widest px-8">No hay noticias publicadas recientemente</p>
-              </div>
-            ) : (
-              noticias.map((noticia, i) => (
-                <motion.div 
-                  key={noticia.id}
-                  whileHover={{ y: -5 }}
-                  className={`min-w-[300px] md:min-w-[350px] bg-white rounded-3xl p-6 shadow-sm border-l-4 snap-start shrink-0 relative overflow-hidden ${
-                    noticia.categoria === 'urgente' ? 'border-red-500' : noticia.categoria === 'evento' ? 'border-amber-400' : 'border-blue-500'
-                  }`}
-                >
-                  <div className="absolute top-0 right-0 p-4 opacity-5">
-                    <Bell size={60} />
-                  </div>
-                  <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-3 ${
-                    noticia.categoria === 'urgente' ? 'bg-red-100 text-red-600' : noticia.categoria === 'evento' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-600'
-                  }`}>
-                    {noticia.categoria === 'urgente' ? '🔴 Urgente' : noticia.categoria === 'evento' ? '⭐ Evento' : '📘 Info'}
-                  </span>
-                  <h3 className="font-bold text-lg text-gray-800 leading-tight mb-3 line-clamp-2">{noticia.titulo}</h3>
-                  <p className="text-gray-500 text-sm leading-relaxed mb-4 line-clamp-3">{noticia.texto}</p>
-                  <div className="flex justify-between items-center text-[10px] text-gray-400 font-medium">
-                    <span className="flex items-center gap-1">
-                      <Calendar size={12} /> 
-                      {new Date(noticia.fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
-                    </span>
-                    <span>Salud Miranda</span>
-                  </div>
-                </motion.div>
-              ))
-            )}
-          </div>
-        </section>
-
-        {/* ACCESOS RÁPIDOS */}
-        <section className="flex justify-center mb-12">
-          {[
-            { label: 'Jornadas', desc: 'Calendario de salud', icon: '📅', action: () => setIsCalendarOpen(true) },
-          ].map((acc, i) => (
-            <motion.div 
-              key={i}
-              whileHover={{ y: -3 }}
-              onClick={acc.action}
-              className="bg-white p-6 rounded-3xl shadow-sm text-center cursor-pointer border border-transparent hover:border-[#0B3D5C]/10 min-w-[200px]"
-            >
-              <span className="text-3xl block mb-3">{acc.icon}</span>
-              <h4 className="font-bold text-sm text-gray-800">{acc.label}</h4>
-              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1">{acc.desc}</p>
-            </motion.div>
-          ))}
-        </section>
-
-        <CalendarView isOpen={isCalendarOpen} onClose={() => setIsCalendarOpen(false)} />
-      </main>
-
-      {/* FOOTER */}
-      <footer className="max-w-5xl mx-auto px-5 pt-10 border-t border-gray-200">
-        <div className="flex flex-col items-center gap-6 text-center">
-          <div className="flex gap-6 text-xs font-bold text-gray-400 uppercase tracking-widest">
-            <Link to="#" className="hover:text-[#0B3D5C]">Sobre SIM</Link>
-            <Link to="#" className="hover:text-[#0B3D5C]">Privacidad</Link>
-            <Link to="#" className="hover:text-[#0B3D5C]">Contacto</Link>
-          </div>
-          <div className="space-y-1">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">© 2026 SIM Miranda – Sistema de Información en Salud</p>
-            <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">Dirección General de Salud · Estado Miranda</p>
-          </div>
+        <div className="mt-16 relative z-10">
+           <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]"></span>
+              Sincronizado Cloud 2026
+           </div>
         </div>
-      </footer>
+      </header>
     </div>
   );
 }

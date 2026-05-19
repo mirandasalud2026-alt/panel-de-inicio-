@@ -1,6 +1,6 @@
 {
-  "name": "SIM Miranda",
-  "short_name": "SIM",
+  "name": "Miranda Salud",
+  "short_name": "Salud",
   "description": "Sistema de Información en Salud – Estado Miranda",
   "start_url": "./index.html",
   "scope": "/",

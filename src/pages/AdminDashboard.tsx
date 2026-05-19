@@ -53,7 +53,7 @@ export default function AdminDashboard() {
            </div>
            <h2 className="text-2xl font-black text-gray-800 uppercase tracking-tight mb-4">Acreditación en Proceso</h2>
            <p className="text-gray-500 leading-relaxed mb-8">
-             Hola <b>{profile.nombre}</b>. Tu solicitud de acceso al sistema SIM Miranda está siendo revisada por un administrador.
+             Hola <b>{profile.nombre}</b>. Tu solicitud de acceso al sistema de Miranda Salud está siendo revisada por un administrador.
            </p>
            <button 
              onClick={() => {
@@ -144,7 +144,7 @@ export default function AdminDashboard() {
 
       <footer className="mt-8 px-6 text-center opacity-30">
         <p className="text-[10px] text-[#0B3D5C] font-extrabold uppercase tracking-[0.3em]">
-          SIM Miranda • Seguridad Reforzada 2026
+          Miranda Salud • Seguridad Reforzada 2026
         </p>
       </footer>
     </div>
