@@ -27,6 +27,7 @@ export default function LoginForm() {
       // Bypassing for specific roles to allow testing/demo
       if (email === 'miranda.salud2026@gmail.com' && password === 'Roble.26') {
         localStorage.setItem('sim_demo_admin', 'true');
+        localStorage.setItem('sim_demo_role', 'admin');
         navigate('/admin/dashboard');
         setLoading(false);
         return;
@@ -34,6 +35,7 @@ export default function LoginForm() {
 
       if (email === 'directivo@miranda.gob.ve' && password === 'Directo.26') {
         // We simulate a directivo profile
+        localStorage.setItem('sim_demo_admin', 'true');
         localStorage.setItem('sim_demo_role', 'directivo');
         navigate('/admin/dashboard');
         setLoading(false);

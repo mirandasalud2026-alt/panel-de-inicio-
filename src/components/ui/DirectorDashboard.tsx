@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   BarChart3, 
@@ -46,6 +46,11 @@ const regionData = [
 export default function DirectorDashboard() {
   const [selectedEje, setSelectedEje] = useState('Todos');
   const [dateRange, setDateRange] = useState('Última Semana');
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
@@ -145,50 +150,52 @@ export default function DirectorDashboard() {
             </div>
           </div>
           
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={workflowData}>
-                <defs>
-                  <linearGradient id="colorAtenciones" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#0B3D5C" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#0B3D5C" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
-                <XAxis 
-                  dataKey="name" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fontSize: 10, fontWeight: 800, fill: '#9CA3AF' }}
-                  dy={10}
-                />
-                <YAxis hide />
-                <Tooltip 
-                  contentStyle={{ 
-                    borderRadius: '20px', 
-                    border: 'none', 
-                    boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
-                    fontSize: '12px',
-                    fontWeight: 'bold'
-                  }} 
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="atenciones" 
-                  stroke="#0B3D5C" 
-                  strokeWidth={3}
-                  fillOpacity={1} 
-                  fill="url(#colorAtenciones)" 
-                />
-                <Area 
-                  type="step" 
-                  dataKey="meta" 
-                  stroke="#E5E7EB" 
-                  strokeDasharray="5 5"
-                  fill="transparent" 
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="h-[400px] w-full min-h-[400px] relative overflow-hidden bg-slate-50/50 rounded-[3rem] border border-gray-100 shadow-inner">
+            {isMounted && (
+              <ResponsiveContainer key="chart-workflow" width="100%" height="100%" minHeight={300}>
+                <AreaChart data={workflowData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorAtenciones" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#0B3D5C" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#0B3D5C" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
+                  <XAxis 
+                    dataKey="name" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 10, fontWeight: 800, fill: '#9CA3AF' }}
+                    dy={10}
+                  />
+                  <YAxis hide />
+                  <Tooltip 
+                    contentStyle={{ 
+                      borderRadius: '20px', 
+                      border: 'none', 
+                      boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+                      fontSize: '12px',
+                      fontWeight: 'bold'
+                    }} 
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="atenciones" 
+                    stroke="#0B3D5C" 
+                    strokeWidth={3}
+                    fillOpacity={1} 
+                    fill="url(#colorAtenciones)" 
+                  />
+                  <Area 
+                    type="step" 
+                    dataKey="meta" 
+                    stroke="#E5E7EB" 
+                    strokeDasharray="5 5"
+                    fill="transparent" 
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 

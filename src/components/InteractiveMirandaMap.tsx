@@ -473,12 +473,29 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
     <div className="flex flex-col w-full h-full bg-[#0B1525] text-slate-200 overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)] border border-white/5 relative" style={{ maxWidth: '100vw', maxHeight: '100dvh' }}>
       
       {isMobile && (
-        <button
-          onClick={toggleFullscreen}
-          className="absolute top-4 right-4 z-50 p-2 bg-black/40 backdrop-blur-xl rounded-full border border-white/20 text-white"
-        >
-          {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-        </button>
+        <div className="absolute top-4 right-4 z-50 flex gap-2">
+          <button
+            onClick={toggleFullscreen}
+            className="p-3 bg-black/40 backdrop-blur-xl rounded-2xl border border-white/20 text-white shadow-2xl"
+          >
+            {isFullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+          </button>
+        </div>
+      )}
+
+      {isMobile && !isLandscape && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 pointer-events-none sm:hidden">
+           <motion.div 
+             initial={{ opacity: 0, scale: 0.8 }}
+             animate={{ opacity: 0.6 }}
+             className="flex flex-col items-center gap-4 text-slate-500"
+           >
+              <div className="w-16 h-16 border-2 border-dashed border-slate-700 rounded-2xl flex items-center justify-center animate-bounce">
+                 <RefreshCw size={32} />
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-[0.3em]">Rote para mejor vista</span>
+           </motion.div>
+        </div>
       )}
 
       {isLoading && (
@@ -776,13 +793,22 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
 
           <div className="w-full flex items-center justify-center overflow-hidden" style={{ 
             minHeight: 0, 
-            height: isMobile ? (isLandscape ? '70vh' : '55vh') : '80vh',
-            maxHeight: isMobile ? (isLandscape ? '70vh' : '55vh') : '80vh'
+            height: isMobile ? (isLandscape ? '75vh' : '65vh') : '85vh',
+            maxHeight: isMobile ? (isLandscape ? '75vh' : '65vh') : '85vh'
           }}>
+            {!isLandscape && isMobile && (
+              <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[35] pointer-events-none flex flex-col items-center gap-2">
+                <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/80 backdrop-blur-md rounded-full border border-amber-400/50 shadow-xl">
+                  <RefreshCw size={12} className="animate-spin text-white" />
+                  <span className="text-[8px] font-black text-white uppercase tracking-[0.2em]">Rote el teléfono para dibujar</span>
+                </div>
+              </div>
+            )}
+
             <svg 
               viewBox={`0 0 ${mapDimensions.width} ${mapDimensions.height}`}
               preserveAspectRatio="xMidYMid meet"
-              className="w-full h-auto max-w-full"
+              className="w-full h-auto max-w-full transform-gpu transition-transform duration-500"
               style={{ maxHeight: '100%', maxWidth: '100%' }}
               onClick={handleSvgClick}
               id="interactive-svg-map"
