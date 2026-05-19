@@ -24,23 +24,17 @@ export default function LoginForm() {
     setLoading(true);
     
     try {
-      // Bypassing for the specific admin user requested to allow viewing the dashboard
+      // Bypassing for specific roles to allow testing/demo
       if (email === 'miranda.salud2026@gmail.com' && password === 'Roble.26') {
-        // We still try to sign in just in case they created the user
-        try {
-          const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
-          if (!authError && data.session) {
-            navigate('/admin/dashboard');
-            return;
-          }
-        } catch (fetchErr) {
-          console.warn('Real sign-in failed, checking for bypass...');
-        }
-        
-        // If it fails but it's the master key, we ALLOW access by setting a temporary item in localStorage
-        // that useAuth will check as a fallback for the admin user.
-        console.log('Master key used - entering in demo mode');
         localStorage.setItem('sim_demo_admin', 'true');
+        navigate('/admin/dashboard');
+        setLoading(false);
+        return;
+      }
+
+      if (email === 'directivo@miranda.gob.ve' && password === 'Directo.26') {
+        // We simulate a directivo profile
+        localStorage.setItem('sim_demo_role', 'directivo');
         navigate('/admin/dashboard');
         setLoading(false);
         return;

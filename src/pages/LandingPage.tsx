@@ -90,7 +90,7 @@ export default function LandingPage() {
             to="/login"
             className="flex-1 bg-white/10 border border-white/20 backdrop-blur-md text-white px-6 py-4 rounded-3xl font-bold text-sm flex items-center justify-center gap-3 hover:bg-white/20 transition-all"
           >
-            <Lock size={20} /> Acceso Personal
+            <Lock size={20} /> Acceso SIM
           </Link>
         </div>
       </header>

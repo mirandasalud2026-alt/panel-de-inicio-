@@ -84,13 +84,26 @@ export function useAuth() {
           await fetchProfile(currentUser.id, currentUser.email);
         } else if (localStorage.getItem('sim_demo_admin') === 'true') {
           // Fallback for Demo Admin if specifically logged in via bypass
-          setUser({ email: 'miranda.salud2026@gmail.com' } as User);
-          setProfile({
-            id: 'demo-admin',
-            nombre: 'Administrador Central (Demo)',
-            email: 'miranda.salud2026@gmail.com',
-            rol: 'admin'
-          });
+          const demoRole = localStorage.getItem('sim_demo_role');
+          if (demoRole === 'directivo') {
+            setUser({ email: 'directivo@miranda.gob.ve' } as User);
+            setProfile({
+              id: 'demo-directivo',
+              nombre: 'Director de Vigilancia (Demo)',
+              email: 'directivo@miranda.gob.ve',
+              rol: 'directivo',
+              estado: 'aprobado'
+            });
+          } else {
+            setUser({ email: 'miranda.salud2026@gmail.com' } as User);
+            setProfile({
+              id: 'demo-admin',
+              nombre: 'Administrador Central (Demo)',
+              email: 'miranda.salud2026@gmail.com',
+              rol: 'admin',
+              estado: 'aprobado'
+            });
+          }
           setLoading(false);
         } else {
           setLoading(false);

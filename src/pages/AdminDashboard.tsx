@@ -98,6 +98,7 @@ export default function AdminDashboard() {
           <button 
             onClick={() => {
               localStorage.removeItem('sim_demo_admin');
+              localStorage.removeItem('sim_demo_role');
               supabase?.auth.signOut();
               if (!supabase) window.location.href = '/login';
             }}
