@@ -43,7 +43,7 @@ interface AdminPortalProps {
 }
 
 export default function AdminPortal({ restricted = false }: AdminPortalProps) {
-  const [activeTab, setActiveTab] = useState<'scripts' | 'noticias' | 'calendario' | 'config' | 'mapa' | 'usuarios'>(restricted ? 'usuarios' : 'scripts');
+  const [activeTab, setActiveTab] = useState<'scripts' | 'noticias' | 'calendario' | 'config' | 'mapa' | 'usuarios'>(restricted ? 'noticias' : 'scripts');
   const [noticias, setNoticias] = useState<Noticia[]>([]);
   const [eventos, setEventos] = useState<any[]>([]);
   const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
@@ -352,9 +352,9 @@ export default function AdminPortal({ restricted = false }: AdminPortalProps) {
           { id: 'mapa', label: 'SIG/Mapa', icon: <MapIcon size={14} /> },
           { id: 'noticias', label: 'Noticias', icon: <Newspaper size={14} /> },
           { id: 'calendario', label: 'Calendario', icon: <Calendar size={14} /> },
-          { id: 'usuarios', label: 'Acreditación', icon: <Users size={14} /> },
+          { id: 'usuarios', label: 'Acreditador', icon: <Users size={14} /> },
           { id: 'config', label: 'Configuración', icon: <Database size={14} /> },
-        ].filter(tab => !restricted || ['usuarios', 'noticias', 'calendario', 'mapa'].includes(tab.id)).map(tab => (
+        ].filter(tab => !restricted || ['noticias', 'calendario'].includes(tab.id)).map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}

@@ -123,7 +123,7 @@ export default function AdminDashboard() {
                    <h3 className="text-xl font-black text-[#0B3D5C] uppercase tracking-tighter flex items-center gap-3">
                      <ShieldCheck className="text-blue-600" size={28} /> Control de Gestión Administrativa
                    </h3>
-                   <p className="text-xs text-gray-400 font-medium mt-1">Supervisión de acreditaciones, boletines informativos y agenda regional.</p>
+                   <p className="text-xs text-gray-400 font-medium mt-1">Supervisión de boletines informativos y agenda regional participativa.</p>
                  </div>
                  <div className="px-4 py-2 bg-blue-50 rounded-2xl border border-blue-100 flex items-center gap-2">
                     <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
@@ -131,7 +131,7 @@ export default function AdminDashboard() {
                  </div>
                </div>
                
-               <div className="bg-white rounded-[3rem] p-4 shadow-2xl shadow-gray-200/50 border border-gray-100 overflow-hidden">
+               <div className="bg-white rounded-[3rem] p-4 shadow-2xl shadow-gray-200/50 border border-gray-100">
                  <AdminPortal restricted={true} />
                </div>
             </div>
