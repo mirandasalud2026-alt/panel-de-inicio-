@@ -84,7 +84,7 @@ export default function LandingPage() {
             to="/sitio-informativo"
             className="flex-1 bg-white text-[#0B3D5C] px-6 py-4 rounded-3xl font-bold text-sm flex items-center justify-center gap-3 shadow-2xl hover:bg-gray-50 transition-all hover:-translate-y-1"
           >
-            <BookOpen size={20} /> Entrar al Sitio Informativo
+            <BookOpen size={20} /> Reporte de Atenciones
           </Link>
           <Link 
             to="/login"

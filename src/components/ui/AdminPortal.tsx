@@ -238,15 +238,29 @@ export default function AdminPortal() {
     setLogs(prev => [...prev, { time, msg }]);
   };
 
-  const ejecutarScript = async (name: string) => {
-    setExecutingScript(name);
-    agregarLog(`🚀 Iniciando: ${name}...`);
+  const ejecutarScript = async (id: string) => {
+    setExecutingScript(id);
+    agregarLog(`🚀 Iniciando: ${id}...`);
     
-    // Simulate execution
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    if (id === 'syncAll') {
+      try {
+        const res = await fetch('/api/sync/workspace', { method: 'POST' });
+        const data = await res.json();
+        if (data.status === 'success') {
+          agregarLog(`✅ Google Workspace: ${data.message} (${data.filesFound} archivos encontrados)`);
+        } else {
+          agregarLog(`❌ Error Workspace: ${data.message}`);
+        }
+      } catch (err: any) {
+        agregarLog(`❌ Error de Red: ${err.message}`);
+      }
+    } else {
+      // Logic for other scripts
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      agregarLog(`✅ Éxito: ${id} ejecutado correctamente.`);
+    }
     
     setExecutingScript(null);
-    agregarLog(`✅ Éxito: ${name} ejecutado correctamente.`);
   };
 
   const saveNoticia = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -318,11 +332,11 @@ export default function AdminPortal() {
   };
 
   const scripts = [
-    { id: 'syncAll', name: 'Sincronizar Todo', desc: 'Sincronización completa de los 5 ejes', icon: <RefreshCw />, color: 'bg-blue-500' },
-    { id: 'syncAM', name: 'Altos Mirandinos', desc: 'Sincronizar solo ASICs de Altos Mirandinos', icon: <Mountain />, color: 'bg-emerald-500' },
-    { id: 'syncVT', name: 'Valles del Tuy', desc: 'Sincronizar solo ASICs de Valles del Tuy', icon: <Palmtree />, color: 'bg-indigo-500' },
-    { id: 'report', name: 'Generar Reporte', desc: 'Crea reporte semanal consolidado en PDF', icon: <BarChart />, color: 'bg-amber-500' },
-    { id: 'cache', name: 'Limpiar Caché', desc: 'Limpia la caché de datos y fuerza actualización', icon: <Eraser />, color: 'bg-rose-500' },
+    { id: 'syncAll', name: 'Sincronizar Cloud', desc: 'Actualizar base de datos central con reportes de los 5 ejes', icon: <RefreshCw />, color: 'bg-blue-500', action: 'SyncCloud' },
+    { id: 'syncStats', name: 'Procesar KPI', desc: 'Recalcular indicadores de gestión y cobertura de salud', icon: <BarChart />, color: 'bg-emerald-500', action: 'ProcessStats' },
+    { id: 'backup', name: 'Backup SIG', desc: 'Generar respaldo de capas geográficas y configuraciones', icon: <Database />, color: 'bg-indigo-500', action: 'BackupSIG' },
+    { id: 'report', name: 'Reporte Epidemiológico', desc: 'Generar boletín semanal consolidado en PDF/Excel', icon: <Newspaper />, color: 'bg-amber-500', action: 'GenReport' },
+    { id: 'cache', name: 'Resetear Caché', desc: 'Forzar refresco de datos en dispositivos cliente', icon: <Eraser />, color: 'bg-rose-500', action: 'ClearCache' },
   ];
 
   return (
@@ -385,15 +399,15 @@ export default function AdminPortal() {
                   
                   <button 
                     disabled={executingScript !== null}
-                    onClick={() => ejecutarScript(script.name)}
+                    onClick={() => ejecutarScript(script.id)}
                     className="w-full py-3 bg-[#0B3D5C] text-white rounded-xl font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-[#1A5F7A] disabled:opacity-50 transition-colors"
                   >
-                    {executingScript === script.name ? (
+                    {executingScript === script.id ? (
                       <Loader2 size={14} className="animate-spin" />
                     ) : (
                       <Play size={14} />
                     )}
-                    {executingScript === script.name ? 'Ejecutando...' : 'Ejecutar'}
+                    {executingScript === script.id ? 'Ejecutando...' : 'Iniciar Proceso'}
                   </button>
                 </div>
               ))}
