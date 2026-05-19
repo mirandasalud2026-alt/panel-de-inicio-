@@ -50,6 +50,52 @@ async function startServer() {
     }
   });
 
+  // Proxy seguro para Google Apps Script
+  app.post("/api/run-script", async (req, res) => {
+    const { action } = req.body;
+    if (!action) {
+      return res.status(400).json({ status: "error", message: "Falta el parámetro 'action'." });
+    }
+
+    const scriptUrl = process.env.GOOGLE_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbzY4-_rA68AOt1PIClaGgCl5iVjhUlTC-XOcxlT_sVY08SRT_4d8DuDeszi98lWFWnsbw/exec";
+
+    try {
+      console.log(`[Script Proxy] Ejecutando acción: ${action} en ${scriptUrl}`);
+      const targetUrl = new URL(scriptUrl);
+      targetUrl.searchParams.set("action", action);
+      targetUrl.searchParams.set("_t", Date.now().toString());
+
+      const response = await fetch(targetUrl.toString(), {
+        method: "GET",
+        headers: {
+          "Accept": "application/json"
+        }
+      });
+
+      console.log(`[Script Proxy] Respuesta: ${response.status}`);
+      const responseText = await response.text();
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (e) {
+        responseData = { message: responseText };
+      }
+
+      res.json({
+        status: "success",
+        action,
+        data: responseData
+      });
+    } catch (error: any) {
+      console.error(`[Script Proxy] Error ejecutando ${action}:`, error);
+      res.status(500).json({
+        status: "error",
+        action,
+        message: error.message || "Error de comunicación con Google Apps Script"
+      });
+    }
+  });
+
   // Health check
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });

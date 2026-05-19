@@ -14,20 +14,6 @@ export default function LandingPage() {
         <div className="absolute -top-16 -right-16 w-64 h-64 bg-white/5 rounded-full blur-3xl"></div>
         <div className="absolute -bottom-10 -left-10 w-64 h-64 bg-white/5 rounded-full blur-3xl"></div>
 
-        <div className="relative z-10 flex flex-col items-center gap-6 mb-12">
-          <motion.div 
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="w-20 h-20 bg-white/20 backdrop-blur-md rounded-[2.5rem] flex items-center justify-center text-4xl border border-white/25 shadow-2xl"
-          >
-            🏥
-          </motion.div>
-          <div>
-            <h1 className="text-4xl md:text-5xl font-black tracking-tight leading-none mb-3">Miranda Salud</h1>
-            <span className="text-xs opacity-60 uppercase tracking-[0.3em] font-black">Dirección Estadal de Salud</span>
-          </div>
-        </div>
-
         {/* CTAs */}
         <div className="relative z-10 flex flex-col sm:flex-row gap-6 w-full max-w-xl">
           <Link 
@@ -44,12 +30,6 @@ export default function LandingPage() {
           </Link>
         </div>
 
-        <div className="mt-16 relative z-10">
-           <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]"></span>
-              Sincronizado Cloud 2026
-           </div>
-        </div>
       </header>
     </div>
   );
