@@ -136,13 +136,13 @@ BEGIN
   RETURN (SELECT rol FROM public.usuarios 
           WHERE id = auth.uid() LIMIT 1);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Usuarios ven su propio perfil" ON public.usuarios;
 CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
     FOR SELECT TO authenticated
-    USING (auth.uid() = id OR (SELECT true FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin'));`;
+    USING (auth.uid() = id OR get_user_role() = 'admin');`;
 
   // Solo detecta móvil/orientación, NO modifica viewBox
   useEffect(() => {

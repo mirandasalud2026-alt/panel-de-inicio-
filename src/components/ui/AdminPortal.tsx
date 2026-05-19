@@ -43,7 +43,7 @@ interface AdminPortalProps {
 }
 
 export default function AdminPortal({ restricted = false }: AdminPortalProps) {
-  const [activeTab, setActiveTab] = useState<'scripts' | 'noticias' | 'calendario' | 'config' | 'mapa' | 'usuarios'>(restricted ? 'noticias' : 'scripts');
+  const [activeTab, setActiveTab] = useState<'scripts' | 'noticias' | 'calendario' | 'config' | 'mapa' | 'usuarios'>(restricted ? 'noticias' : 'usuarios');
   const [noticias, setNoticias] = useState<Noticia[]>([]);
   const [eventos, setEventos] = useState<any[]>([]);
   const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
@@ -237,6 +237,39 @@ export default function AdminPortal({ restricted = false }: AdminPortalProps) {
     }
   };
 
+  const handleRoleChange = async (userId: string, newRole: string) => {
+    if (!supabase) return;
+    try {
+      const { error } = await supabase
+        .from('usuarios')
+        .update({ rol: newRole })
+        .eq('id', userId);
+      
+      if (error) throw error;
+      agregarLog(`👤 Rol de usuario actualizado a ${newRole}.`);
+      fetchUsers();
+    } catch (err: any) {
+      agregarLog(`❌ Error rol: ${err.message}`);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm('¿Seguro que desea eliminar el perfil de este usuario? No podrá acceder al sistema hasta que se registre de nuevo.')) return;
+    if (!supabase) return;
+    try {
+      const { error } = await supabase
+        .from('usuarios')
+        .delete()
+        .eq('id', userId);
+      
+      if (error) throw error;
+      agregarLog(`🗑️ Perfil de usuario eliminado.`);
+      fetchUsers();
+    } catch (err: any) {
+      agregarLog(`❌ Error eliminar usuario: ${err.message}`);
+    }
+  };
+
   const agregarLog = (msg: string) => {
     const time = new Date().toLocaleTimeString('es-VE');
     setLogs(prev => [...prev, { time, msg }]);
@@ -370,6 +403,7 @@ export default function AdminPortal({ restricted = false }: AdminPortalProps) {
       </div>
 
       <AnimatePresence mode="wait">
+        <div className="flex-1 overflow-y-auto px-1 custom-scrollbar" style={{ maxHeight: restricted ? '500px' : 'none' }}>
         {activeTab === 'scripts' && (
           <motion.div 
             key="scripts"
@@ -591,8 +625,8 @@ export default function AdminPortal({ restricted = false }: AdminPortalProps) {
               </div>
             </div>
 
-            <div className="bg-white rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm">
-               <table className="w-full text-left">
+            <div className="bg-white rounded-[2rem] overflow-x-auto border border-gray-100 shadow-sm custom-scrollbar">
+               <table className="w-full text-left min-w-[600px]">
                   <thead className="bg-gray-50 border-b border-gray-100">
                      <tr>
                         <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400">Usuario</th>
@@ -623,9 +657,17 @@ export default function AdminPortal({ restricted = false }: AdminPortalProps) {
                            </td>
                            <td className="px-6 py-4">
                               <div className="flex flex-col gap-1">
-                                 <span className={`w-fit text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
-                                    u.rol === 'admin' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
-                                 }`}>{u.rol}</span>
+                                 <select 
+                                   value={u.rol}
+                                   onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                                   className={`w-fit text-[9px] font-black uppercase px-2 py-1 rounded-md border-none focus:ring-1 focus:ring-[#0B3D5C]/10 cursor-pointer ${
+                                     u.rol === 'admin' ? 'bg-red-50 text-red-600' : u.rol === 'directivo' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'
+                                   }`}
+                                 >
+                                   <option value="admin">Administrador</option>
+                                   <option value="directivo">Directivo</option>
+                                   <option value="oficina">Operador</option>
+                                 </select>
                               </div>
                            </td>
                            <td className="px-6 py-4">
@@ -647,12 +689,19 @@ export default function AdminPortal({ restricted = false }: AdminPortalProps) {
                                  {(u as any).estado !== 'rechazado' && (
                                     <button 
                                       onClick={() => handleUserStatus(u.id, 'rechazado')}
-                                      className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
-                                      title="Rechazar"
+                                      className="p-1.5 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors"
+                                      title="Suspender"
                                     >
                                        <UserX size={16} />
                                     </button>
                                  )}
+                                 <button 
+                                   onClick={() => handleDeleteUser(u.id)}
+                                   className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                                   title="Eliminar Perfil"
+                                 >
+                                    <Trash2 size={16} />
+                                 </button>
                               </div>
                            </td>
                         </tr>
@@ -737,8 +786,16 @@ export default function AdminPortal({ restricted = false }: AdminPortalProps) {
                      </p>
                      <div className="bg-slate-900 rounded-xl p-4 overflow-hidden relative">
                         <pre className="text-[8px] text-blue-300 font-mono overflow-x-auto custom-scrollbar">
-                          {`CREATE OR REPLACE FUNCTION 
-get_user_role() ...`}
+                          {`-- 1. SOLUCIONAR RECURSIÓN
+CREATE OR REPLACE FUNCTION public.get_user_role()
+RETURNS TEXT AS $$
+BEGIN
+  RETURN (SELECT rol FROM public.usuarios WHERE id = auth.uid() LIMIT 1);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- 2. ACCESO MANUAL
+UPDATE public.usuarios SET rol = 'admin', estado = 'aprobado' WHERE email = 'EMAIL';`}
                         </pre>
                      </div>
                   </div>
@@ -746,6 +803,7 @@ get_user_role() ...`}
             </div>
           </motion.div>
         )}
+        </div>
       </AnimatePresence>
 
       {/* MODAL CALENDARIO */}
