@@ -94,3 +94,47 @@ DROP POLICY IF EXISTS "Admins pueden editar poligonos" ON public.mapa_poligonos;
 CREATE POLICY "Admins pueden editar poligonos" ON public.mapa_poligonos FOR ALL USING (
     EXISTS (SELECT 1 FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin')
 );
+
+-- 8. Tabla para Calendario / Jornadas
+CREATE TABLE IF NOT EXISTS public.calendario (
+    id SERIAL PRIMARY KEY,
+    titulo TEXT NOT NULL,
+    fecha DATE NOT NULL,
+    tipo TEXT CHECK (tipo IN ('jornada', 'vacunacion', 'reunion', 'otro')) DEFAULT 'jornada',
+    descripcion TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Habilitar RLS
+ALTER TABLE public.calendario ENABLE ROW LEVEL SECURITY;
+
+-- Políticas: Todos pueden ver, solo Admins pueden editar
+DROP POLICY IF EXISTS "Todos pueden ver calendario" ON public.calendario;
+CREATE POLICY "Todos pueden ver calendario" ON public.calendario FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins pueden editar calendario" ON public.calendario;
+CREATE POLICY "Admins pueden editar calendario" ON public.calendario FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin')
+);
+
+-- 9. Tabla para Noticias
+CREATE TABLE IF NOT EXISTS public.noticias (
+    id SERIAL PRIMARY KEY,
+    titulo TEXT NOT NULL,
+    categoria TEXT CHECK (categoria IN ('urgente', 'informativa', 'evento')) DEFAULT 'informativa',
+    texto TEXT,
+    fecha TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Habilitar RLS
+ALTER TABLE public.noticias ENABLE ROW LEVEL SECURITY;
+
+-- Políticas: Todos pueden ver, solo Admins pueden editar
+DROP POLICY IF EXISTS "Todos pueden ver noticias" ON public.noticias;
+CREATE POLICY "Todos pueden ver noticias" ON public.noticias FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins pueden editar noticias" ON public.noticias;
+CREATE POLICY "Admins pueden editar noticias" ON public.noticias FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin')
+);

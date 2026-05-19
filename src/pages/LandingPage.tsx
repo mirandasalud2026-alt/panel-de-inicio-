@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { 
@@ -18,11 +19,40 @@ import {
   Baby,
   Syringe
 } from 'lucide-react';
+import CalendarView from '../components/ui/CalendarView';
+import { supabase } from '../lib/supabase';
+
+interface Noticia {
+  id: number;
+  titulo: string;
+  categoria: 'urgente' | 'informativa' | 'evento';
+  texto: string;
+  fecha: string;
+}
 
 export default function LandingPage() {
-  const mostrarToast = (mensaje: string) => {
-    // In a real app, this would use a toast library or state
-    console.log(mensaje);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [noticias, setNoticias] = useState<Noticia[]>([]);
+  const [loadingNoticias, setLoadingNoticias] = useState(true);
+
+  useEffect(() => {
+    fetchNoticias();
+  }, []);
+
+  const fetchNoticias = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('noticias')
+        .select('*')
+        .order('fecha', { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      setNoticias(data || []);
+    } catch (err) {
+      console.error('Error fetching news:', err);
+    } finally {
+      setLoadingNoticias(false);
+    }
   };
 
   return (
@@ -84,67 +114,59 @@ export default function LandingPage() {
           </div>
 
           <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-hide snap-x">
-            {/* Noticia Urgente */}
-            <motion.div 
-              whileHover={{ y: -5 }}
-              className="min-w-[300px] md:min-w-[350px] bg-white rounded-3xl p-6 shadow-sm border-l-4 border-red-500 snap-start shrink-0 relative overflow-hidden"
-            >
-              <div className="absolute top-0 right-0 p-4 opacity-5">
-                <Bell size={60} />
+            {loadingNoticias ? (
+              [1, 2, 3].map(i => (
+                <div key={i} className="min-w-[300px] md:min-w-[350px] bg-white rounded-3xl p-6 shadow-sm border border-gray-100 animate-pulse">
+                  <div className="h-4 w-20 bg-gray-100 rounded-full mb-4"></div>
+                  <div className="h-6 w-full bg-gray-100 rounded-lg mb-3"></div>
+                  <div className="h-4 w-3/4 bg-gray-50 rounded-lg"></div>
+                </div>
+              ))
+            ) : noticias.length === 0 ? (
+              <div className="w-full py-12 text-center bg-white rounded-[2.5rem] border border-dashed border-gray-200">
+                <p className="text-gray-400 font-bold text-sm uppercase tracking-widest px-8">No hay noticias publicadas recientemente</p>
               </div>
-              <span className="inline-block px-3 py-1 bg-red-100 text-red-600 rounded-full text-[10px] font-bold uppercase tracking-widest mb-3">
-                🔴 Urgente
-              </span>
-              <h3 className="font-bold text-lg text-gray-800 leading-tight mb-3">Alerta Epidemiológica: Dengue en Valles del Tuy</h3>
-              <p className="text-gray-500 text-sm leading-relaxed mb-4">Reforzar medidas de prevención y control vectorial en los municipios afectados.</p>
-              <div className="flex justify-between items-center text-[10px] text-gray-400 font-medium">
-                <span className="flex items-center gap-1"><Calendar size={12} /> Hace 2 horas</span>
-                <span>Salud Miranda</span>
-              </div>
-            </motion.div>
-
-            {/* Noticia 2 */}
-            <motion.div 
-              whileHover={{ y: -5 }}
-              className="min-w-[300px] md:min-w-[350px] bg-white rounded-3xl p-6 shadow-sm border-l-4 border-amber-400 snap-start shrink-0"
-            >
-              <span className="inline-block px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold uppercase tracking-widest mb-3">
-                ⭐ Destacada
-              </span>
-              <h3 className="font-bold text-lg text-gray-800 leading-tight mb-3">Jornada integral llega a Altos Mirandinos</h3>
-              <p className="text-gray-500 text-sm leading-relaxed mb-4">Más de 15 especialidades médicas disponibles este fin de semana.</p>
-              <div className="flex justify-between items-center text-[10px] text-gray-400 font-medium">
-                <span className="flex items-center gap-1"><Calendar size={12} /> Ayer</span>
-                <span>Coordinación ASIC</span>
-              </div>
-            </motion.div>
-
-            {/* Noticia 3 */}
-            <motion.div 
-              whileHover={{ y: -5 }}
-              className="min-w-[300px] md:min-w-[350px] bg-white rounded-3xl p-6 shadow-sm border-l-4 border-blue-500 snap-start shrink-0"
-            >
-              <span className="inline-block px-3 py-1 bg-blue-100 text-blue-600 rounded-full text-[10px] font-bold uppercase tracking-widest mb-3">
-                📘 Informativa
-              </span>
-              <h3 className="font-bold text-lg text-gray-800 leading-tight mb-3">Nuevo sistema de reporte semanal digital</h3>
-              <p className="text-gray-500 text-sm leading-relaxed mb-4">A partir de junio todos los ASICs deben migrar al nuevo formato.</p>
-              <div className="flex justify-between items-center text-[10px] text-gray-400 font-medium">
-                <span className="flex items-center gap-1"><Calendar size={12} /> 15 May</span>
-                <span>Dirección General</span>
-              </div>
-            </motion.div>
+            ) : (
+              noticias.map((noticia, i) => (
+                <motion.div 
+                  key={noticia.id}
+                  whileHover={{ y: -5 }}
+                  className={`min-w-[300px] md:min-w-[350px] bg-white rounded-3xl p-6 shadow-sm border-l-4 snap-start shrink-0 relative overflow-hidden ${
+                    noticia.categoria === 'urgente' ? 'border-red-500' : noticia.categoria === 'evento' ? 'border-amber-400' : 'border-blue-500'
+                  }`}
+                >
+                  <div className="absolute top-0 right-0 p-4 opacity-5">
+                    <Bell size={60} />
+                  </div>
+                  <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-3 ${
+                    noticia.categoria === 'urgente' ? 'bg-red-100 text-red-600' : noticia.categoria === 'evento' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-600'
+                  }`}>
+                    {noticia.categoria === 'urgente' ? '🔴 Urgente' : noticia.categoria === 'evento' ? '⭐ Evento' : '📘 Info'}
+                  </span>
+                  <h3 className="font-bold text-lg text-gray-800 leading-tight mb-3 line-clamp-2">{noticia.titulo}</h3>
+                  <p className="text-gray-500 text-sm leading-relaxed mb-4 line-clamp-3">{noticia.texto}</p>
+                  <div className="flex justify-between items-center text-[10px] text-gray-400 font-medium">
+                    <span className="flex items-center gap-1">
+                      <Calendar size={12} /> 
+                      {new Date(noticia.fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                    </span>
+                    <span>Salud Miranda</span>
+                  </div>
+                </motion.div>
+              ))
+            )}
           </div>
         </section>
 
         {/* ACCESOS RÁPIDOS */}
         <section className="flex justify-center mb-12">
           {[
-            { label: 'Jornadas', desc: 'Calendario de salud', icon: '📅', to: '#' },
+            { label: 'Jornadas', desc: 'Calendario de salud', icon: '📅', action: () => setIsCalendarOpen(true) },
           ].map((acc, i) => (
             <motion.div 
               key={i}
               whileHover={{ y: -3 }}
+              onClick={acc.action}
               className="bg-white p-6 rounded-3xl shadow-sm text-center cursor-pointer border border-transparent hover:border-[#0B3D5C]/10 min-w-[200px]"
             >
               <span className="text-3xl block mb-3">{acc.icon}</span>
@@ -153,6 +175,8 @@ export default function LandingPage() {
             </motion.div>
           ))}
         </section>
+
+        <CalendarView isOpen={isCalendarOpen} onClose={() => setIsCalendarOpen(false)} />
       </main>
 
       {/* FOOTER */}
