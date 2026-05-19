@@ -138,17 +138,14 @@ export default function LandingPage() {
         </section>
 
         {/* ACCESOS RÁPIDOS */}
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
+        <section className="flex justify-center mb-12">
           {[
-            { label: 'Directorio', desc: 'Contactos oficiales', icon: '📞', to: '#' },
             { label: 'Jornadas', desc: 'Calendario de salud', icon: '📅', to: '#' },
-            { label: 'Ejes Salud', desc: 'Mapa de ASICs', icon: '📍', to: '#' },
-            { label: 'Estadísticas', desc: 'Open Data Miranda', icon: '📈', to: '#' },
           ].map((acc, i) => (
             <motion.div 
               key={i}
               whileHover={{ y: -3 }}
-              className="bg-white p-6 rounded-3xl shadow-sm text-center cursor-pointer border border-transparent hover:border-[#0B3D5C]/10"
+              className="bg-white p-6 rounded-3xl shadow-sm text-center cursor-pointer border border-transparent hover:border-[#0B3D5C]/10 min-w-[200px]"
             >
               <span className="text-3xl block mb-3">{acc.icon}</span>
               <h4 className="font-bold text-sm text-gray-800">{acc.label}</h4>

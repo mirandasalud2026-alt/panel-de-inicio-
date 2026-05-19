@@ -7,6 +7,7 @@ import {
   Trash2, 
   Settings, 
   Newspaper, 
+  Calendar,
   Plus, 
   Download, 
   Play, 
@@ -38,12 +39,15 @@ interface Noticia {
 }
 
 export default function AdminPortal() {
-  const [activeTab, setActiveTab] = useState<'scripts' | 'noticias' | 'config' | 'mapa' | 'usuarios'>('scripts');
+  const [activeTab, setActiveTab] = useState<'scripts' | 'noticias' | 'calendario' | 'config' | 'mapa' | 'usuarios'>('scripts');
   const [noticias, setNoticias] = useState<Noticia[]>([]);
+  const [eventos, setEventos] = useState<any[]>([]);
   const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
   const [mapGlobalConfig, setMapGlobalConfig] = useState({ title: 'Miranda Salud SIG', bgUrl: '' });
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
   const [editingNoticia, setEditingNoticia] = useState<Noticia | null>(null);
+  const [editingEvento, setEditingEvento] = useState<any | null>(null);
   const [logs, setLogs] = useState<{ time: string, msg: string }[]>([]);
   const [executingScript, setExecutingScript] = useState<string | null>(null);
   const [isDbLoading, setIsDbLoading] = useState(false);
@@ -51,10 +55,78 @@ export default function AdminPortal() {
   // Load initial data
   useEffect(() => {
     fetchNoticias();
+    fetchEventos();
     fetchUsers();
     fetchConfig();
     agregarLog('Panel de Administración sincronizado.');
   }, []);
+
+  const fetchEventos = async () => {
+    if (!supabase) return;
+    setIsDbLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('calendario')
+        .select('*')
+        .order('fecha', { ascending: true });
+      if (!error) setEventos(data || []);
+    } catch (err) {
+      console.error('Error fetching events:', err);
+    } finally {
+      setIsDbLoading(false);
+    }
+  };
+
+  const saveEvento = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const eventoData = {
+      titulo: formData.get('titulo') as string,
+      fecha: formData.get('fecha') as string,
+      tipo: formData.get('tipo') as string,
+      descripcion: formData.get('descripcion') as string,
+    };
+
+    if (supabase) {
+      setIsDbLoading(true);
+      try {
+        if (editingEvento) {
+          const { error } = await supabase
+            .from('calendario')
+            .update(eventoData)
+            .eq('id', editingEvento.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('calendario')
+            .insert(eventoData);
+          if (error) throw error;
+        }
+        await fetchEventos();
+      } catch (err: any) {
+        agregarLog(`❌ Error DB Calendario: ${err.message}`);
+      } finally {
+        setIsDbLoading(false);
+      }
+    }
+    setIsCalendarModalOpen(false);
+    setEditingEvento(null);
+    agregarLog(`📅 Evento "${eventoData.titulo}" procesado.`);
+  };
+
+  const deleteEvento = async (id: any) => {
+    if (confirm('¿Eliminar este evento del calendario?')) {
+      if (supabase) {
+        try {
+          await supabase.from('calendario').delete().eq('id', id);
+          await fetchEventos();
+        } catch (err) {
+          console.error(err);
+        }
+      }
+      agregarLog('🗑️ Evento eliminado.');
+    }
+  };
 
   const fetchConfig = async () => {
     if (!supabase) return;
@@ -256,11 +328,12 @@ export default function AdminPortal() {
   return (
     <div className="space-y-6">
       {/* TABS */}
-      <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-gray-100 max-w-3xl overflow-x-auto custom-scrollbar">
+      <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-gray-100 max-w-4xl overflow-x-auto custom-scrollbar">
         {[
           { id: 'scripts', label: 'Scripts/Sync', icon: <Settings size={14} /> },
           { id: 'mapa', label: 'SIG/Mapa', icon: <MapIcon size={14} /> },
           { id: 'noticias', label: 'Noticias', icon: <Newspaper size={14} /> },
+          { id: 'calendario', label: 'Calendario', icon: <Calendar size={14} /> },
           { id: 'usuarios', label: 'Acreditación', icon: <Users size={14} /> },
           { id: 'config', label: 'Configuración', icon: <Database size={14} /> },
         ].map(tab => (
@@ -412,6 +485,68 @@ export default function AdminPortal() {
                     >
                       <Trash2 size={18} />
                     </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'calendario' && (
+          <motion.div 
+            key="calendario"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="space-y-6"
+          >
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold flex items-center gap-2 text-gray-800">
+                <Calendar className="text-[#0B3D5C]" /> Gestión de Jornadas y Eventos
+              </h2>
+              <button 
+                onClick={() => { setEditingEvento(null); setIsCalendarModalOpen(true); }}
+                className="bg-[#0B3D5C] text-white px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg hover:bg-[#1A5F7A]"
+              >
+                <Plus size={16} /> Nuevo Evento
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {eventos.length === 0 ? (
+                <div className="col-span-full py-12 text-center bg-white rounded-[2rem] border border-dashed border-gray-200">
+                   <p className="text-gray-400 font-bold text-sm uppercase tracking-widest">No hay eventos programados</p>
+                </div>
+              ) : eventos.map(evento => (
+                <div key={evento.id} className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 relative group">
+                  <div className={`absolute top-6 right-6 w-2 h-2 rounded-full ${
+                    evento.tipo === 'jornada' ? 'bg-blue-500' : evento.tipo === 'vacunacion' ? 'bg-emerald-500' : 'bg-amber-500'
+                  }`}></div>
+                  
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">{evento.fecha}</span>
+                  <h3 className="font-bold text-gray-800 mb-2 truncate pr-4">{evento.titulo}</h3>
+                  <p className="text-xs text-gray-500 line-clamp-2 mb-6 h-8">{evento.descripcion}</p>
+                  
+                  <div className="flex items-center justify-between pt-4 border-t border-gray-50">
+                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
+                      evento.tipo === 'jornada' ? 'bg-blue-50 text-blue-600' : evento.tipo === 'vacunacion' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
+                    }`}>
+                      {evento.tipo}
+                    </span>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => { setEditingEvento(evento); setIsCalendarModalOpen(true); }}
+                        className="p-1.5 text-blue-400 hover:text-blue-600"
+                      >
+                        <PenBox size={14} />
+                      </button>
+                      <button 
+                        onClick={() => deleteEvento(evento.id)}
+                        className="p-1.5 text-red-400 hover:text-red-600"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -594,6 +729,88 @@ get_user_role() ...`}
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* MODAL CALENDARIO */}
+      {isCalendarModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white w-full max-w-lg rounded-[2.5rem] p-8 shadow-2xl"
+          >
+            <h3 className="text-xl font-bold text-gray-800 mb-6">
+              {editingEvento ? 'Editar Evento' : 'Nuevo Evento de Salud'}
+            </h3>
+            
+            <form onSubmit={saveEvento} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Título del Evento</label>
+                <input 
+                  name="titulo"
+                  required
+                  defaultValue={editingEvento?.titulo}
+                  className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#0B3D5C]/10 transition-all" 
+                  placeholder="Ej: Mega Jornada de Vacunación..."
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Fecha</label>
+                  <input 
+                    name="fecha"
+                    type="date"
+                    required
+                    defaultValue={editingEvento?.fecha}
+                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 text-sm font-medium focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Tipo</label>
+                  <select 
+                    name="tipo"
+                    defaultValue={editingEvento?.tipo || 'jornada'}
+                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 text-sm font-medium focus:outline-none"
+                  >
+                    <option value="jornada">Jornada</option>
+                    <option value="vacunacion">Vacunación</option>
+                    <option value="reunion">Reunión</option>
+                    <option value="otro">Otro</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Descripción</label>
+                <textarea 
+                  name="descripcion"
+                  required
+                  rows={3}
+                  defaultValue={editingEvento?.descripcion}
+                  className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 text-sm font-medium focus:outline-none"
+                  placeholder="Detalles sobre la ubicación, personal requerido..."
+                />
+              </div>
+              
+              <div className="flex gap-3 pt-4">
+                <button 
+                  type="button"
+                  onClick={() => setIsCalendarModalOpen(false)}
+                  className="flex-1 py-4 bg-gray-50 text-gray-400 rounded-2xl font-bold text-xs uppercase tracking-widest border border-gray-100"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 py-4 bg-[#0B3D5C] text-white rounded-2xl font-bold text-xs uppercase tracking-widest shadow-xl shadow-[#0B3D5C]/20 hover:bg-[#1A5F7A]"
+                >
+                  {editingEvento ? 'Actualizar' : 'Agendar'}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
 
       {/* MODAL NOTICIA */}
       {isModalOpen && (
