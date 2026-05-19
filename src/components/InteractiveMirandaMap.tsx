@@ -92,6 +92,46 @@ const INITIAL_EJES: Eje[] = [
     url: 'https://sites.google.com/view/saludmiranda04/estado-ambulatorios',
     description: 'URL: /estado-ambulatorios'
   },
+  { 
+    id: 'altos_mirandinos', 
+    name: 'Eje Altos Mirandinos', 
+    color: '#0EA5E9',
+    icon: <Mountain size={18} />, 
+    url: 'https://sites.google.com/view/saludmiranda04/eje-altos-mirandinos',
+    description: 'Eje Territorial 01'
+  },
+  { 
+    id: 'valles_del_tuy', 
+    name: 'Eje Valles del Tuy', 
+    color: '#84CC16',
+    icon: <Mountain size={18} />, 
+    url: 'https://sites.google.com/view/saludmiranda04/eje-valles-del-tuy',
+    description: 'Eje Territorial 02'
+  },
+  { 
+    id: 'guarenas_guatire', 
+    name: 'Eje Guarenas-Guatire', 
+    color: '#F97316',
+    icon: <Mountain size={18} />, 
+    url: 'https://sites.google.com/view/saludmiranda04/eje-guarenas-guatire',
+    description: 'Eje Territorial 03'
+  },
+  { 
+    id: 'barlovento', 
+    name: 'Eje Barlovento', 
+    color: '#06B6D4',
+    icon: <Palmtree size={18} />, 
+    url: 'https://sites.google.com/view/saludmiranda04/eje-barlovento',
+    description: 'Eje Territorial 04'
+  },
+  { 
+    id: 'metropolitano', 
+    name: 'Eje Metropolitano', 
+    color: '#6366F1',
+    icon: <Building2 size={18} />, 
+    url: 'https://sites.google.com/view/saludmiranda04/eje-metropolitano',
+    description: 'Eje Territorial 05'
+  },
 ];
 
 // Obtiene dimensiones reales de una imagen (URL o base64)
@@ -123,6 +163,7 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const [dbStatus, setDbStatus] = useState<'testing' | 'ok' | 'error' | 'disconnected'>('disconnected');
   const [lastAction, setLastAction] = useState<{ msg: string, type: 'success' | 'error' } | null>(null);
   const [noticias, setNoticias] = useState<any[]>([]);
+  const [territorialData, setTerritorialData] = useState<Record<string, any>>({});
   const [isNewsOpen, setIsNewsOpen] = useState(false);
   const [showSqlRepair, setShowSqlRepair] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -270,6 +311,19 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
         if (newsData && mounted) {
           setNoticias(newsData);
         }
+
+        const fetchTerri = supabase
+          .from('territorial_data')
+          .select('*');
+        const terriRes: any = await Promise.race([fetchTerri, timeoutPromise]);
+        if (terriRes.data && mounted) {
+           const mappedData = terriRes.data.reduce((acc: any, curr: any) => {
+              acc[curr.eje_id] = curr;
+              return acc;
+           }, {});
+           setTerritorialData(mappedData);
+        }
+
         if (mounted) console.log('Map data synchronized');
       } catch (err: any) {
         console.error('Error loading map data:', err);
@@ -917,6 +971,8 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
             {hoveredMunicipio && (() => {
               const poly = customPolygons.find(p => p.id === hoveredMunicipio);
               const eje = poly ? (ejes.find(e => e.id === poly.ejeId) || activeEje) : activeEje;
+              const realData = territorialData[eje.id];
+              
               return (
                 <motion.div
                   initial={{ opacity: 0, y: 15, scale: 0.95 }}
@@ -926,9 +982,36 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                     ${isMobile ? 'bottom-16 left-4 right-4' : 'top-[35%] left-[50%] -translate-x-1/2'}
                   `}
                 >
-                  <div className="bg-[#0A111E]/95 backdrop-blur-xl border border-white/20 p-4 sm:p-5 rounded-[2rem] flex items-center gap-4">
-                     <div className="w-3.5 h-3.5 rounded-full shadow-[0_0_15px_rgba(255,255,255,0.4)] animate-pulse" style={{ backgroundColor: eje.color }}></div>
-                     <span className="text-[12px] sm:text-[14px] font-black text-white uppercase tracking-[0.25em]">{eje.name}</span>
+                  <div className="bg-[#0A111E]/95 backdrop-blur-xl border border-white/20 p-4 sm:p-5 rounded-[2rem] flex flex-col gap-2 min-w-[200px]">
+                     <div className="flex items-center gap-4">
+                        <div className="w-3.5 h-3.5 rounded-full shadow-[0_0_15px_rgba(255,255,255,0.4)] animate-pulse" style={{ backgroundColor: eje.color }}></div>
+                        <span className="text-[12px] sm:text-[14px] font-black text-white uppercase tracking-[0.25em]">{eje.name}</span>
+                     </div>
+                     
+                     <AnimatePresence>
+                       {realData && (
+                         <motion.div 
+                           initial={{ opacity: 0, height: 0 }}
+                           animate={{ opacity: 1, height: 'auto' }}
+                           className="pt-2 border-t border-white/10 mt-1"
+                         >
+                            <div className="flex justify-between items-end mb-1">
+                               <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Estado Real</span>
+                               <span className="text-[14px] font-black text-blue-400">{realData.valor_principal}%</span>
+                            </div>
+                            <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                               <motion.div 
+                                 initial={{ width: 0 }}
+                                 animate={{ width: `${realData.valor_principal}%` }}
+                                 className="h-full bg-blue-500"
+                               />
+                            </div>
+                            <p className="text-[7px] text-slate-400 uppercase tracking-tighter mt-2 mt-2 font-mono">
+                               Sincronizado: {new Date(realData.updated_at).toLocaleTimeString()}
+                            </p>
+                         </motion.div>
+                       )}
+                     </AnimatePresence>
                   </div>
                 </motion.div>
               );

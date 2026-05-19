@@ -36,13 +36,23 @@ CREATE TABLE IF NOT EXISTS public.mapa_poligonos (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 5. Tabla de Datos Territoriales (Conexión Google Sheets/App Script)
+CREATE TABLE IF NOT EXISTS public.territorial_data (
+    eje_id TEXT PRIMARY KEY, -- ex: 'altos_mirandinos', 'valles_del_tuy'
+    name TEXT NOT NULL,
+    valor_principal FLOAT DEFAULT 0, -- Porcentaje de operatividad o carga
+    metadata JSONB DEFAULT '{}', -- Datos adicionales (medicos, insumos, etc)
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Habilitar RLS en todas
 ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.noticias ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mapa_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mapa_poligonos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.territorial_data ENABLE ROW LEVEL SECURITY;
 
--- 5. FUNCIÓN CRÍTICA PARA EVITAR RECURSIÓN INFINITA
+-- 6. FUNCIÓN CRÍTICA PARA EVITAR RECURSIÓN INFINITA
 -- Esta función usa SECURITY DEFINER para saltarse el RLS al consultar perfiles.
 -- Se añade SET row_security TO 'off' para mayor robustez ante recursión.
 CREATE OR REPLACE FUNCTION public.get_user_role()
@@ -107,7 +117,19 @@ CREATE POLICY "Admins gestionan poligonos" ON public.mapa_poligonos
     USING (get_user_role() = 'admin')
     WITH CHECK (get_user_role() = 'admin');
 
--- 6. TRIGGER DE AUTOMATIZACIÓN DE REGISTRO (Acreditación)
+-- POLÍTICAS PARA DATOS TERRITORIALES
+DROP POLICY IF EXISTS "Lectura pública territorial" ON public.territorial_data;
+CREATE POLICY "Lectura pública territorial" ON public.territorial_data
+    FOR SELECT TO public
+    USING (true);
+
+DROP POLICY IF EXISTS "Admins gestionan territorial" ON public.territorial_data;
+CREATE POLICY "Admins gestionan territorial" ON public.territorial_data
+    FOR ALL TO authenticated
+    USING (get_user_role() = 'admin')
+    WITH CHECK (get_user_role() = 'admin');
+
+-- 7. TRIGGER DE AUTOMATIZACIÓN DE REGISTRO (Acreditación)
 -- Crea automáticamente el perfil en public.usuarios cuando alguien se registra en Auth
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$

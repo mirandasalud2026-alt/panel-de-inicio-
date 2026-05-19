@@ -59,5 +59,17 @@ export const googleWorkspaceService = {
     }
 
     return await response.json();
+  },
+
+  /**
+   * Fetch data from an App Script Web App URL
+   * Note: App Scripts usually require a redirect (CORS) or can be called directly if configured properly.
+   */
+  async fetchFromWebApp(url: string): Promise<any> {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Error de App Script: ${response.statusText}`);
+    }
+    return await response.json();
   }
 };
