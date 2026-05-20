@@ -4,7 +4,6 @@ import DirectorDashboard from '../components/ui/DirectorDashboard';
 import OficinaDashboard from '../components/ui/OficinaDashboard';
 import AdminPortal from '../components/ui/AdminPortal';
 import InteractiveMirandaMap from '../components/InteractiveMirandaMap';
-import { WorkspaceManager } from '../components/ui/WorkspaceManager';
 import { supabase } from '../lib/supabase';
 import { LogOut, User, ShieldCheck, Clock, FileCheck, ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -128,8 +127,6 @@ export default function AdminDashboard() {
           <DirectorDashboard />
         )}
         {profile.rol === 'oficina' && <OficinaDashboard />}
-        
-        {profile.rol === 'admin' && <WorkspaceManager />}
       </main>
 
       <footer className="mt-8 px-6 text-center opacity-30">

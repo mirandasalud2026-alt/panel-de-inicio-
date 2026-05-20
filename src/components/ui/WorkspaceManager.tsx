@@ -29,92 +29,189 @@ import { supabase } from '../../lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 
 const FOLDER_ID = '1loiQhrPqtwOZkE5sSjdHEEJkYtPqXgDR';
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzY4-_rA68AOt1PIClaGgCl5iVjhUlTC-XOcxlT_sVY08SRT_4d8DuDeszi98lWFWnsbw/exec';
-const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1iu3UpCktHPDhUJOVWhwL0-zCZ523aJelWIPgHaLE-20/edit?usp=sharing';
 
-const SCRIPT_ACTIONS = [
-  {
-    id: 'verificarSemana',
-    name: 'Verificar Semana actual',
-    description: 'Analiza los datos de la semana pasada en las hojas ASIC y calcula qué ejes tienen reportes listos.',
-    category: 'Semanales',
-    color: 'border-blue-500/30 text-blue-600 bg-blue-500/5 hover:bg-blue-500/10',
-    icon: <Search size={18} className="text-blue-500" />,
-    badge: 'Análisis'
+interface ScriptAction {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  color: string;
+  icon: React.ReactNode;
+  badge: string;
+}
+
+interface ScriptPipeline {
+  id: 'master' | 'captura' | 'cumplimiento';
+  title: string;
+  subtitle: string;
+  sheetUrl: string;
+  webAppUrl: string;
+  sheetName: string;
+  description: string;
+  actions: ScriptAction[];
+}
+
+const PIPELINES: Record<'master' | 'captura' | 'cumplimiento', ScriptPipeline> = {
+  master: {
+    id: 'master',
+    title: 'Consolidado General ASIC (Canal 1)',
+    subtitle: 'Dirección Estadal de Salud',
+    sheetUrl: 'https://docs.google.com/spreadsheets/d/1iu3UpCktHPDhUJOVWhwL0-zCZ523aJelWIPgHaLE-20/edit?usp=sharing',
+    webAppUrl: 'https://script.google.com/macros/s/AKfycbzY4-_rA68AOt1PIClaGgCl5iVjhUlTC-XOcxlT_sVY08SRT_4d8DuDeszi98lWFWnsbw/exec',
+    sheetName: 'Miranda Salud - Compilado General',
+    description: 'Consolida reportes de los 5 ejes territoriales sanitarios de Miranda para compilar la base histórica master.',
+    actions: [
+      {
+        id: 'verificarSemana',
+        name: 'Verificar Semana actual',
+        description: 'Analiza los datos de la semana pasada en las hojas ASIC y calcula qué ejes tienen reportes listos.',
+        category: 'Semanales',
+        color: 'border-blue-500/30 text-blue-600 bg-blue-500/5 hover:bg-blue-500/10',
+        icon: <Search size={18} className="text-blue-500" />,
+        badge: 'Análisis'
+      },
+      {
+        id: 'respaldarSinEliminar',
+        name: 'Respaldar (Mantener Origen)',
+        description: 'Copia los datos de la semana pasada en el libro consolidado ("Compilado") sin borrar los originales de las ASIC.',
+        category: 'Semanales',
+        color: 'border-emerald-500/30 text-emerald-600 bg-emerald-500/5 hover:bg-emerald-500/10',
+        icon: <Layers size={18} className="text-emerald-500" />,
+        badge: 'Seguro'
+      },
+      {
+        id: 'respaldarYEliminarSemana',
+        name: 'Respaldar y Purgar',
+        description: 'Copia los datos de la semana pasada en el libro consolidado ("Compilado") y purga los datos originales de las ASIC.',
+        category: 'Semanales',
+        color: 'border-rose-500/30 text-rose-600 bg-rose-500/5 hover:bg-rose-500/10',
+        icon: <Trash2 size={18} className="text-rose-500" />,
+        badge: 'Purga'
+      },
+      {
+        id: 'actualizarResumenPorEjes',
+        name: 'Actualizar Resumen de Ejes',
+        description: 'Recalcula las estadísticas de filas consolidadas agrupadas por eje territorial en la pestaña de Resumen.',
+        category: 'Mantenimiento',
+        color: 'border-indigo-500/30 text-indigo-600 bg-indigo-500/5 hover:bg-indigo-500/10',
+        icon: <Database size={18} className="text-indigo-500" />,
+        badge: 'Cálculo'
+      },
+      {
+        id: 'limpiarDuplicadosCompilada',
+        name: 'Eliminar Duplicados',
+        description: 'Escanea la pestaña "Compilado" y quita cualquier fila duplicada idéntica para limpiar la base de datos.',
+        category: 'Mantenimiento',
+        color: 'border-amber-500/30 text-amber-600 bg-amber-500/5 hover:bg-amber-500/10',
+        icon: <Wrench size={18} className="text-amber-500" />,
+        badge: 'Limpieza'
+      },
+      {
+        id: 'migrarCompiladoConEje',
+        name: 'Reconstrucción de Ejes',
+        description: 'Migra y reconstruye la pestaña consolidada "Compilado" forzando la columna indexada como primer elemento.',
+        category: 'Mantenimiento',
+        color: 'border-sky-500/30 text-sky-600 bg-slate-500/5 hover:bg-sky-500/10',
+        icon: <ArrowRightLeft size={18} className="text-sky-500" />,
+        badge: 'Migrar'
+      },
+      {
+        id: 'crearTriggerAutomatico',
+        name: 'Configurar Cron Semanal',
+        description: 'Instala un disparador automático continuo en Google Apps Script para respaldar y purgar cada jueves a las 23:50.',
+        category: 'Configuración',
+        color: 'border-teal-500/30 text-teal-600 bg-teal-500/5 hover:bg-teal-500/10',
+        icon: <Clock size={18} className="text-teal-500" />,
+        badge: 'Trigger'
+      },
+      {
+        id: 'resetearCompilado',
+        name: 'Reiniciar Compilado',
+        description: 'Purga todos los datos acumulados en la pestaña "Compilado" y restablece la estructura original con sus cabeceras.',
+        category: 'Configuración',
+        color: 'border-red-500/30 text-red-600 bg-red-500/5 hover:bg-red-500/10',
+        icon: <FileText size={18} className="text-red-500" />,
+        badge: 'Formatear'
+      },
+      {
+        id: 'diagnosticarCompleto',
+        name: 'Diagnóstico en Nube',
+        description: 'Abre en tiempo real cada libro de Eje Territorial verificando hojas "ASIC", columnas, y el estado de la conexión en red.',
+        category: 'Configuración',
+        color: 'border-slate-500/30 text-slate-700 bg-slate-500/5 hover:bg-slate-500/10',
+        icon: <Terminal size={18} className="text-slate-600" />,
+        badge: 'Detalles'
+      }
+    ]
   },
-  {
-    id: 'respaldarSinEliminar',
-    name: 'Respaldar (Mantener Origen)',
-    description: 'Copia los datos de la semana pasada en el libro consolidado ("Compilado") sin borrar los originales de las ASIC.',
-    category: 'Semanales',
-    color: 'border-emerald-500/30 text-emerald-600 bg-emerald-500/5 hover:bg-emerald-500/10',
-    icon: <Layers size={18} className="text-emerald-500" />,
-    badge: 'Seguro'
+  captura: {
+    id: 'captura',
+    title: 'Planilla de Carga de Registros (Canal 2)',
+    subtitle: 'Capturas Epidemiológicas Específicas',
+    sheetUrl: 'https://docs.google.com/spreadsheets/d/1zw04RoFnPvxF3P147dRjbg01gfySKJGNn4QUVbcSfig/edit?usp=sharing',
+    webAppUrl: 'https://script.google.com/macros/s/AKfycby1fK_gztaOFTgwk10Q0QIgcODKUsTLvMW_2AW2xbh4LqfiE_45hfS6iW5U05b0NlsL2Q/exec',
+    sheetName: 'Planilla de Carga de Registros',
+    description: 'Registra, valida y actualiza la hoja de cálculo específica de control para variables dinámicas locales.',
+    actions: [
+      {
+        id: 'llenarDatosSheet',
+        name: 'Sincronizar y Cargar Datos',
+        description: 'Envía peticiones para poblar y rellenar automáticamente la planilla de carga general 1zw04RoFnPvxF3P147dRjbg01gfySKJGNn4QUVbcSfig.',
+        category: 'Planilla de Carga',
+        color: 'border-emerald-500/30 text-emerald-600 bg-emerald-500/5 hover:bg-emerald-500/10',
+        icon: <FileSpreadsheet size={18} className="text-emerald-500" />,
+        badge: 'Cargar'
+      },
+      {
+        id: 'verificarLlenado',
+        name: 'Diagnosticar Formato Carga',
+        description: 'Examina columnas, celdas y el formato general de la hoja de cálculo de carga específica.',
+        category: 'Integridad',
+        color: 'border-blue-500/30 text-blue-600 bg-blue-500/5 hover:bg-blue-500/10',
+        icon: <Search size={18} className="text-blue-500" />,
+        badge: 'Análisis'
+      },
+      {
+        id: 'limpiarPlanilla',
+        name: 'Reiniciar Planilla de Captura',
+        description: 'Limpia la base temporal o de pruebas en la hoja de carga si es necesario inicializar el formato maestro.',
+        category: 'Mantenimiento',
+        color: 'border-rose-500/30 text-rose-600 bg-rose-500/5 hover:bg-rose-500/10',
+        icon: <Trash2 size={18} className="text-rose-500" />,
+        badge: 'Inicializar'
+      }
+    ]
   },
-  {
-    id: 'respaldarYEliminarSemana',
-    name: 'Respaldar y Purgar',
-    description: 'Copia los datos de la semana pasada en el libro consolidado ("Compilado") y purga los datos originales de las ASIC.',
-    category: 'Semanales',
-    color: 'border-rose-500/30 text-rose-600 bg-rose-500/5 hover:bg-rose-500/10',
-    icon: <Trash2 size={18} className="text-rose-500" />,
-    badge: 'Purga'
-  },
-  {
-    id: 'actualizarResumenPorEjes',
-    name: 'Actualizar Resumen de Ejes',
-    description: 'Recalcula las estadísticas de filas consolidadas agrupadas por eje territorial en la pestaña de Resumen.',
-    category: 'Mantenimiento',
-    color: 'border-indigo-500/30 text-indigo-600 bg-indigo-500/5 hover:bg-indigo-500/10',
-    icon: <Database size={18} className="text-indigo-500" />,
-    badge: 'Cálculo'
-  },
-  {
-    id: 'limpiarDuplicadosCompilada',
-    name: 'Eliminar Duplicados',
-    description: 'Escanea la pestaña "Compilado" y quita cualquier fila duplicada idéntica para limpiar la base de datos.',
-    category: 'Mantenimiento',
-    color: 'border-amber-500/30 text-amber-600 bg-amber-500/5 hover:bg-amber-500/10',
-    icon: <Wrench size={18} className="text-amber-500" />,
-    badge: 'Limpieza'
-  },
-  {
-    id: 'migrarCompiladoConEje',
-    name: 'Reconstrucción de Ejes',
-    description: 'Migra y reconstruye la pestaña consolidada "Compilado" forzando la columna indexada como primer elemento.',
-    category: 'Mantenimiento',
-    color: 'border-sky-500/30 text-sky-600 bg-sky-500/5 hover:bg-sky-500/10',
-    icon: <ArrowRightLeft size={18} className="text-sky-500" />,
-    badge: 'Migrar'
-  },
-  {
-    id: 'crearTriggerAutomatico',
-    name: 'Configurar Cron Semanal',
-    description: 'Instala un disparador automático continuo en Google Apps Script para respaldar y purgar cada jueves a las 23:50.',
-    category: 'Configuración',
-    color: 'border-teal-500/30 text-teal-600 bg-teal-500/5 hover:bg-teal-500/10',
-    icon: <Clock size={18} className="text-teal-500" />,
-    badge: 'Trigger'
-  },
-  {
-    id: 'resetearCompilado',
-    name: 'Reiniciar Compilado',
-    description: 'Purga todos los datos acumulados en la pestaña "Compilado" y restablece la estructura original con sus cabeceras.',
-    category: 'Configuración',
-    color: 'border-red-500/30 text-red-600 bg-red-500/5 hover:bg-red-500/10',
-    icon: <FileText size={18} className="text-red-500" />,
-    badge: 'Formatear'
-  },
-  {
-    id: 'diagnosticarCompleto',
-    name: 'Diagnóstico en Nube',
-    description: 'Abre en tiempo real cada libro de Eje Territorial verificando hojas "ASIC", columnas, y el estado de la conexión en red.',
-    category: 'Configuración',
-    color: 'border-slate-500/30 text-slate-700 bg-slate-500/5 hover:bg-slate-500/10',
-    icon: <Terminal size={18} className="text-slate-600" />,
-    badge: 'Detalles'
+  cumplimiento: {
+    id: 'cumplimiento',
+    title: 'Monitoreo de Cumplimiento (Canal 3)',
+    subtitle: 'Dirección de Salud - Estado Miranda',
+    sheetUrl: 'https://docs.google.com/spreadsheets/d/1zw04RoFnPvxF3P147dRjbg01gfySKJGNn4QUVbcSfig/edit?usp=sharing',
+    webAppUrl: 'https://script.google.com/macros/s/AKfycby1fK_gztaOFTgwk10Q0QIgcODKUsTLvMW_2AW2xbh4LqfiE_45hfS6iW5U05b0NlsL2Q/exec',
+    sheetName: 'Planilla para Administración de Cumplimientos',
+    description: 'Control de tránsito bi-direccional hacia Supabase. Peina horario las hojas ASIC de los 5 libros territoriales para calcular el semáforo y retrasos de reportes.',
+    actions: [
+      {
+        id: 'peinarYActualizarSupabase',
+        name: 'Peinar y Actualizar Supabase',
+        description: 'Escanea en tiempo real los 5 libros de ejes territoriales de Miranda, procesa las hojas por ASIC y actualiza los indicadores en Supabase.',
+        category: 'Cumplimientos',
+        color: 'border-cyan-500/30 text-cyan-600 bg-cyan-500/5 hover:bg-cyan-500/10',
+        icon: <RefreshCw size={18} className="text-cyan-500" />,
+        badge: 'Escaneo'
+      },
+      {
+        id: 'ejecutarReinicioSemanal',
+        name: 'Limpieza e Inicialización Semanal',
+        description: 'Reestablece el estado del semáforo colectivo a Rojo e inicializa el cron de retrasos acumulados para el nuevo ciclo de reporte.',
+        category: 'Inicios Semanales',
+        color: 'border-purple-500/30 text-purple-600 bg-purple-500/5 hover:bg-purple-500/10',
+        icon: <Clock size={18} className="text-purple-500" />,
+        badge: 'Purga'
+      }
+    ]
   }
-];
+};
 
 export const WorkspaceManager: React.FC = () => {
   const [user, setUser] = useState<any>(null);
@@ -125,6 +222,7 @@ export const WorkspaceManager: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeManagerTab, setActiveManagerTab] = useState<'files' | 'sync'>('sync');
+  const [selectedPipeline, setSelectedPipeline] = useState<'master' | 'captura' | 'cumplimiento'>('master');
 
   // Apps Script states
   const [runningAction, setRunningAction] = useState<string | null>(null);
@@ -210,8 +308,9 @@ export const WorkspaceManager: React.FC = () => {
     setRunningAction(actionId);
     setError(null);
 
+    const activePipelineUrl = PIPELINES[selectedPipeline].webAppUrl;
     addLog(`⚡ Solicitando ejecución: "${actionName}" (ID: ${actionId})...`);
-    addLog(`📡 Canalizando túnel seguro de la Dirección Estadal hacia Google Cloud...`);
+    addLog(`📡 Canalizando túnel hacia Apps Script: ${activePipelineUrl.substring(0, 45)}...`);
 
     try {
       const response = await fetch('/api/run-script', {
@@ -219,7 +318,7 @@ export const WorkspaceManager: React.FC = () => {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ action: actionId })
+        body: JSON.stringify({ action: actionId, scriptUrl: activePipelineUrl })
       });
 
       if (!response.ok) {
@@ -336,17 +435,106 @@ export const WorkspaceManager: React.FC = () => {
             transition={{ duration: 0.2 }}
             className="space-y-8"
           >
+            {/* SELECCIÓN DE CANAL DE SCRIPT / PLANILLA */}
+            <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-gray-100 shadow-sm">
+              <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                📡 SELECCIONE EL DISPARADOR Y LA HOJA META
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Master channel */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedPipeline('master');
+                    addLog('🔄 Cambiado a Canal 1: Sincronización ASIC y Consolidación Maestro.');
+                  }}
+                  className={`p-5 rounded-3xl border text-left transition-all flex items-start gap-4 ${
+                    selectedPipeline === 'master'
+                      ? 'bg-white border-[#0B3D5C] ring-2 ring-[#0B3D5C]/11 shadow-lg'
+                      : 'bg-white/40 border-gray-200/60 hover:bg-white hover:border-[#0B3D5C]'
+                  }`}
+                >
+                  <div className={`p-3 rounded-2xl ${selectedPipeline === 'master' ? 'bg-[#0B3D5C] text-white' : 'bg-slate-100 text-slate-500'}`}>
+                    <Layers size={20} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-[#0B3D5C] uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded-md">Canal 1</span>
+                      <h5 className="text-[11px] font-black text-slate-800 uppercase tracking-tight">Consolidado ASIC Principal</h5>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1.5 font-medium leading-relaxed">
+                      Compila la base de datos histórica mediante reportes de los 5 ejes territoriales.
+                    </p>
+                  </div>
+                </button>
+
+                {/* Capture channel */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedPipeline('captura');
+                    addLog('🔄 Cambiado a Canal 2: Planilla de Carga de Registros.');
+                  }}
+                  className={`p-5 rounded-3xl border text-left transition-all flex items-start gap-4 ${
+                    selectedPipeline === 'captura'
+                      ? 'bg-white border-emerald-600 ring-2 ring-emerald-500/11 shadow-lg'
+                      : 'bg-white/40 border-gray-200/60 hover:bg-white hover:border-emerald-500'
+                  }`}
+                >
+                  <div className={`p-3 rounded-2xl ${selectedPipeline === 'captura' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                    <FileSpreadsheet size={20} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider bg-emerald-50 px-2 py-0.5 rounded-md">Canal 2</span>
+                      <h5 className="text-[11px] font-black text-slate-800 uppercase tracking-tight">Planilla de Carga General</h5>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1.5 font-medium leading-relaxed">
+                      Llena, formatea y procesa la planilla específica de captura de salud (1zw04RoFnPvxF3P147dRjbg01gfySKJGNn4QUVbcSfig).
+                    </p>
+                  </div>
+                </button>
+
+                {/* Compliance channel (Canal 3) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedPipeline('cumplimiento');
+                    addLog('🔄 Cambiado a Canal 3: Monitoreo de Cumplimiento (Supabase ⇆ Google Sheets).');
+                  }}
+                  className={`p-5 rounded-3xl border text-left transition-all flex items-start gap-4 ${
+                    selectedPipeline === 'cumplimiento'
+                      ? 'bg-white border-cyan-600 ring-2 ring-cyan-500/11 shadow-lg'
+                      : 'bg-white/40 border-gray-200/60 hover:bg-white hover:border-cyan-500'
+                  }`}
+                >
+                  <div className={`p-3 rounded-2xl ${selectedPipeline === 'cumplimiento' ? 'bg-cyan-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                    <RefreshCw size={20} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-cyan-700 uppercase tracking-wider bg-cyan-50 px-2 py-0.5 rounded-md">Canal 3</span>
+                      <h5 className="text-[11px] font-black text-slate-800 uppercase tracking-tight">Cumplimientos ASIC</h5>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1.5 font-medium leading-relaxed">
+                      Control de tránsito de reportes epidemiológicos y semáforos bi-direccionales de los 5 libros de ejes territoriales.
+                    </p>
+                  </div>
+                </button>
+              </div>
+            </div>
+
             {/* HERRAMIENTAS DIRECTAS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-blue-50/50 border border-blue-100/60 p-6 rounded-3xl flex flex-col justify-between">
                 <div>
-                  <h4 className="text-[12px] font-black text-blue-900 uppercase tracking-widest mb-1.5">Consolidado General</h4>
+                  <h4 className="text-[12px] font-black text-blue-900 uppercase tracking-widest mb-1.5">Documento de Google Sheets</h4>
                   <p className="text-[10px] text-blue-700/80 leading-relaxed font-semibold">
-                    Libro de almacenamiento centralizado de datos y compilación histórica.
+                    {PIPELINES[selectedPipeline].sheetName}
                   </p>
                 </div>
                 <a 
-                  href={SHEET_URL} 
+                  href={PIPELINES[selectedPipeline].sheetUrl} 
                   target="_blank" 
                   rel="noopener noreferrer" 
                   className="mt-6 inline-flex items-center gap-2 text-xs font-black text-blue-600 hover:text-blue-700 uppercase tracking-wider bg-white px-4 py-2 rounded-xl shadow-sm border border-blue-100 w-fit transition-all hover:translate-y-[-1px]"
@@ -359,11 +547,11 @@ export const WorkspaceManager: React.FC = () => {
                 <div>
                   <h4 className="text-[12px] font-black text-emerald-900 uppercase tracking-widest mb-1.5">Apps Script Web App</h4>
                   <p className="text-[10px] text-emerald-700/80 leading-relaxed font-semibold">
-                    Servicio macro que automatiza los triggers, respaldos y el formateado de tablas.
+                    Procedimiento macro que orquesta y valida las filas en la hoja conectada.
                   </p>
                 </div>
                 <a 
-                  href={WEB_APP_URL} 
+                  href={PIPELINES[selectedPipeline].webAppUrl} 
                   target="_blank" 
                   rel="noopener noreferrer" 
                   className="mt-6 inline-flex items-center gap-2 text-xs font-black text-emerald-600 hover:text-emerald-700 uppercase tracking-wider bg-white px-4 py-2 rounded-xl shadow-sm border border-emerald-100 w-fit transition-all hover:translate-y-[-1px]"
@@ -374,13 +562,17 @@ export const WorkspaceManager: React.FC = () => {
 
               <div className="bg-amber-50/60 border border-amber-100/60 p-6 rounded-3xl flex flex-col justify-between">
                 <div>
-                  <h4 className="text-[12px] font-black text-amber-900 uppercase tracking-widest mb-1.5">Frecuencia Automatizada</h4>
+                  <h4 className="text-[12px] font-black text-amber-950 uppercase tracking-widest mb-1.5">Planificación</h4>
                   <p className="text-[10px] text-amber-700/80 leading-relaxed font-semibold">
-                    El sistema corre automáticamente el Respaldo Semanal cada <span className="font-extrabold text-[#78350F]">Jueves a las 23:50</span>.
+                  {selectedPipeline === 'master' 
+                    ? 'El sistema corre automáticamente el Respaldo Semanal cada Jueves a las 23:50.' 
+                    : selectedPipeline === 'captura'
+                    ? 'La Sincronización se ejecuta selectivamente bajo demanda y carga manual.'
+                    : 'La sincronización de tránsitos peina horario cada libro ASIC y calcula horas retraso.'}
                   </p>
                 </div>
                 <div className="mt-6 text-[10px] text-amber-600 font-extrabold uppercase tracking-widest flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
                   Servicio Activo
                 </div>
               </div>
@@ -389,11 +581,11 @@ export const WorkspaceManager: React.FC = () => {
             {/* SECCIÓN DE BOTONES DE ACCIÓN */}
             <div>
               <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                <span className="p-1 bg-gray-100 rounded-lg"><Play size={10} /></span> Macros del Sistema
+                <span className="p-1 bg-gray-100 rounded-lg"><Play size={10} /></span> Macros del Canal Seleccionado
               </h4>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {SCRIPT_ACTIONS.map((act) => (
+                {PIPELINES[selectedPipeline].actions.map((act) => (
                   <button
                     key={act.id}
                     type="button"

@@ -37,6 +37,7 @@ import {
 } from 'recharts';
 import { googleSignIn, initAuth, logout } from '../../lib/firebaseAuth';
 import { googleWorkspaceService } from '../../services/googleWorkspaceService';
+import MinimalistDashboard from './MinimalistDashboard';
 
 // Medical Report Interface matching the spreadsheet columns exactly
 interface MedicalReport {
@@ -247,6 +248,7 @@ export default function DirectorDashboard() {
   const [isLoaderActive, setIsLoaderActive] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [fetchedSuccessfully, setFetchedSuccessfully] = useState(false);
+  const [isMinimalistMode, setIsMinimalistMode] = useState(true); // Default to clean minimalist 2026 mode!
   
   // Base raw records state
   const [rawRecords, setRawRecords] = useState<MedicalReport[]>([]);
@@ -701,6 +703,22 @@ export default function DirectorDashboard() {
     }
   };
 
+  if (isMinimalistMode) {
+    return (
+      <div className="space-y-2 bg-[#FFFFFF]">
+        <div className="max-w-4xl mx-auto px-6 pt-6 flex justify-end">
+          <button
+            onClick={() => setIsMinimalistMode(false)}
+            className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 hover:scale-[1.02] transition-all flex items-center gap-1.5 shadow-sm"
+          >
+            📊 <span className="text-gray-300 font-bold">Cambiar a:</span> Analítica Tradicional
+          </button>
+        </div>
+        <MinimalistDashboard />
+      </div>
+    );
+  }
+
   return (
     <div id="executive-director-dashboard" className="space-y-12 animate-in fade-in duration-700">
       
@@ -734,6 +752,12 @@ export default function DirectorDashboard() {
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto self-stretch md:self-auto">
+          <button
+            onClick={() => setIsMinimalistMode(true)}
+            className="px-4 py-3 bg-slate-50 border border-gray-200 hover:bg-slate-100 rounded-xl text-[10px] font-extrabold uppercase tracking-widest text-[#0B3D5C] flex items-center justify-center gap-2 transition-all"
+          >
+            ✨ Vista Minimalista 2026
+          </button>
           {!googleToken ? (
             <button
               onClick={triggerGoogleLogin}

@@ -138,3 +138,27 @@ DROP POLICY IF EXISTS "Admins pueden editar noticias" ON public.noticias;
 CREATE POLICY "Admins pueden editar noticias" ON public.noticias FOR ALL USING (
     EXISTS (SELECT 1 FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin')
 );
+
+-- 10. Tabla de Tránsito de Reportes (Monitoreo de Cumplimiento Canal 3)
+CREATE TABLE IF NOT EXISTS public.transito_reportes (
+    id_centro TEXT PRIMARY KEY,
+    nombre_centro TEXT NOT NULL,
+    asic TEXT NOT NULL,
+    eje_geografico TEXT NOT NULL,
+    ultimo_reporte TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    estado_semaforo TEXT NOT NULL DEFAULT 'Verde' CHECK (estado_semaforo IN ('Verde', 'Amarillo', 'Rojo')),
+    horas_retraso INTEGER NOT NULL DEFAULT 0,
+    actualizado_en TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Habilitar RLS
+ALTER TABLE public.transito_reportes ENABLE ROW LEVEL SECURITY;
+
+-- Políticas: Todos pueden ver, solo Admins pueden editar
+DROP POLICY IF EXISTS "Todos pueden ver transito_reportes" ON public.transito_reportes;
+CREATE POLICY "Todos pueden ver transito_reportes" ON public.transito_reportes FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins pueden editar transito_reportes" ON public.transito_reportes;
+CREATE POLICY "Admins pueden editar transito_reportes" ON public.transito_reportes FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin')
+);

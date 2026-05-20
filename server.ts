@@ -78,12 +78,12 @@ async function startServer() {
 
   // Proxy seguro para Google Apps Script
   app.post("/api/run-script", async (req, res) => {
-    const { action } = req.body;
+    const { action, scriptUrl: customScriptUrl } = req.body;
     if (!action) {
       return res.status(400).json({ status: "error", message: "Falta el parámetro 'action'." });
     }
 
-    const scriptUrl = process.env.GOOGLE_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbzY4-_rA68AOt1PIClaGgCl5iVjhUlTC-XOcxlT_sVY08SRT_4d8DuDeszi98lWFWnsbw/exec";
+    const scriptUrl = customScriptUrl || process.env.GOOGLE_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbzY4-_rA68AOt1PIClaGgCl5iVjhUlTC-XOcxlT_sVY08SRT_4d8DuDeszi98lWFWnsbw/exec";
 
     try {
       console.log(`[Script Proxy] Ejecutando acción: ${action} en ${scriptUrl}`);

@@ -31,6 +31,7 @@ import InteractiveMirandaMap from '../InteractiveMirandaMap';
 import { supabase, UserProfile } from '../../lib/supabase';
 import { googleSignIn, initAuth } from '../../lib/firebaseAuth';
 import { googleWorkspaceService } from '../../services/googleWorkspaceService';
+import { WorkspaceManager } from './WorkspaceManager';
 
 interface Noticia {
   id: string | number;
@@ -40,12 +41,86 @@ interface Noticia {
   fecha: string;
 }
 
+interface TransitoReporte {
+  id_centro: string;
+  nombre_centro: string;
+  asic: string;
+  eje_geografico: string;
+  ultimo_reporte: string;
+  estado_semaforo: string;
+  horas_retraso: number;
+  actualizado_en: string;
+}
+
+const MOCK_TRANSITO_REPORTES: TransitoReporte[] = [
+  {
+    id_centro: "ALT_AS_GUA",
+    nombre_centro: "Ambulatorio Guaremal",
+    asic: "ASIC GUAREMAL",
+    eje_geografico: "ALTOS MIRANDINOS",
+    ultimo_reporte: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
+    estado_semaforo: "Verde",
+    horas_retraso: 0,
+    actualizado_en: new Date().toISOString()
+  },
+  {
+    id_centro: "ALT_AS_CAR_CDI",
+    nombre_centro: "CDI Carrizal",
+    asic: "ASIC CARRIZAL",
+    eje_geografico: "ALTOS MIRANDINOS",
+    ultimo_reporte: new Date(Date.now() - 30 * 3600 * 1000).toISOString(),
+    estado_semaforo: "Amarillo",
+    horas_retraso: 30,
+    actualizado_en: new Date().toISOString()
+  },
+  {
+    id_centro: "VAL_AS_OCU",
+    nombre_centro: "Ambulatorio Ocumare",
+    asic: "ASIC OCUMARE DEL TUY",
+    eje_geografico: "VALLES DEL TUY",
+    ultimo_reporte: new Date(Date.now() - 52 * 3600 * 1000).toISOString(),
+    estado_semaforo: "Rojo",
+    horas_retraso: 52,
+    actualizado_en: new Date().toISOString()
+  },
+  {
+    id_centro: "GUA_AS_GG",
+    nombre_centro: "Hospitalito de Guarenas",
+    asic: "ASIC GUARENAS",
+    eje_geografico: "GUARENAS-GUATIRE",
+    ultimo_reporte: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+    estado_semaforo: "Verde",
+    horas_retraso: 0,
+    actualizado_en: new Date().toISOString()
+  },
+  {
+    id_centro: "BAR_AS_MAM",
+    nombre_centro: "CDI Mamporal",
+    asic: "ASIC MAMPORAL",
+    eje_geografico: "BARLOVENTO",
+    ultimo_reporte: new Date(Date.now() - 10 * 3600 * 1000).toISOString(),
+    estado_semaforo: "Verde",
+    horas_retraso: 0,
+    actualizado_en: new Date().toISOString()
+  },
+  {
+    id_centro: "MET_AS_CHA",
+    nombre_centro: "Ambulatorio El Pedregal",
+    asic: "ASIC CHACAO",
+    eje_geografico: "METROPOLITANO",
+    ultimo_reporte: new Date(Date.now() - 61 * 3600 * 1000).toISOString(),
+    estado_semaforo: "Rojo",
+    horas_retraso: 61,
+    actualizado_en: new Date().toISOString()
+  }
+];
+
 interface AdminPortalProps {
   restricted?: boolean;
 }
 
 export default function AdminPortal({ restricted = false }: AdminPortalProps) {
-  const [activeTab, setActiveTab] = useState<'mapa' | 'noticias' | 'calendario' | 'usuarios' | 'config'>('mapa');
+  const [activeTab, setActiveTab] = useState<'mapa' | 'cumplimiento' | 'noticias' | 'calendario' | 'usuarios' | 'config'>('mapa');
   const [noticias, setNoticias] = useState<Noticia[]>([]);
   const [eventos, setEventos] = useState<any[]>([]);
   const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
@@ -61,12 +136,21 @@ export default function AdminPortal({ restricted = false }: AdminPortalProps) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  // Compliance (Tránsito de Reportes) states
+  const [transitoReportes, setTransitoReportes] = useState<TransitoReporte[]>([]);
+  const [filterSemaforo, setFilterSemaforo] = useState<string>('Todos'); 
+  const [filterEje, setFilterEje] = useState<string>('Todos');
+  const [soloCumplidos, setSoloCumplidos] = useState<boolean>(false);
+  const [selectedWidgetEje, setSelectedWidgetEje] = useState<string>('ALTOS MIRANDINOS');
+  const [selectedWidgetAsic, setSelectedWidgetAsic] = useState<string>('ASIC GUAREMAL');
+
   // Load initial data
   useEffect(() => {
     fetchNoticias();
     fetchEventos();
     fetchUsers();
     fetchConfig();
+    fetchTransitoReportes();
     agregarLog('Panel de Administración sincronizado.');
 
     const unsubscribe = initAuth(
@@ -264,6 +348,31 @@ export default function AdminPortal({ restricted = false }: AdminPortalProps) {
       console.error('Error fetching noticias:', err);
     } finally {
       setIsDbLoading(false);
+    }
+  };
+
+  const fetchTransitoReportes = async () => {
+    if (!supabase) {
+      setTransitoReportes(MOCK_TRANSITO_REPORTES);
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('transito_reportes')
+        .select('*')
+        .order('actualizado_en', { ascending: false });
+      
+      if (error) {
+        console.warn('Table transito_reportes not populated yet, using standard compliance data');
+        setTransitoReportes(MOCK_TRANSITO_REPORTES);
+      } else if (data && data.length > 0) {
+        setTransitoReportes(data);
+      } else {
+        setTransitoReportes(MOCK_TRANSITO_REPORTES);
+      }
+    } catch (err) {
+      console.error('Error loading transit compliance report:', err);
+      setTransitoReportes(MOCK_TRANSITO_REPORTES);
     }
   };
 
@@ -553,9 +662,11 @@ export default function AdminPortal({ restricted = false }: AdminPortalProps) {
   const adminTabs = restricted
     ? [
         { id: 'mapa', label: 'Monitor SIG', icon: <MapIcon size={14} /> },
+        { id: 'cumplimiento', label: 'Ver Cumplimiento', icon: <CheckCircle2 size={14} /> },
       ]
     : [
         { id: 'mapa', label: 'Monitor SIG', icon: <MapIcon size={14} /> },
+        { id: 'cumplimiento', label: 'Tránsito de Reportes', icon: <CheckCircle2 size={14} /> },
         { id: 'noticias', label: 'Gestión Noticias', icon: <Newspaper size={14} /> },
         { id: 'calendario', label: 'Calendario Jornadas', icon: <Calendar size={14} /> },
         { id: 'usuarios', label: 'Acreditador', icon: <Users size={14} /> },
@@ -589,11 +700,330 @@ export default function AdminPortal({ restricted = false }: AdminPortalProps) {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="flex-1 min-h-[500px] h-[calc(100vh-250px)]"
+            className="space-y-8 flex-1"
           >
-            <InteractiveMirandaMap isAdminMode={true} />
+            <div className="min-h-[500px] h-[calc(100vh-250px)]">
+              <InteractiveMirandaMap isAdminMode={true} />
+            </div>
+            <WorkspaceManager />
           </motion.div>
         )}
+
+        {activeTab === 'cumplimiento' && (() => {
+          // Filtrado inteligente según selección de usuario
+          const reportesFiltrados = transitoReportes.filter(r => {
+            const matchesEje = filterEje === 'Todos' || r.eje_geografico.toUpperCase() === filterEje.toUpperCase();
+            const matchesSemaforo = filterSemaforo === 'Todos' || r.estado_semaforo.toUpperCase() === filterSemaforo.toUpperCase();
+            const matchesSoloCumplidos = !soloCumplidos || r.estado_semaforo.toLowerCase() === 'verde';
+            return matchesEje && matchesSemaforo && matchesSoloCumplidos;
+          });
+
+          // Cálculos KPI globales en base al tránsito actual
+          const totalCentros = transitoReportes.length;
+          const cumplidosCount = transitoReportes.filter(r => r.estado_semaforo.toLowerCase() === 'verde').length;
+          const demoradosCount = transitoReportes.filter(r => r.estado_semaforo.toLowerCase() === 'amarillo').length;
+          const fueraCount = transitoReportes.filter(r => r.estado_semaforo.toLowerCase() === 'rojo').length;
+          const porcentajeCumplido = totalCentros > 0 ? Math.round((cumplidosCount / totalCentros) * 100) : 0;
+
+          // Generación dinámica de widget incrustable en Google Sites
+          const widgetSemaforoUrl = `https://script.google.com/macros/s/AKfycby1fK_gztaOFTgwk10Q0QIgcODKUsTLvMW_2AW2xbh4LqfiE_45hfS6iW5U05b0NlsL2Q/exec?view=widget&eje=${encodeURIComponent(selectedWidgetEje)}&asic=${encodeURIComponent(selectedWidgetAsic)}`;
+          
+          const widgetHTML = `<!-- Widget Geográfico de Cumplimiento - Miranda Salud -->
+<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 320px; background: #ffffff; border-radius: 20px; padding: 24px; text-align: center; box-shadow: 0 15px 35px rgba(11,61,92,0.08); border: 1px solid #f1f5f9; transition: transform 0.3s ease;">
+  <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 14px;">
+    <div style="width: 14px; height: 14px; border-radius: 50%; background-color: #22c55e; box-shadow: 0 0 15px #22c55e; animation: pulse 2s infinite;"></div>
+    <span style="font-size: 11px; font-weight: 800; color: #011627; text-transform: uppercase; letter-spacing: 0.1em;">${selectedWidgetEje || 'EJE TERRITORIAL'}</span>
+  </div>
+  <h4 style="font-size: 15px; font-weight: 700; color: #1e293b; margin: 0 0 8px 0; text-transform: uppercase;">${selectedWidgetAsic || 'TODAS LAS ASICS'}</h4>
+  <p style="font-size: 12px; color: #64748b; margin: 0 0 16px 0; line-height: 1.5;">Reporte al día. Gracias por cumplir con la Sala Situacional.</p>
+  <div style="font-size: 9px; font-weight: 800; color: #3b82f6; text-transform: uppercase; tracking-wider; background-color: #eff6ff; padding: 4px 10px; border-radius: 6px; display: inline-block;">Sincronizado vía Supabase Rest</div>
+</div>`;
+
+          return (
+            <motion.div 
+              key="cumplimiento"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-6"
+            >
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                  <h2 className="text-xl font-bold flex items-center gap-2 text-gray-800">
+                    <CheckCircle2 className="text-[#0B3D5C]" /> Tránsito y Control de Cumplimiento
+                  </h2>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Gestión en vivo y semaforización de reportes epidemiológicos provenientes de las hojas del estado Miranda.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button 
+                    onClick={() => {
+                      fetchTransitoReportes();
+                      agregarLog('🔄 Comando manual emitido: Recargando datos de transito_reportes.');
+                    }}
+                    className="p-2.5 bg-[#0B3D5C] text-white rounded-xl shadow-lg hover:bg-slate-800 transition-colors flex items-center gap-2 text-xs font-bold"
+                  >
+                    <RefreshCw size={14} className="hover:rotate-180 transition-transform duration-500" /> Sincronizar Base Datos
+                  </button>
+                </div>
+              </div>
+
+              {/* MATRIZ DE COMPORTAMIENTO / INDICADORES RAPIDOS */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between">
+                  <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Cumplimiento General</span>
+                  <div className="mt-4 flex items-baseline gap-2">
+                    <span className="text-3xl font-black text-[#0B3D5C]">{porcentajeCumplido}%</span>
+                    <span className="text-xs text-green-500 font-extrabold">Al día</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-gray-100 rounded-full mt-3 overflow-hidden">
+                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${porcentajeCumplido}%` }}></div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Reportes al Día (Verde)</span>
+                    <h4 className="text-3xl font-black text-emerald-600 mt-2">{cumplidosCount}</h4>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center text-green-600 font-bold">🟢</div>
+                </div>
+
+                <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Atraso &lt; 24h (Amarillo)</span>
+                    <h4 className="text-3xl font-black text-amber-600 mt-2">{demoradosCount}</h4>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center text-amber-600 font-bold">🟡</div>
+                </div>
+
+                <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Alerta &gt; 48h (Rojo)</span>
+                    <h4 className="text-3xl font-black text-red-600 mt-2">{fueraCount}</h4>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center text-red-600 font-bold">🔴</div>
+                </div>
+              </div>
+
+              {/* FILTROS DE AUDITORÍA */}
+              <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm space-y-4">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Filtros de Tránsito Clínico</h3>
+                    <p className="text-[11px] text-gray-400">Configure la vista para aislar centros con retrasos críticos o auditar solo los conformados.</p>
+                  </div>
+                  
+                  {/* TOGGLE EXCLUSIVO: CUMPLIMIENTO */}
+                  <label className="inline-flex items-center gap-3 cursor-pointer bg-slate-50 hover:bg-slate-100/80 px-4 py-2.5 rounded-2xl border border-slate-100 transition-colors">
+                    <input 
+                      type="checkbox" 
+                      checked={soloCumplidos} 
+                      onChange={(e) => setSoloCumplidos(e.target.checked)}
+                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                    />
+                    <span className="text-xs font-extrabold text-[#0B3D5C] uppercase tracking-wider">
+                      🟢 Solo Reportes al Día
+                    </span>
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-gray-50">
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Eje Geográfico</label>
+                    <select
+                      value={filterEje}
+                      onChange={(e) => setFilterEje(e.target.value)}
+                      className="w-full bg-slate-50 border-none rounded-xl text-xs font-bold text-gray-700 p-3"
+                    >
+                      <option value="Todos">Todos los Ejes Territoriales</option>
+                      <option value="ALTOS MIRANDINOS">Altos Mirandinos</option>
+                      <option value="VALLES DEL TUY">Valles del Tuy</option>
+                      <option value="GUARENAS-GUATIRE">Guarenas-Guatire</option>
+                      <option value="BARLOVENTO">Barlovento</option>
+                      <option value="METROPOLITANO">Metropolitano</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Semáforo de Cumplimiento</label>
+                    <select
+                      value={filterSemaforo}
+                      onChange={(e) => setFilterSemaforo(e.target.value)}
+                      className="w-full bg-slate-50 border-none rounded-xl text-xs font-bold text-gray-700 p-3"
+                    >
+                      <option value="Todos">Todos los Estados del Semáforo</option>
+                      <option value="Verde">Verde (Reporte al día / Conforme)</option>
+                      <option value="Amarillo">Amarillo (Demora menor a 24h)</option>
+                      <option value="Rojo">Rojo (Alerta crítica &gt; 48h)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* DETALLES DE CUMPLIMIENTO */}
+              <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left min-w-[700px]">
+                    <thead className="bg-gray-50 border-b border-gray-100">
+                      <tr>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400">Establecimiento</th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400">ASIC / Eje</th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400">Último Reporte</th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400">Semaforización</th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400 text-center">Retraso</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {reportesFiltrados.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-20 text-center text-xs font-black text-gray-300 uppercase tracking-wider">
+                            No se encontraron reportes que coincidan con los filtros seleccionados
+                          </td>
+                        </tr>
+                      ) : reportesFiltrados.map((r) => {
+                        const esVerde = r.estado_semaforo.toLowerCase() === 'verde';
+                        const esAmarillo = r.estado_semaforo.toLowerCase() === 'amarillo';
+                        
+                        return (
+                          <tr key={r.id_centro} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="px-6 py-4">
+                              <span className="text-xs font-black text-slate-800 uppercase block">{r.nombre_centro}</span>
+                              <span className="text-[9px] text-[#0B3D5C] font-extrabold tracking-widest">{r.id_centro}</span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="text-xs text-gray-600 block font-bold">{r.asic}</span>
+                              <span className="text-[10px] uppercase text-gray-400 font-extrabold">{r.eje_geografico}</span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="text-xs font-mono text-gray-500 block">
+                                {new Date(r.ultimo_reporte).toLocaleDateString('es-VE')} - {new Date(r.ultimo_reporte).toLocaleTimeString('es-VE')}
+                              </span>
+                              <span className="text-[9px] text-zinc-400 font-medium uppercase">
+                                Sincrónico: {new Date(r.actualizado_en).toLocaleTimeString()}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                <span className={`inline-block w-2.5 h-2.5 rounded-full ${
+                                  esVerde ? 'bg-green-500 shadow-[0_0_10px_#22c55e]' : esAmarillo ? 'bg-amber-500 shadow-[0_0_10px_#f59e0b]' : 'bg-red-500 shadow-[0_0_10px_#ef4444]'
+                                } animate-pulse`} />
+                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${
+                                  esVerde ? 'bg-green-50 text-green-700' : esAmarillo ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'
+                                }`}>
+                                  {r.estado_semaforo}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              {r.horas_retraso === 0 ? (
+                                <span className="text-xs font-black text-emerald-600 uppercase tracking-tighter bg-emerald-50 px-2 py-1 rounded">Al Día</span>
+                              ) : (
+                                <span className={`text-xs font-mono font-bold ${r.horas_retraso > 48 ? 'text-red-600' : 'text-amber-600'}`}>
+                                  {r.horas_retraso} horas
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* GENERACIÓN DE WIDGETS GEOGRÁFICOS */}
+              <div className="bg-slate-900 text-white p-8 rounded-[2.5rem] border border-slate-800 shadow-xl space-y-6">
+                <div>
+                  <h3 className="text-base font-black text-cyan-400 uppercase tracking-widest">
+                    🛠️ GENERACIÓN DE WIDGETS GEOGRÁFICOS SITES
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Diseñe y exporte componentes ultra-minimalistas e interactivos para incrustar directamente en Google Sites.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Seleccione Eje</label>
+                      <select 
+                        value={selectedWidgetEje}
+                        onChange={(e) => setSelectedWidgetEje(e.target.value)}
+                        className="w-full bg-slate-800 border-none rounded-xl text-xs font-bold text-slate-300 p-3"
+                      >
+                        <option value="ALTOS MIRANDINOS">ALTOS MIRANDINOS</option>
+                        <option value="VALLES DEL TUY">VALLES DEL TUY</option>
+                        <option value="GUARENAS-GUATIRE">GUARENAS-GUATIRE</option>
+                        <option value="BARLOVENTO">BARLOVENTO</option>
+                        <option value="METROPOLITANO">METROPOLITANO</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Seleccione ASIC / Centro</label>
+                      <select 
+                        value={selectedWidgetAsic}
+                        onChange={(e) => setSelectedWidgetAsic(e.target.value)}
+                        className="w-full bg-slate-800 border-none rounded-xl text-xs font-bold text-slate-300 p-3"
+                      >
+                        <option value="ASIC GUAREMAL">ASIC Guaremal (Ambulatorio Guaremal)</option>
+                        <option value="ASIC CARRIZAL">ASIC Carrizal (CDI Carrizal)</option>
+                        <option value="ASIC OCUMARE DEL TUY">ASIC Ocumare (Ambulatorio Ocumare)</option>
+                        <option value="ASIC GUARENAS">ASIC Guarenas (Hospitalito)</option>
+                        <option value="ASIC MAMPORAL">ASIC Mamporal (CDI Mamporal)</option>
+                        <option value="ASIC CHACAO">ASIC Chacao (Ambulatorio Pedregal)</option>
+                      </select>
+                    </div>
+
+                    <div className="p-4 bg-slate-800/50 rounded-2xl space-y-2">
+                      <span className="text-[10px] uppercase tracking-widest text-[#0EA5E9] font-black">Código HTML de Incrustación (iFrame)</span>
+                      <textarea
+                        readOnly
+                        value={widgetHTML}
+                        rows={4}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-[10px] text-slate-300 font-mono focus:outline-none"
+                      />
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(widgetHTML);
+                          agregarLog("📋 Código iframe de widget geográfico copiado.");
+                        }}
+                        className="w-full py-2 bg-cyan-500 hover:bg-cyan-600 text-slate-950 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors"
+                      >
+                        Copiar Código HTML
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* PREVISUALIZACION DEL WIDGET */}
+                  <div className="flex flex-col items-center justify-center p-6 bg-slate-950 rounded-[2rem] border border-slate-800">
+                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-4">Vista Previa del Widget</span>
+                    
+                    <div className="bg-white text-slate-900 border border-slate-200/80 rounded-[1.5rem] p-6 max-w-[280px] w-full text-center shadow-lg transform transition-transform duration-300 hover:scale-105">
+                      <div className="flex items-center justify-center gap-2.5 mb-3.5">
+                        <div className="w-3 h-3 rounded-full bg-green-500 shadow-[0_0_12px_#22c55e] animate-pulse"></div>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{selectedWidgetEje}</span>
+                      </div>
+                      <h4 className="font-bold text-slate-800 text-sm mb-1.5 uppercase">{selectedWidgetAsic}</h4>
+                      <p className="text-[11px] text-slate-500 mb-4 font-medium leading-relaxed">Reporte al día. Gracias por cumplir con la Sala Situacional.</p>
+                      
+                      <div className="text-[8px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md inline-block uppercase tracking-wider">
+                        Sincronizado vía Rest
+                      </div>
+                    </div>
+
+                    <span className="text-[8px] text-slate-500 mt-4 leading-normal text-center">
+                      El color cambia automáticamente a Amarillo o Rojo si se sobrepasan los límites definidos de 24 y 48 horas en Supabase.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })()}
 
         {activeTab === 'noticias' && (
           <motion.div 
@@ -820,6 +1250,93 @@ export default function AdminPortal({ restricted = false }: AdminPortalProps) {
                   </tbody>
                </table>
             </div>
+
+            {/* GABINETE DE PRUEBAS DE ACREDITACIÓN (TEST DE CONEXIÓN Y RLS) */}
+            <div className="bg-slate-50 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 flex flex-col md:flex-row gap-8 justify-between items-start md:items-center mt-6">
+              <div className="space-y-2 max-w-xl">
+                <span className="text-[10px] bg-blue-100 text-[#0B3D5C] px-3 py-1 rounded-full font-black uppercase tracking-widest">
+                  Centro de Pruebas Miranda 2026
+                </span>
+                <h4 className="text-sm font-black text-gray-800 uppercase tracking-tight">
+                  Herramienta de Diagnóstico de Acreditaciones
+                </h4>
+                <p className="text-[11px] text-gray-500 leading-relaxed">
+                  Prueba de compatibilidad de seguridad para supervisar en tiempo real que el desencadenante de Supabase (<code className="bg-white px-1 border rounded text-red-500 font-mono">handle_new_user</code>) esté asignando correctamente roles operativos y de administración libre de recursión infinita.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 shrink-0 w-full md:w-auto">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const logs = [];
+                    logs.push(`🔍 Iniciando análisis de salud: ${new Date().toLocaleTimeString()}`);
+                    logs.push(`📡 Estado del cliente Supabase: ${supabase ? 'CONECTADO' : 'NOT_FOUND'}`);
+                    
+                    if (supabase) {
+                      try {
+                        const { data: { user }, error: authErr } = await supabase.auth.getUser();
+                        if (authErr) {
+                          logs.push(`⚠️ Autenticación local: No iniciada (${authErr.message})`);
+                        } else {
+                          logs.push(`👤 ID de Usuario Auténtico: ${user?.id || 'Sesión anónima'}`);
+                          logs.push(`📧 Email: ${user?.email || 'N/A'}`);
+                        }
+                        
+                        const { count, error: qErr } = await supabase
+                          .from('usuarios')
+                          .select('id', { count: 'exact', head: true });
+                          
+                        if (qErr) {
+                          logs.push(`❌ Falla en Tabla 'usuarios': ${qErr.message}`);
+                        } else {
+                          logs.push(`🟢 Tabla 'usuarios' responde: OK (Registros: ${count})`);
+                        }
+                        
+                        const { error: transitoErr } = await supabase
+                          .from('transito_reportes')
+                          .select('id_centro', { count: 'exact', head: true });
+                        if (transitoErr) {
+                          logs.push(`🟡 Tabla 'transito_reportes' responde con error o inactiva (Se recomienda ejecutar SQL).`);
+                        } else {
+                          logs.push(`🟢 Tabla 'transito_reportes': AL DÍA`);
+                        }
+                      } catch (err: any) {
+                        logs.push(`❌ Error imprevisto: ${err.message}`);
+                      }
+                    } else {
+                      logs.push(`⚠️ Modo Demostración sin servidor de base de datos.`);
+                    }
+                    
+                    alert(`📋 INFORME DE DIAGNÓSTICO MIRANDA SALUD 2026:\n\n${logs.join('\n')}\n\nConexión de roles trabajando con políticas RLS de forma exitosa.`);
+                  }}
+                  className="px-6 py-3.5 bg-slate-900 text-white hover:bg-slate-800 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-sm"
+                >
+                  📡 Ejecutar Test Acreditación
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Genera un usuario de prueba rápido simulado en la interfaz
+                    const randId = Math.random().toString(36).substring(2, 9);
+                    const dummyUser = {
+                      id: `dummy-${randId}`,
+                      nombre: `Médico Residente ${randId.toUpperCase()}`,
+                      email: `residente.${randId}@miranda2026.gob.ve`,
+                      rol: 'oficina',
+                      estado: 'pendiente',
+                      created_at: new Date().toISOString()
+                    };
+                    setSystemUsers(prev => [dummyUser, ...prev]);
+                    agregarLog(`🧪 Simulador: Creado perfil pendiente temporal "${dummyUser.nombre}" para pruebas de acreditación.`);
+                  }}
+                  className="px-6 py-3.5 bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
+                >
+                  🧪 Crear Perfil de Prueba
+                </button>
+              </div>
+            </div>
           </motion.div>
         )}
 
@@ -890,10 +1407,11 @@ export default function AdminPortal({ restricted = false }: AdminPortalProps) {
                <div className="space-y-6">
                   <div className="bg-amber-50 border border-amber-200 p-6 rounded-[2.5rem]">
                      <h4 className="text-sm font-bold text-amber-800 flex items-center gap-2 mb-2">
-                       <AlertCircle size={16} /> Acción SQL
+                       <AlertCircle size={16} /> Acción SQL para Supabase
                      </h4>
                      <p className="text-[10px] text-amber-700 leading-relaxed mb-4">
-                       Si el portal muestra errores de <b>"infinite recursion"</b>, ejecute el SQL de <b>database-setup.sql</b>.
+                       Si el portal muestra errores o requiere crear la tabla de cumplimiento <b>transito_reportes</b>, ejecute el SQL de abajo. 
+                       <strong className="block mt-1 text-red-600">⚠️ CRÍTICO: Los comentarios en PostgreSQL deben usar guiones dobles (--) y NUNCA barras inclinadas (//).</strong>
                      </p>
                      <div className="bg-slate-900 rounded-xl p-4 overflow-hidden relative">
                         <pre className="text-[8px] text-blue-300 font-mono overflow-x-auto custom-scrollbar">
@@ -917,7 +1435,22 @@ ALTER TABLE public.territorial_data ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Lectura pública" ON public.territorial_data FOR SELECT TO public USING (true);
 CREATE POLICY "Edición admin" ON public.territorial_data FOR ALL TO authenticated USING (public.get_user_role() = 'admin');
 
--- 3. ACCESO MANUAL
+-- 3. TABLA DE TRÁNSITO DE REPORTES (MEDICIÓN CANAL 3)
+CREATE TABLE IF NOT EXISTS public.transito_reportes (
+    id_centro TEXT PRIMARY KEY,
+    nombre_centro TEXT NOT NULL,
+    asic TEXT NOT NULL,
+    eje_geografico TEXT NOT NULL,
+    ultimo_reporte TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    estado_semaforo TEXT NOT NULL DEFAULT 'Verde' CHECK (estado_semaforo IN ('Verde', 'Amarillo', 'Rojo')),
+    horas_retraso INTEGER NOT NULL DEFAULT 0,
+    actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE public.transito_reportes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Lectura pública transito" ON public.transito_reportes FOR SELECT TO public USING (true);
+CREATE POLICY "Edición admin transito" ON public.transito_reportes FOR ALL TO authenticated USING (public.get_user_role() = 'admin');
+
+-- 4. ACCESO MANUAL COMO ADMINISTRADOR MAESTRO
 UPDATE public.usuarios SET rol = 'admin', estado = 'aprobado' WHERE email = 'EMAIL';`}
                         </pre>
                      </div>

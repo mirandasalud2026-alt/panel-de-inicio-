@@ -45,12 +45,25 @@ CREATE TABLE IF NOT EXISTS public.territorial_data (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 5b. Tabla de Tránsito de Reportes (Monitoreo de Cumplimiento Canal 3)
+CREATE TABLE IF NOT EXISTS public.transito_reportes (
+    id_centro TEXT PRIMARY KEY,
+    nombre_centro TEXT NOT NULL,
+    asic TEXT NOT NULL,
+    eje_geografico TEXT NOT NULL,
+    ultimo_reporte TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    estado_semaforo TEXT NOT NULL DEFAULT 'Verde' CHECK (estado_semaforo IN ('Verde', 'Amarillo', 'Rojo')),
+    horas_retraso INTEGER NOT NULL DEFAULT 0,
+    actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Habilitar RLS en todas
 ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.noticias ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mapa_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mapa_poligonos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.territorial_data ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.transito_reportes ENABLE ROW LEVEL SECURITY;
 
 -- 6. FUNCIÓN CRÍTICA PARA EVITAR RECURSIÓN INFINITA
 -- Esta función usa SECURITY DEFINER para saltarse el RLS al consultar perfiles.
@@ -125,6 +138,18 @@ CREATE POLICY "Lectura pública territorial" ON public.territorial_data
 
 DROP POLICY IF EXISTS "Admins gestionan territorial" ON public.territorial_data;
 CREATE POLICY "Admins gestionan territorial" ON public.territorial_data
+    FOR ALL TO authenticated
+    USING (get_user_role() = 'admin')
+    WITH CHECK (get_user_role() = 'admin');
+
+-- POLÍTICAS PARA TRÁNSITO DE REPORTES (transito_reportes)
+DROP POLICY IF EXISTS "Lectura pública transito" ON public.transito_reportes;
+CREATE POLICY "Lectura pública transito" ON public.transito_reportes
+    FOR SELECT TO public
+    USING (true);
+
+DROP POLICY IF EXISTS "Admins gestionan transito" ON public.transito_reportes;
+CREATE POLICY "Admins gestionan transito" ON public.transito_reportes
     FOR ALL TO authenticated
     USING (get_user_role() = 'admin')
     WITH CHECK (get_user_role() = 'admin');
