@@ -18,8 +18,8 @@ setPersistence(auth, browserLocalPersistence);
 
 const provider = new GoogleAuthProvider();
 // Required scopes for Google Sheets and Drive
-provider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
-provider.addScope('https://www.googleapis.com/auth/drive.readonly');
+provider.addScope('https://www.googleapis.com/auth/spreadsheets');
+provider.addScope('https://www.googleapis.com/auth/drive');
 provider.addScope('https://www.googleapis.com/auth/script.projects.readonly');
 
 let cachedAccessToken: string | null = null;

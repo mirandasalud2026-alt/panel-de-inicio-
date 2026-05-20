@@ -71,5 +71,53 @@ export const googleWorkspaceService = {
       throw new Error(`Error de App Script: ${response.statusText}`);
     }
     return await response.json();
+  },
+
+  /**
+   * Create or upload a file in a specific folder in Google Drive
+   */
+  async createFileMultipart(
+    accessToken: string,
+    folderId: string,
+    name: string,
+    mimeType: string,
+    content: string
+  ): Promise<any> {
+    const url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true';
+    
+    const metadata = {
+      name: name,
+      parents: [folderId],
+      mimeType: mimeType
+    };
+
+    const boundary = 'foo_bar_boundary';
+    
+    // Construct real multipart/related body
+    const body = [
+      `\r\n--${boundary}\r\n`,
+      'Content-Type: application/json; charset=UTF-8\r\n\r\n',
+      JSON.stringify(metadata),
+      `\r\n--${boundary}\r\n`,
+      `Content-Type: ${mimeType}\r\n\r\n`,
+      content,
+      `\r\n--${boundary}--\r\n`
+    ].join('');
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': `multipart/related; boundary=${boundary}`
+      },
+      body: body
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`Error subiendo archivo: ${error.error?.message || response.statusText}`);
+    }
+
+    return await response.json();
   }
 };
