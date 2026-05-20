@@ -70,7 +70,15 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6] pb-10 font-sans">
+    <div className="min-h-screen bg-[#F3F4F6] pb-10 font-sans flex flex-col justify-start">
+      {/* Dynamic Flag Accent Ribbon at the very top */}
+      <div className="h-2 w-full flex shrink-0">
+        <div className="flex-1 bg-[#FFD700]"></div> {/* Yellow */}
+        <div className="flex-1 bg-[#002F6C]"></div> {/* Blue */}
+        <div className="flex-1 bg-[#CF0921]"></div> {/* Red */}
+        <div className="flex-1 bg-[#008751]"></div> {/* Green */}
+      </div>
+
       {/* Header */}
       <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-6 md:px-8 sticky top-0 z-30 shadow-sm">
         <div className="flex items-center gap-4">

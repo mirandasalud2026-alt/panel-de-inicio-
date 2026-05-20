@@ -15,59 +15,74 @@ export default function InformativoPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#050B15] font-sans">
+    <div className="min-h-screen bg-[#F3F4F6] font-sans flex flex-col justify-between">
+      {/* Dynamic Flag Accent Ribbon at the very top */}
+      <div className="h-2 w-full flex shrink-0">
+        <div className="flex-1 bg-[#FFD700]"></div> {/* Yellow */}
+        <div className="flex-1 bg-[#002F6C]"></div> {/* Blue */}
+        <div className="flex-1 bg-[#CF0921]"></div> {/* Red */}
+        <div className="flex-1 bg-[#008751]"></div> {/* Green */}
+      </div>
+
       {/* Header Compacto Profesional */}
-      <header className="bg-[#0A192F] text-white px-6 py-4 border-b border-white/5 flex justify-between items-center">
+      <header className="bg-white text-gray-800 px-6 py-4 border-b border-gray-200 flex justify-between items-center shadow-sm">
         <div className="flex items-center gap-4">
           <button 
             onClick={() => navigate('/')}
-            className="p-2 hover:bg-white/5 rounded-xl transition-colors text-slate-400 hover:text-white"
+            className="p-2 hover:bg-gray-100 rounded-xl transition-colors text-gray-400 hover:text-gray-800"
           >
             <ArrowLeft size={20} />
           </button>
-          <div>
-            <h1 className="text-lg font-black tracking-tight leading-none text-white">SALA SITUACIONAL SIM</h1>
-            <p className="text-[9px] text-blue-400 font-bold uppercase tracking-[0.2em] mt-1">Monitoreo Regional Miranda</p>
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🏥</span>
+            <div>
+              <h1 className="text-lg font-black tracking-tight leading-none text-[#0B3D5C]">SALA SITUACIONAL SIM</h1>
+              <p className="text-[9px] text-[#0B3D5C]/60 font-bold uppercase tracking-[0.2em] mt-1">Monitoreo Regional Miranda</p>
+            </div>
           </div>
         </div>
 
         <div className="flex items-center gap-6">
-           <div className="hidden md:flex items-center gap-2 px-4 py-1.5 bg-green-500/10 rounded-full border border-green-500/20">
-              <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
-              <span className="text-[9px] font-black text-green-400 uppercase tracking-widest">Sincronización Activa</span>
+           <div className="hidden md:flex items-center gap-2 px-4 py-1.5 bg-emerald-50 rounded-full border border-emerald-200">
+              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+              <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Sincronización Activa</span>
            </div>
            
-           <div className="h-8 w-[1px] bg-white/10 mx-2"></div>
+           <div className="h-8 w-[1px] bg-gray-200 mx-2"></div>
            
-           <button className="flex items-center gap-2 text-[10px] font-black text-slate-400 hover:text-white transition-all uppercase tracking-widest">
+           <button className="flex items-center gap-2 text-[10px] font-black text-gray-500 hover:text-[#0B3D5C] transition-all uppercase tracking-widest">
               <Share2 size={14} /> Compartir Vista
            </button>
         </div>
       </header>
 
-      <main className="p-4 lg:p-8 max-w-[1600px] mx-auto">
+      <main className="flex-1 p-4 lg:p-8 max-w-[1600px] w-full mx-auto">
         {/* Intro Hero */}
          <div className="mb-8">
-            <h2 className="text-3xl font-black text-white tracking-tighter">Panel de Gestión Territorial</h2>
-            <p className="text-slate-400 text-sm mt-2 max-w-2xl font-medium">
-              Toca tu eje o selecciona tu eje.
+            <h2 className="text-3xl font-black text-[#0B3D5C] tracking-tighter">Panel de Gestión Territorial</h2>
+            <p className="text-gray-500 text-sm mt-2 max-w-2xl font-medium">
+              Toca tu eje o selecciona tu eje en el mapa interactivo para acceder a su reporte de atenciones y salas situacionales de salud.
             </p>
          </div>
 
         {/* MAPA INTERACTIVO (Principal) */}
-        <section className="w-full h-[700px] lg:h-[800px] mb-12">
+        <section className="w-full h-[700px] lg:h-[800px] bg-white rounded-[2.5rem] p-4 shadow-xl shadow-gray-200/50 border border-gray-100 mb-12 overflow-hidden">
            <InteractiveMirandaMap />
         </section>
-
-        <footer className="mt-8 py-6 border-t border-white/5 flex justify-between items-center">
-           <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">SISTEMA INTEGRADO DE INFORMACIÓN EN SALUD · MIRANDA 2026</p>
-           <div className="flex gap-4">
-              <div className="w-2 h-2 rounded-full bg-blue-500/20"></div>
-              <div className="w-2 h-2 rounded-full bg-blue-500/20"></div>
-              <div className="w-2 h-2 rounded-full bg-blue-500/20"></div>
-           </div>
-        </footer>
       </main>
+
+      {/* FOOTER */}
+      <footer className="py-6 border-t border-gray-200 text-center bg-gray-50/50 flex flex-col sm:flex-row justify-between items-center px-6 md:px-12 gap-4">
+         <p className="text-[9px] text-gray-500 font-extrabold uppercase tracking-[0.25em]">
+           GOBIERNO DE MIRANDA • DIRECCIÓN ESTADAL DE SALUD • SIM 2026
+         </p>
+         <div className="flex gap-4">
+            <div className="w-2.5 h-2.5 rounded-full bg-[#FFD700]/60"></div>
+            <div className="w-2.5 h-2.5 rounded-full bg-[#002F6C]/60"></div>
+            <div className="w-2.5 h-2.5 rounded-full bg-[#CF0921]/60"></div>
+            <div className="w-2.5 h-2.5 rounded-full bg-[#008751]/60"></div>
+         </div>
+      </footer>
     </div>
   );
 }
