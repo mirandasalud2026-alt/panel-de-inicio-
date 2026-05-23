@@ -21,7 +21,10 @@ import {
   Layers,
   FileText,
   Copy,
-  Plus
+  Plus,
+  TrendingUp,
+  Shield,
+  Zap
 } from 'lucide-react';
 import { googleSignIn, initAuth, logout } from '../../lib/firebaseAuth';
 import { googleWorkspaceService, GoogleDriveFile } from '../../services/googleWorkspaceService';
@@ -51,13 +54,20 @@ interface ScriptPipeline {
   actions: ScriptAction[];
 }
 
+// URLs actualizadas de los Web Apps
+const WEBAPP_URLS = {
+  master: 'https://script.google.com/macros/s/AKfycbzsG72xt9ttRtFB-BzvVkKuVK5WyqVFI6a8S_DzFuGub1EYrDBmaPGex2kp7GQk_d8fgw/exec',
+  captura: 'https://script.google.com/macros/s/AKfycbzsG72xt9ttRtFB-BzvVkKuVK5WyqVFI6a8S_DzFuGub1EYrDBmaPGex2kp7GQk_d8fgw/exec',
+  cumplimiento: 'https://script.google.com/macros/s/AKfycbzsG72xt9ttRtFB-BzvVkKuVK5WyqVFI6a8S_DzFuGub1EYrDBmaPGex2kp7GQk_d8fgw/exec'
+};
+
 const PIPELINES: Record<'master' | 'captura' | 'cumplimiento', ScriptPipeline> = {
   master: {
     id: 'master',
     title: 'Consolidado General ASIC (Canal 1)',
     subtitle: 'Dirección Estadal de Salud',
     sheetUrl: 'https://docs.google.com/spreadsheets/d/1iu3UpCktHPDhUJOVWhwL0-zCZ523aJelWIPgHaLE-20/edit?usp=sharing',
-    webAppUrl: 'https://script.google.com/macros/s/AKfycbzY4-_rA68AOt1PIClaGgCl5iVjhUlTC-XOcxlT_sVY08SRT_4d8DuDeszi98lWFWnsbw/exec',
+    webAppUrl: WEBAPP_URLS.master,
     sheetName: 'Miranda Salud - Compilado General',
     description: 'Consolida reportes de los 5 ejes territoriales sanitarios de Miranda para compilar la base histórica master.',
     actions: [
@@ -125,6 +135,42 @@ const PIPELINES: Record<'master' | 'captura' | 'cumplimiento', ScriptPipeline> =
         badge: 'Trigger'
       },
       {
+        id: 'crearTriggersCada3Horas',
+        name: 'Configurar Cron 3 Horas',
+        description: 'Instala disparador automático para actualizar reportes (Resumen_ASIC y Semaforo) en el Dashboard cada 3 horas.',
+        category: 'Configuración',
+        color: 'border-purple-500/30 text-purple-600 bg-purple-500/5 hover:bg-purple-500/10',
+        icon: <Zap size={18} className="text-purple-500" />,
+        badge: 'Trigger 3h'
+      },
+      {
+        id: 'crearTodosLosTriggers',
+        name: 'Configurar TODOS los Triggers',
+        description: 'Instala todos los disparadores: semanal (jueves 23:50) y cada 3 horas para reportes del Dashboard.',
+        category: 'Configuración',
+        color: 'border-indigo-600/30 text-indigo-600 bg-indigo-500/5 hover:bg-indigo-500/10',
+        icon: <Shield size={18} className="text-indigo-600" />,
+        badge: 'Full Setup'
+      },
+      {
+        id: 'eliminarTodosLosTriggers',
+        name: 'Eliminar TODOS Triggers',
+        description: 'Elimina todos los disparadores automáticos del proyecto (semanal y cada 3 horas).',
+        category: 'Configuración',
+        color: 'border-red-500/30 text-red-600 bg-red-500/5 hover:bg-red-500/10',
+        icon: <Trash2 size={18} className="text-red-500" />,
+        badge: 'Limpiar'
+      },
+      {
+        id: 'verTriggersActivos',
+        name: 'Ver Triggers Activos',
+        description: 'Muestra la lista de todos los disparadores automáticos actualmente instalados en el proyecto.',
+        category: 'Configuración',
+        color: 'border-slate-500/30 text-slate-600 bg-slate-500/5 hover:bg-slate-500/10',
+        icon: <Clock size={18} className="text-slate-500" />,
+        badge: 'Listar'
+      },
+      {
         id: 'resetearCompilado',
         name: 'Reiniciar Compilado',
         description: 'Purga todos los datos acumulados en la pestaña "Compilado" y restablece la estructura original con sus cabeceras.',
@@ -141,6 +187,24 @@ const PIPELINES: Record<'master' | 'captura' | 'cumplimiento', ScriptPipeline> =
         color: 'border-slate-500/30 text-slate-700 bg-slate-500/5 hover:bg-slate-500/10',
         icon: <Terminal size={18} className="text-slate-600" />,
         badge: 'Detalles'
+      },
+      {
+        id: 'diagnosticarResumenASIC',
+        name: 'Diagnosticar Resumen_ASIC',
+        description: 'Verifica qué ejes tienen la pestaña "Resumen_ASIC" y cuántos datos contienen.',
+        category: 'Diagnóstico',
+        color: 'border-cyan-500/30 text-cyan-600 bg-cyan-500/5 hover:bg-cyan-500/10',
+        icon: <Search size={18} className="text-cyan-500" />,
+        badge: 'ASIC'
+      },
+      {
+        id: 'diagnosticarSemaforo',
+        name: 'Diagnosticar Semaforo',
+        description: 'Verifica qué ejes tienen la pestaña "Semaforo" y cuántos datos contienen.',
+        category: 'Diagnóstico',
+        color: 'border-cyan-500/30 text-cyan-600 bg-cyan-500/5 hover:bg-cyan-500/10',
+        icon: <Search size={18} className="text-cyan-500" />,
+        badge: 'Semáforo'
       }
     ]
   },
@@ -149,17 +213,44 @@ const PIPELINES: Record<'master' | 'captura' | 'cumplimiento', ScriptPipeline> =
     title: 'Planilla de Carga de Registros (Canal 2)',
     subtitle: 'Capturas Epidemiológicas Específicas',
     sheetUrl: 'https://docs.google.com/spreadsheets/d/1zw04RoFnPvxF3P147dRjbg01gfySKJGNn4QUVbcSfig/edit?usp=sharing',
-    webAppUrl: 'https://script.google.com/macros/s/AKfycby1fK_gztaOFTgwk10Q0QIgcODKUsTLvMW_2AW2xbh4LqfiE_45hfS6iW5U05b0NlsL2Q/exec',
+    webAppUrl: WEBAPP_URLS.captura,
     sheetName: 'Planilla de Carga de Registros',
     description: 'Registra, valida y actualiza la hoja de cálculo específica de control para variables dinámicas locales.',
     actions: [
       {
-        id: 'llenarDatosSheet',
-        name: 'Sincronizar y Cargar Datos',
-        description: 'Envía peticiones para poblar y rellenar automáticamente la planilla de carga general 1zw04RoFnPvxF3P147dRjbg01gfySKJGNn4QUVbcSfig.',
-        category: 'Planilla de Carga',
+        id: 'procesarYReportarResumenASIC',
+        name: 'Procesar Resumen_ASIC → Dashboard',
+        description: 'Consolida todas las pestañas "Resumen_ASIC" de los 5 ejes en el Dashboard de Salud Miranda.',
+        category: 'Reportes',
         color: 'border-emerald-500/30 text-emerald-600 bg-emerald-500/5 hover:bg-emerald-500/10',
         icon: <FileSpreadsheet size={18} className="text-emerald-500" />,
+        badge: 'Dashboard'
+      },
+      {
+        id: 'procesarYReportarSemaforo',
+        name: 'Procesar Semaforo → Dashboard',
+        description: 'Consolida todas las pestañas "Semaforo" de los 5 ejes en el Dashboard de Salud Miranda.',
+        category: 'Reportes',
+        color: 'border-emerald-500/30 text-emerald-600 bg-emerald-500/5 hover:bg-emerald-500/10',
+        icon: <FileSpreadsheet size={18} className="text-emerald-500" />,
+        badge: 'Dashboard'
+      },
+      {
+        id: 'procesarAmbosReportes',
+        name: 'Procesar AMBOS Reportes',
+        description: 'Ejecuta la consolidación de Resumen_ASIC y Semaforo en un solo paso.',
+        category: 'Reportes',
+        color: 'border-purple-500/30 text-purple-600 bg-purple-500/5 hover:bg-purple-500/10',
+        icon: <TrendingUp size={18} className="text-purple-500" />,
+        badge: 'Full'
+      },
+      {
+        id: 'llenarDatosSheet',
+        name: 'Sincronizar y Cargar Datos',
+        description: 'Envía peticiones para poblar y rellenar automáticamente la planilla de carga general.',
+        category: 'Planilla de Carga',
+        color: 'border-blue-500/30 text-blue-600 bg-blue-500/5 hover:bg-blue-500/10',
+        icon: <Database size={18} className="text-blue-500" />,
         badge: 'Cargar'
       },
       {
@@ -167,8 +258,8 @@ const PIPELINES: Record<'master' | 'captura' | 'cumplimiento', ScriptPipeline> =
         name: 'Diagnosticar Formato Carga',
         description: 'Examina columnas, celdas y el formato general de la hoja de cálculo de carga específica.',
         category: 'Integridad',
-        color: 'border-blue-500/30 text-blue-600 bg-blue-500/5 hover:bg-blue-500/10',
-        icon: <Search size={18} className="text-blue-500" />,
+        color: 'border-cyan-500/30 text-cyan-600 bg-cyan-500/5 hover:bg-cyan-500/10',
+        icon: <Search size={18} className="text-cyan-500" />,
         badge: 'Análisis'
       },
       {
@@ -187,17 +278,26 @@ const PIPELINES: Record<'master' | 'captura' | 'cumplimiento', ScriptPipeline> =
     title: 'Monitoreo de Cumplimiento (Canal 3)',
     subtitle: 'Dirección de Salud - Estado Miranda',
     sheetUrl: 'https://docs.google.com/spreadsheets/d/1zw04RoFnPvxF3P147dRjbg01gfySKJGNn4QUVbcSfig/edit?usp=sharing',
-    webAppUrl: 'https://script.google.com/macros/s/AKfycby1fK_gztaOFTgwk10Q0QIgcODKUsTLvMW_2AW2xbh4LqfiE_45hfS6iW5U05b0NlsL2Q/exec',
+    webAppUrl: WEBAPP_URLS.cumplimiento,
     sheetName: 'Planilla para Administración de Cumplimientos',
     description: 'Control de tránsito bi-direccional hacia Supabase. Peina horario las hojas ASIC de los 5 libros territoriales para calcular el semáforo y retrasos de reportes.',
     actions: [
+      {
+        id: 'actualizarReportesCada3Horas',
+        name: 'Actualizar Reportes (Ahora)',
+        description: 'Ejecuta manualmente la actualización de Resumen_ASIC y Semaforo en el Dashboard.',
+        category: 'Reportes',
+        color: 'border-cyan-500/30 text-cyan-600 bg-cyan-500/5 hover:bg-cyan-500/10',
+        icon: <RefreshCw size={18} className="text-cyan-500" />,
+        badge: 'Manual'
+      },
       {
         id: 'peinarYActualizarSupabase',
         name: 'Peinar y Actualizar Supabase',
         description: 'Escanea en tiempo real los 5 libros de ejes territoriales de Miranda, procesa las hojas por ASIC y actualiza los indicadores en Supabase.',
         category: 'Cumplimientos',
-        color: 'border-cyan-500/30 text-cyan-600 bg-cyan-500/5 hover:bg-cyan-500/10',
-        icon: <RefreshCw size={18} className="text-cyan-500" />,
+        color: 'border-emerald-500/30 text-emerald-600 bg-emerald-500/5 hover:bg-emerald-500/10',
+        icon: <RefreshCw size={18} className="text-emerald-500" />,
         badge: 'Escaneo'
       },
       {
@@ -213,7 +313,11 @@ const PIPELINES: Record<'master' | 'captura' | 'cumplimiento', ScriptPipeline> =
   }
 };
 
-export const WorkspaceManager: React.FC = () => {
+interface WorkspaceManagerProps {
+  onRegisterTriggerHandler?: (handler: () => void) => void;
+}
+
+export const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ onRegisterTriggerHandler }) => {
   const [user, setUser] = useState<any>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [files, setFiles] = useState<GoogleDriveFile[]>([]);
@@ -248,6 +352,14 @@ export const WorkspaceManager: React.FC = () => {
     );
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (onRegisterTriggerHandler) {
+      onRegisterTriggerHandler(() => {
+        runScriptAction('crearTriggersCada3Horas', 'Configurar Cron 3 Horas');
+      });
+    }
+  }, [onRegisterTriggerHandler, selectedPipeline, runningAction, user]);
 
   useEffect(() => {
     if (consoleEndRef.current) {
@@ -331,6 +443,17 @@ export const WorkspaceManager: React.FC = () => {
         const payload = resData.data;
         addLog(`🟢 Macro ejecutada con éxito. Respuesta recibida del servidor.`);
         
+        if (actionId === 'crearTriggersCada3Horas') {
+          addLog(`⏰ [DISPARADOR] Se ha configurado el cron de consolidación del Dashboard cada 3 horas.`);
+          addLog(`⚙️ Apps Script activó un trigger de tipo tiempo ('timeBased') llamando a los módulos 'Resumen_ASIC' y 'Semaforo'.`);
+        } else if (actionId === 'eliminarTodosLosTriggers') {
+          addLog(`🗑️ [LIMPIEZA] Depuración completa completada.`);
+          addLog(`⚙️ Se eliminaron todos los disparadores anteriores de Apps Script de forma exitosa.`);
+        } else if (actionId === 'crearTodosLosTriggers') {
+          addLog(`🚀 [CRON EXCEPCIONAL] Despliegue masivo completado.`);
+          addLog(`⚙️ Se reactivó tanto el Cron Semanal de los jueves a las 23:50 como el Cron de consolidación de 3 horas.`);
+        }
+
         if (payload && payload.message) {
           addLog(`[Apps Script] ${payload.message}`);
         } else if (payload && typeof payload === 'object') {
@@ -490,7 +613,7 @@ export const WorkspaceManager: React.FC = () => {
                       <h5 className="text-[11px] font-black text-slate-800 uppercase tracking-tight">Planilla de Carga General</h5>
                     </div>
                     <p className="text-[10px] text-slate-400 mt-1.5 font-medium leading-relaxed">
-                      Llena, formatea y procesa la planilla específica de captura de salud (1zw04RoFnPvxF3P147dRjbg01gfySKJGNn4QUVbcSfig).
+                      Llena, formatea y procesa la planilla específica de captura de salud.
                     </p>
                   </div>
                 </button>
@@ -517,7 +640,7 @@ export const WorkspaceManager: React.FC = () => {
                       <h5 className="text-[11px] font-black text-slate-800 uppercase tracking-tight">Cumplimientos ASIC</h5>
                     </div>
                     <p className="text-[10px] text-slate-400 mt-1.5 font-medium leading-relaxed">
-                      Control de tránsito de reportes epidemiológicos y semáforos bi-direccionales de los 5 libros de ejes territoriales.
+                      Control de tránsito de reportes epidemiológicos y semáforos bi-direccionales.
                     </p>
                   </div>
                 </button>
@@ -565,9 +688,9 @@ export const WorkspaceManager: React.FC = () => {
                   <h4 className="text-[12px] font-black text-amber-950 uppercase tracking-widest mb-1.5">Planificación</h4>
                   <p className="text-[10px] text-amber-700/80 leading-relaxed font-semibold">
                   {selectedPipeline === 'master' 
-                    ? 'El sistema corre automáticamente el Respaldo Semanal cada Jueves a las 23:50.' 
+                    ? 'El sistema corre automáticamente el Respaldo Semanal cada Jueves a las 23:50 y reportes cada 3 horas.' 
                     : selectedPipeline === 'captura'
-                    ? 'La Sincronización se ejecuta selectivamente bajo demanda y carga manual.'
+                    ? 'Los reportes se consolidan automáticamente cada 3 horas en el Dashboard.'
                     : 'La sincronización de tránsitos peina horario cada libro ASIC y calcula horas retraso.'}
                   </p>
                 </div>

@@ -1,15 +1,17 @@
 import { useAuth } from '../hooks/useAuth';
 import { Navigate } from 'react-router-dom';
 import DirectorDashboard from '../components/ui/DirectorDashboard';
+import MinimalistDashboard from '../components/ui/MinimalistDashboard';
 import OficinaDashboard from '../components/ui/OficinaDashboard';
 import AdminPortal from '../components/ui/AdminPortal';
 import InteractiveMirandaMap from '../components/InteractiveMirandaMap';
 import { supabase } from '../lib/supabase';
-import { LogOut, User, ShieldCheck, Clock, FileCheck, ExternalLink } from 'lucide-react';
+import { LogOut, User, ShieldCheck, Clock, FileCheck, ExternalLink, LayoutDashboard, TrendingUp, AlertTriangle, LayoutGrid } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 export default function AdminDashboard() {
   const { user, profile, loading } = useAuth();
+  const [activeDirectivoView, setActiveDirectivoView] = useState<'analitico' | 'minimalista' | 'mapa'>('analitico');
 
   if (loading) {
     return (
@@ -25,7 +27,6 @@ export default function AdminDashboard() {
           Sincronizando credenciales y políticas de seguridad...
         </p>
         
-        {/* Helper if it hangs */}
         <div className="mt-12 text-[9px] text-gray-300 font-medium uppercase tracking-tighter">
           Si esto demora más de 10 segundos, verifique su conexión o las variables VITE_ en Vercel.
         </div>
@@ -68,28 +69,239 @@ export default function AdminDashboard() {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-[#F3F4F6] pb-10 font-sans flex flex-col justify-start">
-      {/* Sticky Header and Flag Accent Ribbon container to ensure it never disappears on scroll */}
-      <div className="sticky top-0 z-30 shadow-md shrink-0">
-        {/* Dynamic Flag Accent Ribbon at the very top */}
-        <div className="h-2 w-full flex">
-          <div className="flex-1 bg-[#FFD700]"></div> {/* Yellow */}
-          <div className="flex-1 bg-[#002F6C]"></div> {/* Blue */}
-          <div className="flex-1 bg-[#CF0921]"></div> {/* Red */}
-          <div className="flex-1 bg-[#008751]"></div> {/* Green */}
+  // Si es admin, mostrar AdminPortal
+  if (profile.rol === 'admin') {
+    return (
+      <div className="min-h-screen bg-[#F3F4F6] pb-10 font-sans flex flex-col justify-start">
+        <div className="sticky top-0 z-30 shadow-md shrink-0">
+          <div className="h-2 w-full flex">
+            <div className="flex-1 bg-[#FFD700]"></div>
+            <div className="flex-1 bg-[#002F6C]"></div>
+            <div className="flex-1 bg-[#CF0921]"></div>
+            <div className="flex-1 bg-[#008751]"></div>
+          </div>
+
+          <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-6 md:px-8">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm">
+                <ShieldCheck size={24} />
+              </div>
+              <div className="hidden sm:block">
+                <h2 className="text-lg font-bold text-gray-800 leading-none">Gestión Maestra</h2>
+                <p className="text-xs text-gray-400 mt-1 font-medium">Conectado como {profile.rol}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 sm:gap-6">
+              <div className="hidden xs:flex flex-col items-end">
+                <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">{profile.nombre}</span>
+                <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-widest bg-red-50 text-red-600">
+                  {profile.rol}
+                </span>
+              </div>
+              
+              <button 
+                onClick={() => {
+                  localStorage.removeItem('sim_demo_admin');
+                  localStorage.removeItem('sim_demo_role');
+                  supabase?.auth.signOut();
+                  if (!supabase) window.location.href = '/login';
+                }}
+                className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all shadow-sm"
+                title="Cerrar sesión"
+              >
+                <LogOut size={18} />
+              </button>
+            </div>
+          </header>
         </div>
 
-        {/* Header */}
+        <main className="max-w-7xl mx-auto p-6 md:p-8 space-y-12 w-full">
+          <AdminPortal />
+        </main>
+
+        <footer className="mt-8 px-6 text-center opacity-30">
+          <p className="text-[10px] text-[#0B3D5C] font-extrabold uppercase tracking-[0.3em]">
+            Miranda Salud • Seguridad Reforzada 2026
+          </p>
+        </footer>
+      </div>
+    );
+  }
+
+  // Si es directivo, mostrar selector entre Analítico, Minimalista y Mapa
+  if (profile.rol === 'directivo') {
+    return (
+      <div className="min-h-screen bg-[#F3F4F6] pb-10 font-sans flex flex-col justify-start">
+        <div className="sticky top-0 z-30 shadow-md shrink-0">
+          <div className="h-2 w-full flex">
+            <div className="flex-1 bg-[#FFD700]"></div>
+            <div className="flex-1 bg-[#002F6C]"></div>
+            <div className="flex-1 bg-[#CF0921]"></div>
+            <div className="flex-1 bg-[#008751]"></div>
+          </div>
+
+          <header className="bg-white border-b border-gray-200">
+            <div className="h-20 flex items-center justify-between px-6 md:px-8">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-[#0B3D5C] rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm">
+                  {profile.nombre.charAt(0).toUpperCase()}
+                </div>
+                <div className="hidden sm:block">
+                  <h2 className="text-lg font-bold text-gray-800 leading-none">Panel de Control Directivo</h2>
+                  <p className="text-xs text-gray-400 mt-1 font-medium">Conectado como {profile.rol}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 sm:gap-6">
+                {/* Selector de vista para directivo - 3 opciones */}
+                <div className="hidden md:flex bg-gray-50 p-1 rounded-xl border border-gray-200">
+                  <button
+                    onClick={() => setActiveDirectivoView('analitico')}
+                    className={`px-3 py-2 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${
+                      activeDirectivoView === 'analitico' 
+                        ? 'bg-white text-[#0B3D5C] shadow-sm' 
+                        : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                  >
+                    <LayoutDashboard size={12} />
+                    Analítico
+                  </button>
+                  <button
+                    onClick={() => setActiveDirectivoView('minimalista')}
+                    className={`px-3 py-2 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${
+                      activeDirectivoView === 'minimalista' 
+                        ? 'bg-white text-[#0B3D5C] shadow-sm' 
+                        : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                  >
+                    <LayoutGrid size={12} />
+                    Minimalista
+                  </button>
+                  <button
+                    onClick={() => setActiveDirectivoView('mapa')}
+                    className={`px-3 py-2 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${
+                      activeDirectivoView === 'mapa' 
+                        ? 'bg-white text-[#0B3D5C] shadow-sm' 
+                        : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                  >
+                    <TrendingUp size={12} />
+                    Mapa
+                  </button>
+                </div>
+
+                <div className="hidden xs:flex flex-col items-end">
+                  <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">{profile.nombre}</span>
+                  <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-widest bg-[#0B3D5C]/10 text-[#0B3D5C]">
+                    {profile.rol}
+                  </span>
+                </div>
+                
+                <button 
+                  onClick={() => {
+                    localStorage.removeItem('sim_demo_admin');
+                    localStorage.removeItem('sim_demo_role');
+                    supabase?.auth.signOut();
+                    if (!supabase) window.location.href = '/login';
+                  }}
+                  className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all shadow-sm"
+                  title="Cerrar sesión"
+                >
+                  <LogOut size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Selector móvil */}
+            <div className="md:hidden flex bg-gray-50 p-1 rounded-xl border border-gray-200 mx-6 mb-3">
+              <button
+                onClick={() => setActiveDirectivoView('analitico')}
+                className={`flex-1 px-3 py-2 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1 ${
+                  activeDirectivoView === 'analitico' 
+                    ? 'bg-white text-[#0B3D5C] shadow-sm' 
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                <LayoutDashboard size={12} />
+                Analítico
+              </button>
+              <button
+                onClick={() => setActiveDirectivoView('minimalista')}
+                className={`flex-1 px-3 py-2 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1 ${
+                  activeDirectivoView === 'minimalista' 
+                    ? 'bg-white text-[#0B3D5C] shadow-sm' 
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                <LayoutGrid size={12} />
+                Minimalista
+              </button>
+              <button
+                onClick={() => setActiveDirectivoView('mapa')}
+                className={`flex-1 px-3 py-2 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1 ${
+                  activeDirectivoView === 'mapa' 
+                    ? 'bg-white text-[#0B3D5C] shadow-sm' 
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                <TrendingUp size={12} />
+                Mapa
+              </button>
+            </div>
+          </header>
+        </div>
+
+        <main className="max-w-7xl mx-auto p-6 md:p-8 w-full">
+          {activeDirectivoView === 'analitico' && <DirectorDashboard />}
+          {activeDirectivoView === 'minimalista' && <MinimalistDashboard />}
+          {activeDirectivoView === 'mapa' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-emerald-50 rounded-xl">
+                    <AlertTriangle size={20} className="text-emerald-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-gray-800">Mapa de Semáforo por Eje Territorial</h3>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black">
+                      Visualización geográfica del estado de reporte por territorio
+                    </p>
+                  </div>
+                </div>
+                <InteractiveMirandaMap />
+              </div>
+            </div>
+          )}
+        </main>
+
+        <footer className="mt-8 px-6 text-center opacity-30">
+          <p className="text-[10px] text-[#0B3D5C] font-extrabold uppercase tracking-[0.3em]">
+            Miranda Salud • Seguridad Reforzada 2026
+          </p>
+        </footer>
+      </div>
+    );
+  }
+
+  // Si es oficina, mostrar OficinaDashboard
+  return (
+    <div className="min-h-screen bg-[#F3F4F6] pb-10 font-sans flex flex-col justify-start">
+      <div className="sticky top-0 z-30 shadow-md shrink-0">
+        <div className="h-2 w-full flex">
+          <div className="flex-1 bg-[#FFD700]"></div>
+          <div className="flex-1 bg-[#002F6C]"></div>
+          <div className="flex-1 bg-[#CF0921]"></div>
+          <div className="flex-1 bg-[#008751]"></div>
+        </div>
+
         <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-6 md:px-8">
           <div className="flex items-center gap-4">
-            <div className={`w-10 h-10 ${profile.rol === 'admin' ? 'bg-red-600' : 'bg-[#0B3D5C]'} rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm transition-colors`}>
-              {profile.rol === 'admin' ? <ShieldCheck size={24} /> : profile.nombre.charAt(0).toUpperCase()}
+            <div className="w-10 h-10 bg-[#0B3D5C] rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm">
+              {profile.nombre.charAt(0).toUpperCase()}
             </div>
             <div className="hidden sm:block">
-              <h2 className="text-lg font-bold text-gray-800 leading-none">
-                {profile.rol === 'admin' ? 'Gestión Maestra' : profile.rol === 'directivo' ? 'Panel de Control' : 'Panel Operativo'}
-              </h2>
+              <h2 className="text-lg font-bold text-gray-800 leading-none">Panel Operativo</h2>
               <p className="text-xs text-gray-400 mt-1 font-medium">Conectado como {profile.rol}</p>
             </div>
           </div>
@@ -97,9 +309,7 @@ export default function AdminDashboard() {
           <div className="flex items-center gap-3 sm:gap-6">
             <div className="hidden xs:flex flex-col items-end">
               <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">{profile.nombre}</span>
-              <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-widest ${
-                profile.rol === 'admin' ? 'bg-red-50 text-red-600' : 'bg-[#0B3D5C]/10 text-[#0B3D5C]'
-              }`}>
+              <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-widest bg-[#0B3D5C]/10 text-[#0B3D5C]">
                 {profile.rol}
               </span>
             </div>
@@ -120,13 +330,8 @@ export default function AdminDashboard() {
         </header>
       </div>
 
-      {/* Main Content */}
-      <main className="max-w-6xl mx-auto p-6 md:p-8 space-y-12">
-        {profile.rol === 'admin' && <AdminPortal />}
-        {profile.rol === 'directivo' && (
-          <DirectorDashboard />
-        )}
-        {profile.rol === 'oficina' && <OficinaDashboard />}
+      <main className="max-w-7xl mx-auto p-6 md:p-8 w-full">
+        <OficinaDashboard />
       </main>
 
       <footer className="mt-8 px-6 text-center opacity-30">
