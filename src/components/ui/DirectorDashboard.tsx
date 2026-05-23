@@ -27,6 +27,7 @@ interface SemaforoData {
 
 interface ResumenASICData {
   eje: string;
+  asic?: string;
   totalEstablecimientos: number;
   totalActivos: number;
   totalInactivos: number;
@@ -66,8 +67,8 @@ function procesarDatosSemaforo(values: string[][]): SemaforoData[] {
   
   for (let i = 0; i < headers.length; i++) {
     const header = headers[i]?.toLowerCase() || '';
-    if (header.includes('eje') || header.includes('territorio')) colEje = i;
-    if (header.includes('fecha') || header.includes('reporte') || header.includes('ultimo')) colUltimoReporte = i;
+    if (header.includes('eje') || header.includes('territorio') || header.includes('asic') || header.includes('municipio') || header.includes('centro') || header.includes('nombre')) colEje = i;
+    if (header.includes('fecha') || header.includes('reporte') || header.includes('ultimo') || header.includes('actualizado')) colUltimoReporte = i;
   }
   
   if (colEje === -1) colEje = 0;
@@ -104,6 +105,7 @@ function procesarDatosResumenASIC(values: string[][]): ResumenASICData[] {
   const resultados: ResumenASICData[] = [];
   
   let colEje = -1;
+  let colAsic = -1;
   let colTotalEst = -1;
   let colActivos = -1;
   let colInactivos = -1;
@@ -113,13 +115,32 @@ function procesarDatosResumenASIC(values: string[][]): ResumenASICData[] {
   
   for (let i = 0; i < headers.length; i++) {
     const header = headers[i]?.toLowerCase() || '';
-    if (header.includes('eje') || header.includes('asic')) colEje = i;
-    if (header.includes('tt_est') || header.includes('total establecimientos')) colTotalEst = i;
-    if (header.includes('tt_activo') || header.includes('activos')) colActivos = i;
-    if (header.includes('tt_inactivo') || header.includes('inactivos')) colInactivos = i;
-    if (header.includes('tt_clausu') || header.includes('clausurados')) colClausurados = i;
-    if (header.includes('si_repor') || header.includes('reportaron')) colReportaron = i;
-    if (header.includes('porcrepor') || header.includes('porcentaje')) colPorcentaje = i;
+    
+    // Identificar columna Eje
+    if (header === 'eje' || (header.includes('eje') && !header.includes('asic'))) {
+      colEje = i;
+    }
+    // Identificar columna ASIC / Nombre
+    if (header.includes('asic') || header.includes('nombre') || header.includes('centro') || header.includes('municipio')) {
+      colAsic = i;
+    }
+    
+    if (header.includes('tt_est') || header.includes('total establecimientos') || header.includes('total est') || header.includes('establecimientos') || header.includes('est.')) colTotalEst = i;
+    if (header.includes('tt_activo') || header.includes('activos') || header.includes('activo')) colActivos = i;
+    if (header.includes('tt_inactivo') || header.includes('inactivos') || header.includes('inactivo')) colInactivos = i;
+    if (header.includes('tt_clausu') || header.includes('clausurados') || header.includes('clausurado')) colClausurados = i;
+    if (header.includes('si_repor') || header.includes('reportaron') || header.includes('reporto') || header.includes('repor')) colReportaron = i;
+    if (header.includes('porcrepor') || header.includes('porcentaje') || header.includes('%') || header.includes('cumplimiento') || header.includes('porc')) colPorcentaje = i;
+  }
+  
+  // Caídas de seguridad inteligentes
+  if (colEje === -1) colEje = 0;
+  if (colAsic === -1) colAsic = 1 < headers.length ? 1 : 0;
+  
+  // Si coinciden por redundancia, intentar reasignar
+  if (colEje === colAsic && headers.length > 1) {
+    if (colEje === 0) colAsic = 1;
+    else colEje = 0;
   }
   
   for (let i = 1; i < values.length; i++) {
@@ -135,6 +156,7 @@ function procesarDatosResumenASIC(values: string[][]): ResumenASICData[] {
     };
     
     const eje = row[colEje] || 'Desconocido';
+    const asic = colAsic !== -1 && colAsic < row.length ? row[colAsic] || '' : '';
     const totalEst = parseNum(colTotalEst);
     const activos = parseNum(colActivos);
     const inactivos = parseNum(colInactivos);
@@ -148,6 +170,7 @@ function procesarDatosResumenASIC(values: string[][]): ResumenASICData[] {
     
     resultados.push({
       eje,
+      asic,
       totalEstablecimientos: totalEst,
       totalActivos: activos,
       totalInactivos: inactivos,
@@ -361,9 +384,11 @@ function ResumenASICChart({ data, onEjeClick }: ResumenASICChartProps) {
   
   const chartData = useMemo(() => {
     return data.map(item => ({
-      eje: item.eje,
+      eje: item.asic ? `${item.asic} (${item.eje})` : item.eje,
       porcentaje: Math.round(item.porcentajeReporte),
       activos: item.totalActivos,
+      subAsic: item.asic || '',
+      ejeOrig: item.eje,
       inactivos: item.totalInactivos,
       clausurados: item.totalClausurados,
       total: item.totalEstablecimientos,
@@ -490,14 +515,14 @@ function ResumenASICChart({ data, onEjeClick }: ResumenASICChartProps) {
                 if (selectedMetric === 'porcentaje') return [`${value}%`, getMetricLabel()];
                 return [`${value} establecimientos`, getMetricLabel()];
               }}
-              labelFormatter={(label) => `Eje: ${label}`}
+              labelFormatter={(label) => `${label}`}
             />
             <Bar 
               dataKey={selectedMetric === 'porcentaje' ? 'porcentaje' : selectedMetric} 
               fill={getBarColor()}
               radius={[8, 8, 0, 0]}
               maxBarSize={50}
-              onClick={(data) => handleBarClick(data.eje)}
+              onClick={(data) => handleBarClick(data.ejeOrig || data.eje)}
             >
               {chartData.map((entry, index) => (
                 <Cell 
@@ -516,7 +541,7 @@ function ResumenASICChart({ data, onEjeClick }: ResumenASICChartProps) {
         <table className="w-full text-left">
           <thead>
             <tr className="text-[8px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
-              <th className="pb-3 px-2">Eje Territorial</th>
+              <th className="pb-3 px-2">ASIC (Eje Territorial)</th>
               <th className="pb-3 px-2 text-right">Total Est.</th>
               <th className="pb-3 px-2 text-right">Activos</th>
               <th className="pb-3 px-2 text-right">Inactivos</th>
@@ -532,7 +557,9 @@ function ResumenASICChart({ data, onEjeClick }: ResumenASICChartProps) {
                 className="border-t border-gray-50 hover:bg-gray-50/50 transition-colors cursor-pointer"
                 onClick={() => handleBarClick(item.eje)}
               >
-                <td className="py-3 px-2 text-xs font-bold">{item.eje}</td>
+                <td className="py-3 px-2 text-xs font-bold">
+                  {item.asic ? `${item.asic} (${item.eje})` : item.eje}
+                </td>
                 <td className="py-3 px-2 text-right text-xs">{item.totalEstablecimientos}</td>
                 <td className="py-3 px-2 text-right text-xs text-emerald-600">{item.totalActivos}</td>
                 <td className="py-3 px-2 text-right text-xs text-amber-600">{item.totalInactivos}</td>
@@ -604,22 +631,59 @@ export default function DirectorDashboard() {
     console.log(`[${new Date().toLocaleTimeString()}] ${text}`);
   };
 
+  // Detectar dinámicamente las pestañas del libro consolidado
+  const detectSheetTabs = async (token: string): Promise<{ semaforo: string; resumen: string }> => {
+    try {
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${DASHBOARD_ID}?fields=sheets(properties(title))`;
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const titles: string[] = data.sheets?.map((s: any) => s.properties?.title || '') || [];
+        addLog(`📋 Pestañas detectadas en Google Sheets: ${titles.filter(Boolean).join(', ')}`);
+        
+        let semaforoTab = titles.find(t => t.includes('Semaforo_') || t.includes('Semaforo'));
+        let resumenTab = titles.find(t => t.includes('Resumen_ASIC_') || t.includes('Resumen_ASIC') || t.includes('Resumen ASIC'));
+        
+        const now = new Date();
+        const fallbackDate = `${now.getMonth() + 1}-${now.getDate()}-${now.getFullYear()}`;
+        
+        return {
+          semaforo: semaforoTab || `Semaforo_${fallbackDate}`,
+          resumen: resumenTab || `Resumen_ASIC_${fallbackDate}`
+        };
+      }
+    } catch (e: any) {
+      console.error("Error al detectar pestañas:", e);
+    }
+    const now = new Date();
+    const fallbackDate = `${now.getMonth() + 1}-${now.getDate()}-${now.getFullYear()}`;
+    return {
+      semaforo: `Semaforo_${fallbackDate}`,
+      resumen: `Resumen_ASIC_${fallbackDate}`
+    };
+  };
+
   // Cargar datos del semáforo
   const loadSemaforoData = async (token: string) => {
     setIsLoadingSemaforo(true);
     try {
-      const sheetName = 'Semaforo_5-23-2026';
-      const res = await googleWorkspaceService.getSheetData(token, DASHBOARD_ID, `${sheetName}!A1:ZZ500`);
+      const tabs = await detectSheetTabs(token);
+      addLog(`📡 Cargando registros de semáforo desde pestaña dinámica: "${tabs.semaforo}"`);
+      const res = await googleWorkspaceService.getSheetData(token, DASHBOARD_ID, `${tabs.semaforo}!A1:ZZ500`);
       
       if (res && res.values && res.values.length > 1) {
         const processed = procesarDatosSemaforo(res.values);
         setSemaforoData(processed);
-        addLog(`✅ Datos de Semáforo cargados: ${processed.length} registros`);
+        addLog(`✅ Datos de Semáforo cargados desde ${tabs.semaforo}: ${processed.length} registros`);
       }
     } catch (err: any) {
       console.error(err);
       addLog(`❌ Error cargando Semáforo: ${err.message}`);
-      // Datos mock para demostración
+      // Datos mock para demostración de semillero
       const mockData: SemaforoData[] = [
         { fecha: new Date(), fechaString: new Date().toISOString(), eje: 'Altos Mirandinos', estado: 'verde', horasRetraso: 12, ultimoReporte: new Date() },
         { fecha: new Date(Date.now() - 30 * 60 * 60 * 1000), fechaString: '', eje: 'Valles del Tuy', estado: 'amarillo', horasRetraso: 30, ultimoReporte: new Date(Date.now() - 30 * 60 * 60 * 1000) },
@@ -637,13 +701,14 @@ export default function DirectorDashboard() {
   const loadResumenASICData = async (token: string) => {
     setIsLoadingSemaforo(true);
     try {
-      const sheetName = 'Resumen_ASIC_5-23-2026';
-      const res = await googleWorkspaceService.getSheetData(token, DASHBOARD_ID, `${sheetName}!A1:ZZ100`);
+      const tabs = await detectSheetTabs(token);
+      addLog(`📡 Cargando estadísticas consolidadas desde pestaña dinámica: "${tabs.resumen}"`);
+      const res = await googleWorkspaceService.getSheetData(token, DASHBOARD_ID, `${tabs.resumen}!A1:ZZ100`);
       
       if (res && res.values && res.values.length > 1) {
         const processed = procesarDatosResumenASIC(res.values);
         setResumenASICData(processed);
-        addLog(`✅ Datos de Resumen ASIC cargados: ${processed.length} ejes`);
+        addLog(`✅ Datos de Resumen ASIC cargados desde ${tabs.resumen}: ${processed.length} ejes`);
       }
     } catch (err: any) {
       console.error(err);
@@ -688,7 +753,30 @@ export default function DirectorDashboard() {
             📊 <span className="text-gray-300 font-bold">Cambiar a:</span> Analítica Tradicional
           </button>
         </div>
-        <MinimalistDashboard />
+        <MinimalistDashboard 
+          externalSemaforoData={semaforoData}
+          externalResumenASICData={resumenASICData}
+          googleToken={googleToken}
+          googleUser={googleUser}
+          onConnectGoogle={async () => {
+            try {
+              const result = await googleSignIn();
+              if (result) {
+                setGoogleUser(result.user);
+                setGoogleToken(result.accessToken);
+                await loadSemaforoData(result.accessToken);
+                await loadResumenASICData(result.accessToken);
+              }
+            } catch (err: any) {
+              setErrorMessage(err.message);
+            }
+          }}
+          onDisconnectGoogle={async () => {
+            await logout();
+            setGoogleUser(null);
+            setGoogleToken(null);
+          }}
+        />
       </div>
     );
   }

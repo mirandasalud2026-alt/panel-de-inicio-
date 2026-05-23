@@ -416,78 +416,61 @@ export const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ onRegisterTr
   };
 
   const runScriptAction = async (actionId: string, actionName: string) => {
-    if (runningAction) return;
-    setRunningAction(actionId);
-    setError(null);
+  if (runningAction) return;
+  setRunningAction(actionId);
+  setError(null);
 
-    const activePipelineUrl = PIPELINES[selectedPipeline].webAppUrl;
-    addLog(`⚡ Solicitando ejecución: "${actionName}" (ID: ${actionId})...`);
-    addLog(`📡 Canalizando túnel hacia Apps Script: ${activePipelineUrl.substring(0, 45)}...`);
+  const activePipelineUrl = PIPELINES[selectedPipeline].webAppUrl;
+  addLog(`⚡ Solicitando ejecución: "${actionName}" (ID: ${actionId})...`);
+  addLog(`📡 Canalizando túnel hacia Apps Script: ${activePipelineUrl.substring(0, 45)}...`);
 
-    try {
-      const response = await fetch('/api/run-script', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ action: actionId, scriptUrl: activePipelineUrl })
-      });
+  try {
+    // Canalizar la petición a través del proxy seguro de nuestro servidor Express para evitar bloqueos CORS del navegador
+    const response = await fetch('/api/run-script', {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        action: actionId,
+        scriptUrl: activePipelineUrl
+      })
+    });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status} en la conexión proxy`);
-      }
-
-      const resData = await response.json();
-
-      if (response.status === 200 && resData.status === 'success') {
-        const payload = resData.data;
-        addLog(`🟢 Macro ejecutada con éxito. Respuesta recibida del servidor.`);
-        
-        if (actionId === 'crearTriggersCada3Horas') {
-          addLog(`⏰ [DISPARADOR] Se ha configurado el cron de consolidación del Dashboard cada 3 horas.`);
-          addLog(`⚙️ Apps Script activó un trigger de tipo tiempo ('timeBased') llamando a los módulos 'Resumen_ASIC' y 'Semaforo'.`);
-        } else if (actionId === 'eliminarTodosLosTriggers') {
-          addLog(`🗑️ [LIMPIEZA] Depuración completa completada.`);
-          addLog(`⚙️ Se eliminaron todos los disparadores anteriores de Apps Script de forma exitosa.`);
-        } else if (actionId === 'crearTodosLosTriggers') {
-          addLog(`🚀 [CRON EXCEPCIONAL] Despliegue masivo completado.`);
-          addLog(`⚙️ Se reactivó tanto el Cron Semanal de los jueves a las 23:50 como el Cron de consolidación de 3 horas.`);
-        }
-
-        if (payload && payload.message) {
-          addLog(`[Apps Script] ${payload.message}`);
-        } else if (payload && typeof payload === 'object') {
-          addLog(`[Apps Script JSON] ${JSON.stringify(payload, null, 2)}`);
-        } else if (payload) {
-          addLog(`[Apps Script] ${String(payload)}`);
-        } else {
-          addLog(`[Apps Script] Operación completada (Código OK 200).`);
-        }
-        
-        // Si es una acción crítica, podemos actualizar la base de datos de supabase de forma simulada
-        if (supabase) {
-          await supabase
-            .from('territorial_data')
-            .upsert({
-              eje_id: `sync_${actionId}`,
-              name: `Acción ${actionName}`,
-              valor_principal: 100,
-              metadata: { source: 'Consola Integrada', systemUser: user?.email || 'Admin', action: actionId },
-              updated_at: new Date().toISOString()
-            });
-        }
-      } else {
-        throw new Error(resData.message || 'Error inexplicado devuelto por Apps Script');
-      }
-    } catch (err: any) {
-      console.error(err);
-      addLog(`❌ FALLIDO: Error durante la macro "${actionName}".`);
-      addLog(`[ERROR INFO] ${err.message}`);
-      setError(`Error al ejecutar "${actionName}": ${err.message}`);
-    } finally {
-      setRunningAction(null);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
-  };
+
+    const result = await response.json();
+    const actualData = result.data || result;
+    
+    addLog(`🟢 Macro ejecutada con éxito.`);
+    
+    // Manejar respuestas específicas según la acción
+    if (actionId === 'crearTriggersCada3Horas') {
+      addLog(`⏰ [DISPARADOR] Configuración del cron de 3 horas completada.`);
+    } else if (actionId === 'procesarYReportarResumenASIC') {
+      addLog(`📊 [DASHBOARD] Resumen ASIC consolidado exitosamente.`);
+    } else if (actionId === 'procesarYReportarSemaforo') {
+      addLog(`🚦 [DASHBOARD] Datos de semáforo actualizados.`);
+    } else if (actionId === 'procesarAmbosReportes') {
+      addLog(`🔄 [DASHBOARD] Ambos reportes (ASIC + Semáforo) procesados.`);
+    }
+    
+    if (actualData && actualData.message) {
+      addLog(`[Apps Script] ${actualData.message}`);
+    } else if (actualData && typeof actualData === 'object') {
+      addLog(`[Apps Script Response] ${JSON.stringify(actualData, null, 2)}`);
+    }
+    
+  } catch (err: any) {
+    console.error(err);
+    addLog(`❌ Error al ejecutar "${actionName}": ${err.message}`);
+    setError(`Error: ${err.message}`);
+  } finally {
+    setRunningAction(null);
+  }
+};
 
   const filteredFiles = files.filter(f => 
     f.name.toLowerCase().includes(searchTerm.toLowerCase())

@@ -58,6 +58,7 @@ export interface SemaforoData {
 
 export interface ResumenASICData {
   eje: string;
+  asic?: string;
   totalEstablecimientos: number;
   totalActivos: number;
   totalInactivos: number;
@@ -293,30 +294,36 @@ function ResumenASICChartMinimal({ data, onEjeClick, isLoading }: { data: Resume
       </div>
 
       <div className="space-y-3">
-        {data.map((item) => (
-          <button
-            key={item.eje}
-            onClick={() => onEjeClick?.(item.eje)}
-            className="w-full hover:bg-gray-50 transition-colors rounded-lg p-1.5"
-          >
-            <div className="flex items-center justify-between mb-0.5">
-              <span className="text-[9px] font-black text-gray-600">{item.eje}</span>
-              <span className={`text-[8px] font-black ${item.porcentajeReporte >= 80 ? 'text-emerald-600' : item.porcentajeReporte >= 50 ? 'text-amber-600' : 'text-red-600'}`}>
-                {Math.round(item.porcentajeReporte)}%
-              </span>
-            </div>
-            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div 
-                className={`h-full rounded-full ${item.porcentajeReporte >= 80 ? 'bg-emerald-500' : item.porcentajeReporte >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
-                style={{ width: `${item.porcentajeReporte}%` }}
-              />
-            </div>
-            <div className="flex justify-between mt-0.5 text-[7px] text-gray-400">
-              <span>Activos: {item.totalActivos}</span>
-              <span>Total: {item.totalEstablecimientos}</span>
-            </div>
-          </button>
-        ))}
+        {data.map((item) => {
+          const itemKey = item.asic ? `${item.eje}-${item.asic}` : item.eje;
+          const label = item.asic ? `${item.asic} (${item.eje})` : item.eje;
+          return (
+            <button
+              key={itemKey}
+              onClick={() => onEjeClick?.(item.eje)}
+              className="w-full hover:bg-gray-50 transition-colors rounded-lg p-1.5"
+            >
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-[9px] font-black text-gray-600 truncate max-w-[200px]" title={label}>
+                  {label}
+                </span>
+                <span className={`text-[8px] font-black ${item.porcentajeReporte >= 80 ? 'text-emerald-600' : item.porcentajeReporte >= 50 ? 'text-amber-600' : 'text-red-600'}`}>
+                  {Math.round(item.porcentajeReporte)}%
+                </span>
+              </div>
+              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full rounded-full ${item.porcentajeReporte >= 80 ? 'bg-emerald-500' : item.porcentajeReporte >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                  style={{ width: `${item.porcentajeReporte}%` }}
+                />
+              </div>
+              <div className="flex justify-between mt-0.5 text-[7px] text-gray-400">
+                <span>Activos: {item.totalActivos}</span>
+                <span>Total: {item.totalEstablecimientos}</span>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -367,43 +374,45 @@ function TransitoCompacto({ data, onEjeClick, isLoading }: { data: TransitoRepor
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        {data.slice(0, 8).map((item) => {
-          const horas = item.horas_retraso;
-          let statusText = '';
-          if (horas === 0) statusText = 'Al día';
-          else if (horas < 24) statusText = `${horas}h`;
-          else if (horas < 48) statusText = `${Math.floor(horas / 24)}d ${horas % 24}h`;
-          else statusText = `${Math.floor(horas / 24)}d`;
+      <div className="max-h-[360px] overflow-y-auto pr-1">
+        <div className="grid grid-cols-2 gap-2">
+          {data.map((item) => {
+            const horas = item.horas_retraso;
+            let statusText = '';
+            if (horas === 0) statusText = 'Al día';
+            else if (horas < 24) statusText = `${horas}h`;
+            else if (horas < 48) statusText = `${Math.floor(horas / 24)}d ${horas % 24}h`;
+            else statusText = `${Math.floor(horas / 24)}d`;
 
-          return (
-            <button
-              key={item.id_centro}
-              onClick={() => onEjeClick?.(item.eje_geografico)}
-              className={`p-2 rounded-xl border text-left transition-all hover:scale-[1.02] ${getColorClass(item.estado_semaforo)}`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[8px] font-black text-gray-700 truncate max-w-[100px]">
-                  {item.nombre_centro.split(' ').slice(0, 2).join(' ')}
-                </span>
-                <span className={`text-[7px] font-black px-1.5 py-0.5 rounded-full ${getBadgeClass(item.estado_semaforo)}`}>
-                  {item.estado_semaforo}
-                </span>
-              </div>
-              <div className="flex items-center gap-1 mt-1">
-                <Clock size={8} className="text-gray-400" />
-                <span className="text-[7px] font-semibold text-gray-500">
-                  {statusText}
-                </span>
-              </div>
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={item.id_centro}
+                onClick={() => onEjeClick?.(item.eje_geografico)}
+                className={`p-2 rounded-xl border text-left transition-all hover:scale-[1.02] ${getColorClass(item.estado_semaforo)}`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[8px] font-black text-gray-700 truncate max-w-[100px]">
+                    {item.nombre_centro.split(' ').slice(0, 2).join(' ')}
+                  </span>
+                  <span className={`text-[7px] font-black px-1.5 py-0.5 rounded-full ${getBadgeClass(item.estado_semaforo)}`}>
+                    {item.estado_semaforo}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 mt-1">
+                  <Clock size={8} className="text-gray-400" />
+                  <span className="text-[7px] font-semibold text-gray-500">
+                    {statusText}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {data.length > 8 && (
-        <div className="mt-3 text-center text-[7px] text-gray-400">
-          +{data.length - 8} centros más
+      {data.length > 0 && (
+        <div className="mt-3 text-center text-[7px] text-gray-400 font-bold uppercase tracking-wider">
+          Desliza para explorar la lista completa • {data.length} centros en total
         </div>
       )}
     </div>
@@ -414,7 +423,23 @@ function TransitoCompacto({ data, onEjeClick, isLoading }: { data: TransitoRepor
 // COMPONENTE PRINCIPAL
 // ==========================================
 
-export default function MinimalistDashboard() {
+export interface MinimalistDashboardProps {
+  externalSemaforoData?: SemaforoData[];
+  externalResumenASICData?: ResumenASICData[];
+  googleToken?: string | null;
+  googleUser?: any;
+  onConnectGoogle?: () => void;
+  onDisconnectGoogle?: () => void;
+}
+
+export default function MinimalistDashboard({
+  externalSemaforoData,
+  externalResumenASICData,
+  googleToken,
+  googleUser,
+  onConnectGoogle,
+  onDisconnectGoogle
+}: MinimalistDashboardProps = {}) {
   const [reportes, setReportes] = useState<TransitoReporte[]>(SEMILLA_REPORTES);
   const [semaforoData, setSemaforoData] = useState<SemaforoData[]>(SEMILLA_SEMAFORO);
   const [resumenASICData, setResumenASICData] = useState<ResumenASICData[]>(SEMILLA_RESUMEN_ASIC);
@@ -423,6 +448,24 @@ export default function MinimalistDashboard() {
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [activeTab, setActiveTab] = useState<'transito' | 'semaforo' | 'resumen'>('semaforo');
+
+  // Sincronizar con los datos reales de Google Sheets tan pronto como cambien en el componente padre
+  useEffect(() => {
+    if (externalSemaforoData && externalSemaforoData.length > 0) {
+      setSemaforoData(externalSemaforoData);
+    }
+  }, [externalSemaforoData]);
+
+  useEffect(() => {
+    if (externalResumenASICData && externalResumenASICData.length > 0) {
+      setResumenASICData(externalResumenASICData);
+    }
+  }, [externalResumenASICData]);
+
+  // Cargar datos reales de Supabase automáticamente al montar
+  useEffect(() => {
+    buscarDatosReales();
+  }, []);
 
   const [morbilidad] = useState<IndicadoresSalud>({
     infecciones_ira: 34,
@@ -495,6 +538,12 @@ export default function MinimalistDashboard() {
     return reportes.filter(r => r.eje_geografico.toUpperCase() === ejeFiltro.toUpperCase());
   }, [reportes, ejeFiltro]);
 
+  // Filtrar resumen ASIC por eje
+  const resumenASICFiltrados = useMemo(() => {
+    if (ejeFiltro === 'TODO') return resumenASICData;
+    return resumenASICData.filter(r => r.eje.toUpperCase() === ejeFiltro.toUpperCase());
+  }, [resumenASICData, ejeFiltro]);
+
   // Métrica de cumplimiento
   const metricaCumplimiento = useMemo(() => {
     const total = reportesFiltrados.length;
@@ -536,7 +585,32 @@ export default function MinimalistDashboard() {
           <h1 className="text-lg font-bold tracking-tight text-gray-900 mt-0.5 uppercase">Miranda Salud</h1>
         </div>
         
-        <div className="flex items-center gap-2 w-full md:w-auto">
+        <div className="flex items-center gap-2 w-full md:w-auto flex-wrap sm:flex-nowrap">
+          {onConnectGoogle && (
+            <div className="flex items-center gap-2">
+              {!googleToken ? (
+                <button
+                  onClick={onConnectGoogle}
+                  className="px-3.5 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[8.5px] font-black uppercase tracking-wider hover:bg-emerald-100 transition-all shadow-xs"
+                >
+                  🟢 Conectar Google Sheets
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 bg-emerald-50/50 border border-emerald-100 px-3 py-1.5 rounded-full">
+                  <span className="text-[8px] font-black text-emerald-800 max-w-[120px] truncate uppercase tracking-widest">
+                    {googleUser?.email ? googleUser.email.split('@')[0] : 'Sincronizado'}
+                  </span>
+                  <button
+                    onClick={onDisconnectGoogle}
+                    className="px-2 py-1 bg-white border border-gray-200 text-[7px] text-gray-500 font-extrabold rounded-full hover:bg-red-50 hover:text-red-500 transition-all cursor-pointer"
+                  >
+                    Salir
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          
           <div className="relative flex-1 md:w-48">
             <select 
               value={ejeFiltro}
@@ -661,7 +735,7 @@ export default function MinimalistDashboard() {
               transition={{ duration: 0.2 }}
             >
               <ResumenASICChartMinimal 
-                data={resumenASICData} 
+                data={resumenASICFiltrados} 
                 onEjeClick={handleEjeClick}
                 isLoading={isSearching}
               />

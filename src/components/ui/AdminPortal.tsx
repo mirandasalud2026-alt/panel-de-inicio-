@@ -487,8 +487,8 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
               <div className="max-h-96 overflow-y-auto">
                 <table className="w-full text-left">
-                  <thead className="sticky top-0 bg-gray-50">
-                    <tr className="text-[9px] font-black text-gray-400 uppercase">
+                  <thead className="sticky top-0 bg-gray-50 text-[9px] font-black text-gray-400 uppercase">
+                    <tr>
                       <th className="px-3 py-2">Centro</th>
                       <th className="px-3 py-2 hidden sm:table-cell">ASIC</th>
                       <th className="px-3 py-2 text-center">Estado</th>
@@ -496,7 +496,7 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {reportesFiltrados.slice(0, 15).map((r) => (
+                    {reportesFiltrados.map((r) => (
                       <tr key={r.id_centro} className="hover:bg-gray-50">
                         <td className="px-3 py-2">
                           <p className="text-[10px] font-bold">{r.nombre_centro.split(' ').slice(0,2).join(' ')}</p>
@@ -527,8 +527,10 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
               </div>
             </div>
 
-            {reportesFiltrados.length > 15 && (
-              <p className="text-[9px] text-gray-400 text-center">+{reportesFiltrados.length - 15} centros más</p>
+            {reportesFiltrados.length > 0 && (
+              <p className="text-[9px] text-[#0B3D5C] font-black tracking-widest uppercase text-center mt-2 animate-pulse">
+                Desliza sobre la tabla para examinar los {reportesFiltrados.length} centros registrados
+              </p>
             )}
           </motion.div>
         )}
