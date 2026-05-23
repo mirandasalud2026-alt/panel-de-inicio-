@@ -171,6 +171,14 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mapDimensions, setMapDimensions] = useState({ width: 800, height: 500 });
 
+  // Zoom & Pan states
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [touchStartDist, setTouchStartDist] = useState<number | null>(null);
+  const [touchStartZoom, setTouchStartZoom] = useState<number>(1);
+
   const sqlCode = `CREATE OR REPLACE FUNCTION public.get_user_role()
 RETURNS TEXT AS $$
 BEGIN
@@ -494,12 +502,151 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
     const pt = svg.createSVGPoint();
     pt.x = e.clientX;
     pt.y = e.clientY;
-    const ctm = svg.getScreenCTM();
+    
+    // Obtener CTM del contenedor de zoom/paneo para deshacer la transformacion y dibujar en los pixeles correctos
+    const target = svg.querySelector('#zoom-pan-container') || svg;
+    const ctm = (target as any).getScreenCTM();
     if (!ctm) return;
     const svgP = pt.matrixTransform(ctm.inverse());
     if (svgP) {
       setCurrentPoints([...currentPoints, { x: svgP.x, y: svgP.y }]);
     }
+  };
+
+  // Mouse & Touch gestores para Paneo (Drag) y Zoom
+  const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (isDrawingMode) return;
+    if (e.button !== 0) return; // Solo boton izquierdo
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (isDrawingMode || !isDragging) return;
+    setPan({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleWheel = (e: React.WheelEvent<SVGSVGElement>) => {
+    if (isDrawingMode) return;
+    
+    // Prevenir scrolling de la pagina principal al interactuar con el mapa
+    e.preventDefault();
+    const zoomFactor = 1.1;
+    let newZoom = zoom;
+    if (e.deltaY < 0) {
+      newZoom = Math.min(zoom * zoomFactor, 10);
+    } else {
+      newZoom = Math.max(zoom / zoomFactor, 0.5);
+    }
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    const xs = (mouseX - pan.x) / zoom;
+    const ys = (mouseY - pan.y) / zoom;
+
+    setZoom(newZoom);
+    setPan({
+      x: mouseX - xs * newZoom,
+      y: mouseY - ys * newZoom
+    });
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<SVGSVGElement>) => {
+    if (isDrawingMode) return;
+    
+    if (e.touches.length === 1) {
+      setIsDragging(true);
+      const touch = e.touches[0];
+      setDragStart({ x: touch.clientX - pan.x, y: touch.clientY - pan.y });
+    } else if (e.touches.length === 2) {
+      setIsDragging(false);
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      setTouchStartDist(dist);
+      setTouchStartZoom(zoom);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<SVGSVGElement>) => {
+    if (isDrawingMode) return;
+    
+    if (e.touches.length === 1 && isDragging) {
+      const touch = e.touches[0];
+      setPan({
+        x: touch.clientX - dragStart.x,
+        y: touch.clientY - dragStart.y
+      });
+    } else if (e.touches.length === 2 && touchStartDist !== null) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      const scale = dist / touchStartDist;
+      const newZoom = Math.max(0.5, Math.min(10, touchStartZoom * scale));
+      
+      const rect = e.currentTarget.getBoundingClientRect();
+      const midX = (t1.clientX + t2.clientX) / 2 - rect.left;
+      const midY = (t1.clientY + t2.clientY) / 2 - rect.top;
+      
+      const xs = (midX - pan.x) / zoom;
+      const ys = (midY - pan.y) / zoom;
+      
+      setZoom(newZoom);
+      setPan({
+        x: midX - xs * newZoom,
+        y: midY - ys * newZoom
+      });
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+    setTouchStartDist(null);
+  };
+
+  // Botones flotantes de zoom
+  const zoomIn = () => {
+    const newZoom = Math.min(zoom * 1.3, 10);
+    const midX = mapDimensions.width / 2;
+    const midY = mapDimensions.height / 2;
+    const xs = (midX - pan.x) / zoom;
+    const ys = (midY - pan.y) / zoom;
+    setZoom(newZoom);
+    setPan({
+      x: midX - xs * newZoom,
+      y: midY - ys * newZoom
+    });
+  };
+
+  const zoomOut = () => {
+    const newZoom = Math.max(zoom / 1.3, 0.5);
+    const midX = mapDimensions.width / 2;
+    const midY = mapDimensions.height / 2;
+    const xs = (midX - pan.x) / zoom;
+    const ys = (midY - pan.y) / zoom;
+    setZoom(newZoom);
+    setPan({
+      x: midX - xs * newZoom,
+      y: midY - ys * newZoom
+    });
+  };
+
+  const resetZoom = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
   };
 
   const finishPolygon = async () => {
@@ -738,116 +885,158 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
               viewBox={`0 0 ${mapDimensions.width} ${mapDimensions.height}`}
               preserveAspectRatio="xMidYMid meet"
               className="w-full h-auto max-w-full transform-gpu transition-transform duration-500"
-              style={{ maxHeight: '100%', maxWidth: '100%' }}
+              style={{ 
+                maxHeight: '100%', 
+                maxWidth: '100%',
+                cursor: isDrawingMode ? 'crosshair' : (isDragging ? 'grabbing' : 'grab'),
+                touchAction: 'none'
+              }}
               onClick={handleSvgClick}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseLeave}
+              onWheel={handleWheel}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
               id="interactive-svg-map"
             >
               <rect width={mapDimensions.width} height={mapDimensions.height} fill="transparent" />
               
-              {backgroundImage && (
-                <image 
-                  href={backgroundImage} 
-                  x="0" 
-                  y="0" 
-                  width={mapDimensions.width} 
-                  height={mapDimensions.height} 
-                  preserveAspectRatio="xMidYMid meet"
-                  className="opacity-90 pointer-events-none" 
-                />
-              )}
+              <g id="zoom-pan-container" transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
+                {backgroundImage && (
+                  <image 
+                    href={backgroundImage} 
+                    x="0" 
+                    y="0" 
+                    width={mapDimensions.width} 
+                    height={mapDimensions.height} 
+                    preserveAspectRatio="xMidYMid meet"
+                    className="opacity-90 pointer-events-none" 
+                  />
+                )}
 
-              {customPolygons.map((poly) => {
-                const eje = ejes.find(e => e.id === poly.ejeId) || activeEje;
-                const isSelected = selectedPolygonId === poly.id;
-                return (
-                  <g key={poly.id} className="cursor-pointer group">
-                    <polygon 
-                      points={poly.points.map(p => `${p.x},${p.y}`).join(' ')}
-                      fill={isSelected ? `${eje.color}90` : (hoveredMunicipio === poly.id ? eje.color : `${eje.color}60`)}
-                      stroke={isSelected ? '#FFFFFF' : eje.color}
-                      strokeWidth={isSelected ? "4" : "3"}
-                      strokeOpacity={isSelected || hoveredMunicipio === poly.id ? 1 : 0.8}
-                      strokeDasharray={isSelected ? "5,5" : "none"}
-                      onMouseEnter={() => setHoveredMunicipio(poly.id)}
-                      onMouseLeave={() => setHoveredMunicipio(null)}
-                      onClick={(e) => { 
-                        e.stopPropagation(); 
-                        if (isAdminMode) {
-                          setSelectedPolygonId(isSelected ? null : poly.id);
-                        } else {
-                          window.open(eje.url, '_blank'); 
-                        }
-                      }}
-                      className="transition-all duration-300"
-                      style={{ 
-                        filter: (isSelected || hoveredMunicipio === poly.id) 
-                          ? `drop-shadow(0 0 30px ${eje.color})` 
-                          : 'none' 
-                      }}
-                    />
-                    {isAdminMode && isSelected && (
-                      <foreignObject 
-                        x={poly.points[0].x - 40} 
-                        y={poly.points[0].y - 80} 
-                        width="100" 
-                        height="120"
-                        className="overflow-visible"
-                      >
-                        <div className="flex flex-col items-center gap-3">
-                          <div className="flex gap-1.5 p-2 bg-[#0B1525]/90 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl">
-                            {ejes.map(e => (
-                              <button
-                                key={e.id}
-                                onClick={(e_evt) => { e_evt.stopPropagation(); updatePolygonEje(poly.id, e.id); }}
-                                className={`w-6 h-6 rounded-lg border-2 transition-all ${
-                                  poly.ejeId === e.id ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-40 hover:opacity-100'
-                                }`}
-                                style={{ backgroundColor: e.color }}
-                                title={e.name}
-                              />
-                            ))}
+                {customPolygons.map((poly) => {
+                  const eje = ejes.find(e => e.id === poly.ejeId) || activeEje;
+                  const isSelected = selectedPolygonId === poly.id;
+                  return (
+                    <g key={poly.id} className="cursor-pointer group">
+                      <polygon 
+                        points={poly.points.map(p => `${p.x},${p.y}`).join(' ')}
+                        fill={isSelected ? `${eje.color}90` : (hoveredMunicipio === poly.id ? eje.color : `${eje.color}60`)}
+                        stroke={isSelected ? '#FFFFFF' : eje.color}
+                        strokeWidth={isSelected ? "4" : "3"}
+                        strokeOpacity={isSelected || hoveredMunicipio === poly.id ? 1 : 0.8}
+                        strokeDasharray={isSelected ? "5,5" : "none"}
+                        onMouseEnter={() => setHoveredMunicipio(poly.id)}
+                        onMouseLeave={() => setHoveredMunicipio(null)}
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          if (isAdminMode) {
+                            setSelectedPolygonId(isSelected ? null : poly.id);
+                          } else {
+                            window.open(eje.url, '_blank'); 
+                          }
+                        }}
+                        className="transition-all duration-300"
+                        style={{ 
+                          filter: (isSelected || hoveredMunicipio === poly.id) 
+                             ? `drop-shadow(0 0 30px ${eje.color})` 
+                             : 'none' 
+                        }}
+                      />
+                      {isAdminMode && isSelected && (
+                        <foreignObject 
+                          x={poly.points[0].x - 40} 
+                          y={poly.points[0].y - 80} 
+                          width="100" 
+                          height="120"
+                          className="overflow-visible"
+                        >
+                          <div className="flex flex-col items-center gap-3">
+                            <div className="flex gap-1.5 p-2 bg-[#0B1525]/90 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl">
+                              {ejes.map(e => (
+                                <button
+                                  key={e.id}
+                                  onClick={(e_evt) => { e_evt.stopPropagation(); updatePolygonEje(poly.id, e.id); }}
+                                  className={`w-6 h-6 rounded-lg border-2 transition-all ${
+                                    poly.ejeId === e.id ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-40 hover:opacity-100'
+                                   }`}
+                                  style={{ backgroundColor: e.color }}
+                                  title={e.name}
+                                />
+                              ))}
+                            </div>
+                            <button 
+                              onClick={(e_evt) => { e_evt.stopPropagation(); deletePolygon(poly.id); }}
+                              className="w-12 h-12 flex items-center justify-center bg-rose-600 text-white rounded-full shadow-[0_10px_30px_rgba(225,29,72,0.4)] hover:bg-rose-500 transition-all hover:scale-110 active:scale-95 border-4 border-[#0B1525]"
+                              title="Eliminar Polígono"
+                            >
+                              <Trash2 size={20} />
+                            </button>
                           </div>
-                          <button 
-                            onClick={(e_evt) => { e_evt.stopPropagation(); deletePolygon(poly.id); }}
-                            className="w-12 h-12 flex items-center justify-center bg-rose-600 text-white rounded-full shadow-[0_10px_30px_rgba(225,29,72,0.4)] hover:bg-rose-500 transition-all hover:scale-110 active:scale-95 border-4 border-[#0B1525]"
-                            title="Eliminar Polígono"
-                          >
-                            <Trash2 size={20} />
-                          </button>
-                        </div>
-                      </foreignObject>
-                    )}
+                        </foreignObject>
+                      )}
+                    </g>
+                  );
+                })}
+
+                {currentPoints.length > 0 && (
+                  <g>
+                    <polyline 
+                      points={currentPoints.map(p => `${p.x},${p.y}`).join(' ')}
+                      fill="none"
+                      stroke={activeEje.color}
+                      strokeWidth="3"
+                      className="animate-pulse"
+                    />
+                    {currentPoints.map((p, i) => (
+                      <circle key={i} cx={p.x} cy={p.y} r="5" fill="white" stroke={activeEje.color} strokeWidth="2" />
+                    ))}
                   </g>
-                );
-              })}
+                )}
 
-              {currentPoints.length > 0 && (
-                <g>
-                  <polyline 
-                    points={currentPoints.map(p => `${p.x},${p.y}`).join(' ')}
-                    fill="none"
-                    stroke={activeEje.color}
-                    strokeWidth="3"
-                    className="animate-pulse"
-                  />
-                  {currentPoints.map((p, i) => (
-                    <circle key={i} cx={p.x} cy={p.y} r="5" fill="white" stroke={activeEje.color} strokeWidth="2" />
-                  ))}
-                </g>
-              )}
-
-              {!backgroundImage && customPolygons.length === 0 && (
-                <g id="mapa-placeholder" className="opacity-40 animate-pulse">
-                  <path
-                    d="M150,150 L250,120 L300,180 L280,260 L180,280 Z"
-                    fill={`${activeEje.color}60`}
-                    stroke={activeEje.color}
-                    strokeWidth="3"
-                  />
-                  <text x="180" y="215" fill="white" className="text-[12px] font-black pointer-events-none opacity-80 uppercase tracking-widest select-none shadow-black drop-shadow-md">Panel de Dibujo Activo (Suba un fondo)</text>
-                </g>
-              )}
+                {!backgroundImage && customPolygons.length === 0 && (
+                  <g id="mapa-placeholder" className="opacity-40 animate-pulse">
+                    <path
+                      d="M150,150 L250,120 L300,180 L280,260 L180,280 Z"
+                      fill={`${activeEje.color}60`}
+                      stroke={activeEje.color}
+                      strokeWidth="3"
+                    />
+                    <text x="180" y="215" fill="white" className="text-[12px] font-black pointer-events-none opacity-80 uppercase tracking-widest select-none shadow-black drop-shadow-md">Panel de Dibujo Activo (Suba un fondo)</text>
+                  </g>
+                )}
+              </g>
             </svg>
+
+            {/* Controles flotantes para mejorar navegabilidad tactil */}
+            <div className={`absolute z-30 flex flex-col gap-2 transition-all duration-300
+              ${isMobile ? 'bottom-20 right-4' : 'bottom-24 right-6'}
+            `}>
+              <button
+                onClick={zoomIn}
+                className="w-10 h-10 flex items-center justify-center bg-black/60 hover:bg-black/80 backdrop-blur-xl rounded-xl border border-white/10 text-white hover:text-blue-400 active:scale-95 hover:scale-105 transition-all shadow-2xl"
+                title="Acercar mapa"
+              >
+                <span className="text-xl font-bold">+</span>
+              </button>
+              <button
+                onClick={zoomOut}
+                className="w-10 h-10 flex items-center justify-center bg-black/60 hover:bg-black/80 backdrop-blur-xl rounded-xl border border-white/10 text-white hover:text-blue-400 active:scale-95 hover:scale-105 transition-all shadow-2xl"
+                title="Alejar mapa"
+              >
+                <span className="text-xl font-bold">−</span>
+              </button>
+              <button
+                onClick={resetZoom}
+                className="w-10 h-10 flex items-center justify-center bg-black/60 hover:bg-black/80 backdrop-blur-xl rounded-xl border border-white/10 text-white hover:text-blue-400 active:scale-95 hover:scale-105 transition-all shadow-2xl text-[10px] font-black uppercase tracking-tighter"
+                title="Restablecer vista"
+              >
+                Reset
+              </button>
+            </div>
           </div>
           
           <AnimatePresence>
