@@ -1,32 +1,21 @@
 import React from 'react';
 import { useDashboardData } from '../../hooks/useDashboardData';
 import DashboardHeader from './DashboardHeader';
-import KPICards from './KPICards';
-import SemaforoChart from './Charts/SemaforoChart';
-import ResumenASICChart from './Charts/ResumenASICChart';
-import ASICSummaryTable from './ASICSummaryTable';
+import ComplianceByEje from './ComplianceByEje';
+import WeeklyLoadHistory from './WeeklyLoadHistory';
 import TransitoTable from './TransitoTable';
-import { BarChart3, TrendingUp, AlertCircle, Database, Server, Info, RefreshCw } from 'lucide-react';
+import { Database, Info, RefreshCw } from 'lucide-react';
 
 export default function DashboardContainer() {
   const { 
-    selectedTab, 
-    setSelectedTab, 
     reportes, 
     isLoading, 
     error,
-    lastUpdate,
     fetchData
   } = useDashboardData();
 
-  const tabOptions = [
-    { id: 'semaforo', label: 'Semáforo', icon: <BarChart3 size={13} /> },
-    { id: 'resumen_asic', label: 'Resumen ASIC', icon: <TrendingUp size={13} /> },
-    { id: 'transito', label: 'Tránsito Real', icon: <AlertCircle size={13} /> }
-  ];
-
   return (
-    <div className="flex flex-col gap-4 max-w-7xl mx-auto w-full px-3 sm:px-4 py-2 text-slate-700 min-h-screen">
+    <div className="flex flex-col gap-5 max-w-7xl mx-auto w-full px-3 sm:px-4 py-2 text-slate-700 min-h-screen">
       
       {/* 1. Header with Controls */}
       <DashboardHeader />
@@ -48,86 +37,39 @@ export default function DashboardContainer() {
         </div>
       )}
 
-      {/* 2. Key Performance Indicators grid */}
-      <KPICards />
+      {/* 2. Interactive Compliance Widget */}
+      <ComplianceByEje />
 
-      {/* 3. Segmented navigation container */}
-      <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-1">
-        <div className="flex items-center gap-1.5 overflow-x-auto">
-          {tabOptions.map(tab => {
-            const isActive = selectedTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setSelectedTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shrink-0 ${
-                  isActive 
-                    ? 'bg-slate-900 text-white shadow-sm font-black' 
-                    : 'bg-white hover:bg-slate-50 text-slate-500 border border-slate-200 border-dashed'
-                }`}
-              >
-                {tab.icon}
-                {tab.label}
-              </button>
-            );
-          })}
+      {/* 3. Weekly Load History timeline */}
+      <WeeklyLoadHistory />
+
+      {/* Title block for transit reports data list */}
+      <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2 mt-4">
+        <div>
+          <h3 className="text-sm font-black text-[#0B3D5C] uppercase tracking-wider">
+            Reportes en Tránsito de Salud
+          </h3>
+          <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">
+            Consolidado unificado en tiempo real de rezagos y cumplimiento por establecimiento
+          </p>
         </div>
-
         {reportes.length > 0 && (
-          <span className="text-[9px] text-[#0B3D5C] bg-[#0B3D5C]/15 px-2 py-0.5 rounded-full font-black uppercase tracking-wider hidden xs:inline-block">
-            {reportes.length} Registrados
+          <span className="text-[9px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full font-black uppercase tracking-wider">
+            {reportes.length} Centros Sincronizados
           </span>
         )}
       </div>
 
-      {/* 4. Dynamic view tab context contents */}
+      {/* 3. Direct Transito Table component */}
       <div className="min-h-[300px] flex flex-col gap-4">
-        {selectedTab === 'semaforo' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            
-            {/* Visual stacked semaforos */}
-            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-2">
-              <div>
-                <span className="text-[10px] font-black text-[#0B3D5C] uppercase tracking-wider block">
-                  Distribución del Semáforo de Cumplimiento
-                </span>
-                <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider">
-                  Cálculo del nivel de rezago por centros activos
-                </span>
-              </div>
-              <SemaforoChart />
-            </div>
-
-            {/* Compliance percentages comparison */}
-            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-2">
-              <div>
-                <span className="text-[10px] font-black text-[#0B3D5C] uppercase tracking-wider block">
-                  Operatividad Consolidada por Ejes
-                </span>
-                <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider">
-                  Porcentajes acumulados (Promedio de sus ASICs integrados)
-                </span>
-              </div>
-              <ResumenASICChart />
-            </div>
-
-          </div>
-        )}
-
-        {selectedTab === 'resumen_asic' && (
-          <ASICSummaryTable />
-        )}
-
-        {selectedTab === 'transito' && (
-          <TransitoTable />
-        )}
+        <TransitoTable />
       </div>
 
-      {/* 5. Minimal unified footer info */}
+      {/* 3. Minimal footer */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-slate-100 pt-4 mt-4 text-slate-400">
         <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider">
           <Database size={11} className="text-emerald-500 shrink-0" />
-          <span>Proveedor de Datos: Google Sheets (Sincronización Directa)</span>
+          <span>Proveedor de Datos: Google Sheets & Supabase DB (Sincronización Directa)</span>
         </div>
         <span className="text-[8px] font-bold uppercase tracking-widest text-[#0B3D5C]">
           SISTEMA DE INFORMACIÓN GEOGRÁFICA DE SALUD (SIG) • MIRANDA SALUD 2026

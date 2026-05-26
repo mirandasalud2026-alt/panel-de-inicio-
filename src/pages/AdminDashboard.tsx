@@ -133,7 +133,7 @@ export default function AdminDashboard() {
     );
   }
 
-  // Si es directivo, mostrar selector entre Analítico, Minimalista y Mapa
+  // Si es directivo, mostrar el consolidado de reportes en tránsito directamente
   if (profile.rol === 'directivo') {
     return (
       <div className="min-h-screen bg-[#F3F4F6] pb-10 font-sans flex flex-col justify-start">
@@ -158,43 +158,6 @@ export default function AdminDashboard() {
               </div>
 
               <div className="flex items-center gap-3 sm:gap-6">
-                {/* Selector de vista para directivo - 3 opciones */}
-                <div className="hidden md:flex bg-gray-50 p-1 rounded-xl border border-gray-200">
-                  <button
-                    onClick={() => setActiveDirectivoView('analitico')}
-                    className={`px-3 py-2 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${
-                      activeDirectivoView === 'analitico' 
-                        ? 'bg-white text-[#0B3D5C] shadow-sm' 
-                        : 'text-gray-400 hover:text-gray-600'
-                    }`}
-                  >
-                    <LayoutDashboard size={12} />
-                    Analítico
-                  </button>
-                  <button
-                    onClick={() => setActiveDirectivoView('minimalista')}
-                    className={`px-3 py-2 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${
-                      activeDirectivoView === 'minimalista' 
-                        ? 'bg-white text-[#0B3D5C] shadow-sm' 
-                        : 'text-gray-400 hover:text-gray-600'
-                    }`}
-                  >
-                    <LayoutGrid size={12} />
-                    Minimalista
-                  </button>
-                  <button
-                    onClick={() => setActiveDirectivoView('mapa')}
-                    className={`px-3 py-2 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${
-                      activeDirectivoView === 'mapa' 
-                        ? 'bg-white text-[#0B3D5C] shadow-sm' 
-                        : 'text-gray-400 hover:text-gray-600'
-                    }`}
-                  >
-                    <TrendingUp size={12} />
-                    Mapa
-                  </button>
-                </div>
-
                 <div className="hidden xs:flex flex-col items-end">
                   <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">{profile.nombre}</span>
                   <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-widest bg-[#0B3D5C]/10 text-[#0B3D5C]">
@@ -216,67 +179,11 @@ export default function AdminDashboard() {
                 </button>
               </div>
             </div>
-
-            {/* Selector móvil */}
-            <div className="md:hidden flex bg-gray-50 p-1 rounded-xl border border-gray-200 mx-6 mb-3">
-              <button
-                onClick={() => setActiveDirectivoView('analitico')}
-                className={`flex-1 px-3 py-2 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1 ${
-                  activeDirectivoView === 'analitico' 
-                    ? 'bg-white text-[#0B3D5C] shadow-sm' 
-                    : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                <LayoutDashboard size={12} />
-                Analítico
-              </button>
-              <button
-                onClick={() => setActiveDirectivoView('minimalista')}
-                className={`flex-1 px-3 py-2 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1 ${
-                  activeDirectivoView === 'minimalista' 
-                    ? 'bg-white text-[#0B3D5C] shadow-sm' 
-                    : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                <LayoutGrid size={12} />
-                Minimalista
-              </button>
-              <button
-                onClick={() => setActiveDirectivoView('mapa')}
-                className={`flex-1 px-3 py-2 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1 ${
-                  activeDirectivoView === 'mapa' 
-                    ? 'bg-white text-[#0B3D5C] shadow-sm' 
-                    : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                <TrendingUp size={12} />
-                Mapa
-              </button>
-            </div>
           </header>
         </div>
 
         <main className="max-w-7xl mx-auto p-6 md:p-8 w-full">
-          {activeDirectivoView === 'analitico' && <DirectorDashboard />}
-          {activeDirectivoView === 'minimalista' && <MinimalistDashboard />}
-          {activeDirectivoView === 'mapa' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-emerald-50 rounded-xl">
-                    <AlertTriangle size={20} className="text-emerald-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-black text-gray-800">Mapa de Semáforo por Eje Territorial</h3>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black">
-                      Visualización geográfica del estado de reporte por territorio
-                    </p>
-                  </div>
-                </div>
-                <InteractiveMirandaMap />
-              </div>
-            </div>
-          )}
+          <DirectorDashboard />
         </main>
 
         <footer className="mt-8 px-6 text-center opacity-30">
