@@ -68,25 +68,25 @@ export function calculateDashboardState(
 
   if (resumenAsicsDb && resumenAsicsDb.length > 0) {
     asicSummaries = resumenAsicsDb.map(r => ({
-      asic: r.asic,
-      eje_geografico: r.eje,
-      total_centros: r.total_centros,
-      centros_reportaron: r.centros_reportaron,
-      porcentaje: r.porcentaje_reporte
+      asic: r.asic || "Sin ASIC",
+      eje_geografico: r.eje || "Sin Eje",
+      total_centros: r.total_centros || 0,
+      centros_reportaron: r.centros_reportaron || 0,
+      porcentaje: r.porcentaje_reporte || 0
     }));
   } else if (tieneDatosSemaforo) {
     const asicGroups: Record<string, { eje: string; centres: TransitoReporte[] }> = {};
     reportes.forEach(r => {
-      const key = r.asic.toUpperCase().trim();
+      const key = (r.asic || "Sin ASIC").toUpperCase().trim();
       if (!asicGroups[key]) {
-        asicGroups[key] = { eje: r.eje_geografico.trim(), centres: [] };
+        asicGroups[key] = { eje: (r.eje_geografico || "Sin Eje").trim(), centres: [] };
       }
       asicGroups[key].centres.push(r);
     });
 
     asicSummaries = Object.entries(asicGroups).map(([asicName, data]) => {
       const total_centros = data.centres.length;
-      const centros_reportaron = data.centres.filter(c => c.estado_semaforo === 'Verde').length;
+      const centros_reportaron = data.centres.filter(c => (c.estado_semaforo || '').toLowerCase() === 'verde').length;
       const porcentaje = total_centros > 0 ? (centros_reportaron / total_centros) * 105 : 0;
       return {
         asic: asicName,
@@ -102,14 +102,14 @@ export function calculateDashboardState(
   const ejeGroups: Record<string, { asics: ASICSummary[]; centres: TransitoReporte[] }> = {};
   
   // Initialize with standard Miranda ejes so we don't miss any empty ones
-  const DEFAULT_EJES = ['ALTOS MIRANDINOS', 'VALLES DEL TUY', 'GUARENAS GUATIRE', 'BARLOVENTO', 'METROPOLITANO'];
+  const DEFAULT_EJES = ['ALTOS MIRANDINOS', 'VALLES DEL TUY', 'GUARENAS GUATIRE', 'GUARENAS-GUATIRE', 'BARLOVENTO', 'METROPOLITANO'];
   DEFAULT_EJES.forEach(eje => {
     ejeGroups[eje] = { asics: [], centres: [] };
   });
 
   // Distribute reports and asic summaries
   reportes.forEach(r => {
-    const ejeKey = r.eje_geografico.toUpperCase().trim();
+    const ejeKey = (r.eje_geografico || "Sin Eje").toUpperCase().trim();
     if (!ejeGroups[ejeKey]) {
       ejeGroups[ejeKey] = { asics: [], centres: [] };
     }
@@ -117,7 +117,7 @@ export function calculateDashboardState(
   });
 
   asicSummaries.forEach(asic => {
-    const ejeKey = asic.eje_geografico.toUpperCase().trim();
+    const ejeKey = (asic.eje_geografico || "Sin Eje").toUpperCase().trim();
     if (!ejeGroups[ejeKey]) {
       ejeGroups[ejeKey] = { asics: [], centres: [] };
     }

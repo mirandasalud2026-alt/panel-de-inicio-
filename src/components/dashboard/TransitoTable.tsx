@@ -8,11 +8,11 @@ export default function TransitoTable() {
   const [statusFilter, setStatusFilter] = useState<'TODO' | 'Verde' | 'Amarillo' | 'Rojo'>('TODO');
 
   const filteredReportes = useMemo(() => {
-    let result = reportes;
+    let result = reportes || [];
     
     // 1. Eje filter
     if (selectedEje !== 'TODO') {
-      result = result.filter(r => r.eje_geografico.toUpperCase() === selectedEje.toUpperCase());
+      result = result.filter(r => (r.eje_geografico || '').toUpperCase() === selectedEje.toUpperCase());
     }
 
     // 2. Status filter
@@ -24,9 +24,9 @@ export default function TransitoTable() {
     if (searchTerm.trim() !== '') {
       const q = searchTerm.toLowerCase();
       result = result.filter(r => 
-        r.nombre_centro.toLowerCase().includes(q) || 
-        r.asic.toLowerCase().includes(q) ||
-        r.id_centro.toLowerCase().includes(q)
+        (r.nombre_centro || '').toLowerCase().includes(q) || 
+        (r.asic || '').toLowerCase().includes(q) ||
+        (r.id_centro || '').toLowerCase().includes(q)
       );
     }
 

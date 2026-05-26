@@ -40,8 +40,8 @@ export default function ComplianceByEje() {
   }
 
   // Find the selected Eje data object
-  const selectedEjeData = ejes.find(
-    e => e.eje_geografico.toUpperCase().trim() === activeEje.toUpperCase().trim()
+  const selectedEjeData = (ejes || []).find(
+    e => ((e && e.eje_geografico) || '').toUpperCase().trim() === (activeEje || '').toUpperCase().trim()
   );
 
   return (
