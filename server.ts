@@ -14,6 +14,43 @@ const supabaseServerClient = (supabaseUrl && supabaseAnonKey && !supabaseUrl.inc
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
+function parseCSV(csvText: string): string[][] {
+  const result: string[][] = [];
+  const lines = csvText.split(/\r?\n/);
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    
+    const row: string[] = [];
+    let insideQuote = false;
+    let curr = "";
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        insideQuote = !insideQuote;
+      } else if (char === ',' && !insideQuote) {
+        row.push(curr);
+        curr = "";
+      } else {
+        curr += char;
+      }
+    }
+    row.push(curr);
+    
+    // Clean bounding quotes and normalize double-quotes
+    const cleanedRow = row.map(val => {
+      let clean = val.trim();
+      if (clean.startsWith('"') && clean.endsWith('"')) {
+        clean = clean.substring(1, clean.length - 1);
+      }
+      return clean.replace(/""/g, '"');
+    });
+    
+    result.push(cleanedRow);
+  }
+  return result;
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -152,11 +189,54 @@ async function startServer() {
   });
 
   // ==========================================
-  // RUTAS PARA VISTAS UNIFICADAS DE BASE DE DATOS
+  // RUTAS PARA VISTAS UNIFICADAS DE BASE DE DATOS (CON PRIORIDAD EN GOOGLE SHEETS)
   // ==========================================
 
   // 1. Obtener vista unificada territorial (JOINS sugeridos por columnas)
   app.get("/api/db/vista-unificada", async (req, res) => {
+    try {
+      const sheetId = "1zw04RoFnPvxF3P147dRjbg01gfySKJGNn4QUVbcSfig";
+      const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=transito_reportes`;
+      
+      console.log(`[Google Sheets API] Fetching vista-unificada from: ${url}`);
+      const response = await fetch(url);
+      if (response.ok) {
+        const csvText = await response.text();
+        const rows = parseCSV(csvText);
+        if (rows.length > 1) {
+          const headers = rows[0].map(h => h.trim().toLowerCase());
+          const joinedData = rows.slice(1).map(row => {
+            const obj: any = {};
+            headers.forEach((h, idx) => {
+              obj[h] = row[idx] || "";
+            });
+
+            const eje_geografico = obj.eje_geografico || "Sin Eje";
+            const asic = obj.asic || "Sin ASIC";
+            return {
+              id_centro: obj.id_centro,
+              nombre_centro: obj.nombre_centro,
+              centro_asic_cod: asic,
+              estado_semaforo: obj.estado_semaforo || "Verde",
+              horas_retraso: parseInt(obj.horas_retraso) || 0,
+              ultimo_reporte: obj.ultimo_reporte,
+              actualizado_en: obj.actualizado_en || new Date().toISOString(),
+              nombre_asic: asic,
+              eje_geografico: eje_geografico,
+              eje_id: eje_geografico.toLowerCase().replace(/\s+/g, '_'),
+              nombre_municipio: "Miranda",
+              municipio_id: null,
+              nombre_parroquia: "",
+              parroquia_id: null
+            };
+          });
+          return res.json({ status: "success", source: "google_sheets", data: joinedData });
+        }
+      }
+    } catch (sheetError: any) {
+      console.warn("[Google Sheets API] Fallback to legacy database due to:", sheetError.message);
+    }
+
     try {
       if (supabaseServerClient) {
         // Consultar la vista unificada territorial
@@ -250,34 +330,151 @@ async function startServer() {
     }
   });
 
-  // 2. Obtener resumen de reportes agrupados por ASIC (Vista resumen_asic)
-  app.get("/api/db/resumen-asic", async (req, res) => {
+  // 1b. Obtener reportes en tránsito crudos de Google Sheets (Priorizando Supabase)
+  app.get("/api/db/transito-reportes", async (req, res) => {
+    // 1. Intentar Supabase Primero
+    if (supabaseServerClient) {
+      try {
+        console.log("[Server DB Cache] Fetching transito_reportes from Supabase first...");
+        const { data, error } = await supabaseServerClient
+          .from("transito_reportes")
+          .select("*")
+          .order("actualizado_en", { ascending: false });
+          
+        if (!error && data && data.length > 0) {
+          return res.json({ status: "success", source: "supabase", data });
+        }
+        if (error) {
+          console.warn("[Server DB Cache] Error fetching from Supabase:", error.message);
+        }
+      } catch (dbErr: any) {
+        console.error("Supabase error:", dbErr);
+      }
+    }
+
+    // 2. Fallback a Google Sheets CSV
     try {
-      if (supabaseServerClient) {
+      const sheetId = "1zw04RoFnPvxF3P147dRjbg01gfySKJGNn4QUVbcSfig";
+      const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=transito_reportes`;
+      
+      console.log(`[Google Sheets Fallback] Fetching transito_reportes from: ${url}`);
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Google Sheets HTTP Error ${response.status}`);
+      }
+      
+      const csvText = await response.text();
+      const rows = parseCSV(csvText);
+      if (rows.length <= 1) {
+        throw new Error("No data or only headers in Google Sheet");
+      }
+      
+      const headers = rows[0].map(h => h.trim().toLowerCase());
+      const data = rows.slice(1).map(row => {
+        const obj: any = {};
+        headers.forEach((h, idx) => {
+          obj[h] = row[idx] || "";
+        });
+        
+        return {
+          id_centro: obj.id_centro,
+          nombre_centro: obj.nombre_centro,
+          asic: obj.asic || "Sin ASIC",
+          eje_geografico: obj.eje_geografico || "Sin Eje",
+          ultimo_reporte: obj.ultimo_reporte,
+          estado_semaforo: obj.estado_semaforo || "Verde",
+          horas_retraso: parseInt(obj.horas_retraso) || 0,
+          actualizado_en: obj.actualizado_en || new Date().toISOString()
+        };
+      });
+      
+      return res.json({ status: "success", source: "google_sheets", data });
+    } catch (sheetError: any) {
+      console.warn("[Google Sheets API] Fallback transito-reportes to local simulation:", sheetError.message);
+      
+      return res.json({
+        status: "success",
+        source: "local_simulation",
+        data: [
+          {
+            id_centro: "ALT_AS_GUA",
+            nombre_centro: "Ambulatorio Guaremal",
+            asic: "ASIC Guaremal",
+            eje_geografico: "ALTOS MIRANDINOS",
+            ultimo_reporte: new Date(Date.now() - 4 * 3600 * 1000).toISOString(),
+            estado_semaforo: "Verde",
+            horas_retraso: 0,
+            actualizado_en: new Date().toISOString()
+          }
+        ]
+      });
+    }
+  });
+
+  // 2. Obtener resumen de reportes agrupados por ASIC (Vista resumen_asic con prioridad Supabase)
+  app.get("/api/db/resumen-asic", async (req, res) => {
+    // 1. Intentar Supabase Primero
+    if (supabaseServerClient) {
+      try {
+        console.log("[Server DB Cache] Fetching resumen_asic from Supabase first...");
         const { data, error } = await supabaseServerClient
           .from("resumen_asic")
           .select("*");
           
-        if (!error && data) {
+        if (!error && data && data.length > 0) {
           return res.json({ status: "success", source: "supabase_view", data });
         }
+        if (error) {
+          console.warn("[Server DB Cache] Error fetching resumen_asic from Supabase:", error.message);
+        }
+      } catch (dbErr: any) {
+        console.error("Supabase error for resumen_asic:", dbErr);
       }
-      
-      // Fallback simulado correspondientes al tipo ResumenASICData[]
-      res.json({
-        status: "success",
-        source: "local_simulation",
-        data: [
-          { eje: 'Altos Mirandinos', totalEstablecimientos: 45, totalActivos: 38, totalInactivos: 5, totalClausurados: 2, reportaron: 35, porcentajeReporte: 77.8 },
-          { eje: 'Valles del Tuy', totalEstablecimientos: 52, totalActivos: 42, totalInactivos: 8, totalClausurados: 2, reportaron: 40, porcentajeReporte: 76.9 },
-          { eje: 'Guarenas-Guatire', totalEstablecimientos: 38, totalActivos: 30, totalInactivos: 6, totalClausurados: 2, reportaron: 28, porcentajeReporte: 73.7 },
-          { eje: 'Barlovento', totalEstablecimientos: 29, totalActivos: 24, totalInactivos: 4, totalClausurados: 1, reportaron: 22, porcentajeReporte: 75.9 },
-          { eje: 'Metropolitano', totalEstablecimientos: 68, totalActivos: 58, totalInactivos: 8, totalClausurados: 2, reportaron: 55, porcentajeReporte: 80.9 }
-        ]
-      });
-    } catch (error: any) {
-      res.status(500).json({ status: "error", message: error.message });
     }
+
+    // 2. Fallback a Google Sheets CSV
+    try {
+      const sheetId = "1zw04RoFnPvxF3P147dRjbg01gfySKJGNn4QUVbcSfig";
+      const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=resumen_asic`;
+      
+      console.log(`[Google Sheets Fallback] Fetching resumen_asic from: ${url}`);
+      const response = await fetch(url);
+      if (response.ok) {
+        const csvText = await response.text();
+        const rows = parseCSV(csvText);
+        if (rows.length > 1) {
+          const headers = rows[0].map(h => h.trim().toLowerCase());
+          const data = rows.slice(1).map(row => {
+            const obj: any = {};
+            headers.forEach((h, idx) => {
+              obj[h] = row[idx] || "";
+            });
+            
+            return {
+              asic: obj.asic || "Sin ASIC",
+              eje: obj.eje || obj.eje_geografico || "Sin Eje",
+              total_centros: parseInt(obj.total_centros) || 0,
+              centros_reportaron: parseInt(obj.centros_reportaron) || 0,
+              porcentaje_reporte: parseFloat(obj.porcentaje_reporte) || 0,
+              actualizado_en: obj.actualizado_en || new Date().toISOString()
+            };
+          });
+          return res.json({ status: "success", source: "google_sheets", data });
+        }
+      }
+    } catch (sheetError: any) {
+      console.warn("[Google Sheets API] Fallback resumen-asic to local simulation:", sheetError.message);
+    }
+
+    // 3. Fallback simulado correspondientes al tipo ResumenASICData[]
+    return res.json({
+      status: "success",
+      source: "local_simulation",
+      data: [
+        { asic: 'ASIC Guaremal', eje: 'ALTOS MIRANDINOS', total_centros: 45, centros_reportaron: 35, porcentaje_reporte: 77.8 },
+        { asic: 'ASIC Carrizal', eje: 'ALTOS MIRANDINOS', total_centros: 52, centros_reportaron: 40, porcentaje_reporte: 76.9 }
+      ]
+    });
   });
 
   // 3. Obtener noticias con información de autores unificada (vista_noticias_autores)

@@ -127,7 +127,7 @@ export default function DashboardContainer() {
       <div className="flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-slate-100 pt-4 mt-4 text-slate-400">
         <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider">
           <Database size={11} className="text-emerald-500 shrink-0" />
-          <span>Proveedor de Datos: Supabase CDN Real-time</span>
+          <span>Proveedor de Datos: Google Sheets (Sincronización Directa)</span>
         </div>
         <span className="text-[8px] font-bold uppercase tracking-widest text-[#0B3D5C]">
           SISTEMA DE INFORMACIÓN GEOGRÁFICA DE SALUD (SIG) • MIRANDA SALUD 2026
