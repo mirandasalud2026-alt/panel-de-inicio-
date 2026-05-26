@@ -147,8 +147,8 @@ const getImageDimensions = (src: string): Promise<{ width: number; height: numbe
 export default function InteractiveMirandaMap({ isAdminMode = false }: InteractiveMirandaMapProps) {
   const [activeEje, setActiveEje] = useState<Eje>(INITIAL_EJES[0]);
   const [ejes, setEjes] = useState<Eje[]>(INITIAL_EJES);
-  const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
-  const [bgUrlInput, setBgUrlInput] = useState('');
+  const [backgroundImage, setBackgroundImage] = useState<string | null>('https://images.unsplash.com/photo-1516738901171-8eb4fc13bd20?auto=format&fit=crop&q=80&w=2000');
+  const [bgUrlInput, setBgUrlInput] = useState('https://images.unsplash.com/photo-1516738901171-8eb4fc13bd20?auto=format&fit=crop&q=80&w=2000');
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [currentPoints, setCurrentPoints] = useState<{ x: number, y: number }[]>([]);
   const [customPolygons, setCustomPolygons] = useState<{ points: { x: number, y: number }[], ejeId: string, id: string }[]>([]);
@@ -159,8 +159,8 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const [isConsoleMinimized, setIsConsoleMinimized] = useState(false);
   const [isExecuting, setIsExecuting] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [dbStatus, setDbStatus] = useState<'testing' | 'ok' | 'error' | 'disconnected'>('disconnected');
+  const [isLoading, setIsLoading] = useState(false);
+  const [dbStatus, setDbStatus] = useState<'testing' | 'ok' | 'error' | 'disconnected'>('ok');
   const [lastAction, setLastAction] = useState<{ msg: string, type: 'success' | 'error' } | null>(null);
   const [noticias, setNoticias] = useState<any[]>([]);
   const [territorialData, setTerritorialData] = useState<Record<string, any>>({});

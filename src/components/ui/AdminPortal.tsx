@@ -32,7 +32,8 @@ import {
   Bell,
   Server,
   HardDrive,
-  Cloud
+  Cloud,
+  Layers
 } from 'lucide-react';
 import InteractiveMirandaMap from '../InteractiveMirandaMap';
 import { supabase, UserProfile } from '../../lib/supabase';
@@ -124,7 +125,11 @@ const MOCK_TRANSITO_REPORTES: TransitoReporte[] = [
 
 export default function AdminPortal({ restricted = false }: { restricted?: boolean }) {
   const trigger3HoursRef = useRef<(() => void) | null>(null);
-  const [activeTab, setActiveTab] = useState<'mapa' | 'cumplimiento' | 'noticias' | 'calendario' | 'usuarios'>('mapa');
+  const [activeTab, setActiveTab] = useState<'mapa' | 'mapa_admin' | 'cumplimiento' | 'noticias' | 'calendario' | 'usuarios'>('cumplimiento');
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [activeTab]);
   const [noticias, setNoticias] = useState<Noticia[]>([]);
   const [eventos, setEventos] = useState<any[]>([]);
   const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
@@ -360,8 +365,8 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
   const porcentajeCumplido = totalCentros > 0 ? Math.round((cumplidosCount / totalCentros) * 100) : 0;
 
   const tabs = [
-    { id: 'mapa', label: 'Mapa SIG', icon: <MapIcon size={14} /> },
     { id: 'cumplimiento', label: 'Tránsito', icon: <Activity size={14} /> },
+    { id: 'mapa', label: 'Mapa SIG', icon: <MapIcon size={14} /> },
     { id: 'noticias', label: 'Noticias', icon: <Newspaper size={14} /> },
     { id: 'calendario', label: 'Calendario', icon: <Calendar size={14} /> },
     { id: 'usuarios', label: 'Usuarios', icon: <Users size={14} /> },
@@ -394,37 +399,9 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
         {/* MAPA */}
         {activeTab === 'mapa' && (
           <motion.div key="mapa" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-            <div className="h-[450px] rounded-2xl overflow-hidden border border-gray-200 shadow-sm">
+            <div className="h-[480px] rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
               <InteractiveMirandaMap isAdminMode={true} />
             </div>
-            
-            {/* Botón de Sincronización Rápida cada 3 Horas */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-              <div className="space-y-1 text-center sm:text-left">
-                <h4 className="text-xs font-black text-gray-800 uppercase tracking-tight flex items-center justify-center sm:justify-start gap-1.5 font-sans">
-                  <Clock size={13} className="text-[#0B3D5C]" /> Configuración de Disparadores Temporales
-                </h4>
-                <p className="text-[10px] text-gray-400 font-semibold leading-relaxed font-sans">
-                  Configura y activa de forma inmediata el cron automático de Apps Script para consolidar los reportes en el Dashboard cada 3 horas.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (trigger3HoursRef.current) {
-                    agregarLog('⏳ Iniciando configuración manual del Cron de 3 horas desde la pestaña de Mapa...');
-                    trigger3HoursRef.current();
-                  } else {
-                    alert('El módulo de Sincronización se está cargando. Por favor, intente de nuevo en un momento.');
-                  }
-                }}
-                className="w-full sm:w-auto shrink-0 flex items-center justify-center gap-2 px-5 py-3 bg-[#0B3D5C] hover:bg-[#082E47] text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-sm hover:shadow-md hover:translate-y-[-1px] active:translate-y-[0px] cursor-pointer"
-              >
-                <Clock size={14} /> Configurar Cron 3 Horas
-              </button>
-            </div>
-
-            <WorkspaceManager onRegisterTriggerHandler={(handler) => { trigger3HoursRef.current = handler; }} />
           </motion.div>
         )}
 
@@ -532,6 +509,36 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
                 Desliza sobre la tabla para examinar los {reportesFiltrados.length} centros registrados
               </p>
             )}
+
+            {/* SECCIÓN DE SINCRONIZACIÓN MOVIDA A TRANSITO */}
+            <div className="border-t border-dashed border-gray-150 pt-6 mt-6 space-y-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                <div className="space-y-1 text-center sm:text-left font-sans">
+                  <h4 className="text-xs font-black text-gray-800 uppercase tracking-tight flex items-center justify-center sm:justify-start gap-1.5">
+                    <Clock size={13} className="text-[#0B3D5C]" /> Configuración de Disparadores Temporales
+                  </h4>
+                  <p className="text-[10px] text-gray-400 font-semibold leading-relaxed">
+                    Configura y activa de forma inmediata el cron automático de Apps Script para consolidar los reportes en el Dashboard cada 3 horas.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (trigger3HoursRef.current) {
+                      agregarLog('⏳ Iniciando configuración manual del Cron de 3 horas desde la pestaña de Tránsito...');
+                      trigger3HoursRef.current();
+                    } else {
+                      alert('El módulo de Sincronización se está cargando. Por favor, intente de nuevo en un momento.');
+                    }
+                  }}
+                  className="w-full sm:w-auto shrink-0 flex items-center justify-center gap-2 px-5 py-3 bg-[#0B3D5C] hover:bg-[#082E47] text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-sm hover:shadow-md hover:translate-y-[-1px] active:translate-y-[0px] cursor-pointer font-sans"
+                >
+                  <Clock size={14} /> Configurar Cron 3 Horas
+                </button>
+              </div>
+
+              <WorkspaceManager onRegisterTriggerHandler={(handler) => { trigger3HoursRef.current = handler; }} />
+            </div>
           </motion.div>
         )}
 

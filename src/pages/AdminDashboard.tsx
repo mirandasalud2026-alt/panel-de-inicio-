@@ -13,6 +13,10 @@ export default function AdminDashboard() {
   const { user, profile, loading } = useAuth();
   const [activeDirectivoView, setActiveDirectivoView] = useState<'analitico' | 'minimalista' | 'mapa'>('analitico');
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [activeDirectivoView, profile?.rol]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#F3F4F6] p-10 text-center">

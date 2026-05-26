@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import InformativoPage from './pages/InformativoPage';
 import LoginPage from './pages/LoginPage';
@@ -6,6 +6,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Clock, AlertTriangle, RefreshCw, ServerOff } from 'lucide-react';
+import { DashboardProvider } from './contexts/DashboardContext';
 
 function checkIsLocked(): boolean {
   // Option to test it anywhere via URL parameter
@@ -175,6 +176,16 @@ function LockScreen() {
   );
 }
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [pathname]);
+
+  return null;
+}
+
 /**
  * Miranda Salud - App Principal
  * Arquitectura PWA con autenticación basada en roles.
@@ -195,13 +206,16 @@ export default function App() {
   }
 
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/sitio-informativo" element={<InformativoPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/admin/dashboard" element={<AdminDashboard />} />
-      </Routes>
-    </Router>
+    <DashboardProvider>
+      <Router>
+        <ScrollToTop />
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/sitio-informativo" element={<InformativoPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        </Routes>
+      </Router>
+    </DashboardProvider>
   );
 }

@@ -2,6 +2,17 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { google } from "googleapis";
+import { createClient } from "@supabase/supabase-js";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "";
+
+const supabaseServerClient = (supabaseUrl && supabaseAnonKey && !supabaseUrl.includes("your-project-url"))
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
 
 async function startServer() {
   const app = express();
@@ -137,6 +148,169 @@ async function startServer() {
           message: `${fallbackMessage} [Túnel Seguro de Miranda Salud]`
         }
       });
+    }
+  });
+
+  // ==========================================
+  // RUTAS PARA VISTAS UNIFICADAS DE BASE DE DATOS
+  // ==========================================
+
+  // 1. Obtener vista unificada territorial (JOINS sugeridos por columnas)
+  app.get("/api/db/vista-unificada", async (req, res) => {
+    try {
+      if (supabaseServerClient) {
+        // Consultar la vista unificada territorial
+        const { data, error } = await supabaseServerClient
+          .from("vista_unificada_territorial")
+          .select("*");
+          
+        if (!error && data) {
+          return res.json({ status: "success", source: "supabase_view", data });
+        }
+        
+        console.warn("Fallo o no existe la vista unificada en Supabase, intentando JOIN manual en backend:", error);
+        
+        // Manual fallback query joins
+        const { data: transito } = await supabaseServerClient.from("transito_reportes").select("*");
+        const { data: tasic } = await supabaseServerClient.from("TASIC").select("*");
+        const { data: tejes } = await supabaseServerClient.from("TEjes").select("*");
+        const { data: tmunicipios } = await supabaseServerClient.from("TMunicipios").select("*");
+        const { data: tparroquias } = await supabaseServerClient.from("TParroquias").select("*");
+        
+        if (transito) {
+          const joinedData = transito.map((tr: any) => {
+            const a = tasic?.find((x: any) => x.Cod_ASIC === tr.asic || x.cod_asic === tr.asic);
+            const e = tejes?.find((x: any) => x.cod_eje === a?.Cod_Eje || x.cod_eje === a?.cod_eje);
+            const m = tmunicipios?.find((x: any) => x.cod_mun == a?.Cod_mun || x.cod_mun == a?.cod_mun);
+            const p = tparroquias?.find((x: any) => x.cod_parr == a?.Cod_parr || x.cod_parr == a?.cod_parr);
+            
+            return {
+              id_centro: tr.id_centro,
+              nombre_centro: tr.nombre_centro,
+              centro_asic_cod: tr.asic,
+              estado_semaforo: tr.estado_semaforo,
+              horas_retraso: tr.horas_retraso,
+              ultimo_reporte: tr.ultimo_reporte,
+              actualizado_en: tr.actualizado_en,
+              nombre_asic: a ? a.nombre_asic : tr.asic,
+              eje_geografico: tr.eje_geografico || e?.nombre_eje || "Sin Eje",
+              eje_id: e?.cod_eje || a?.Cod_Eje || "Sin Eje",
+              nombre_municipio: m?.nombre_municipio || "Sin Municipio",
+              municipio_id: m?.cod_mun || null,
+              nombre_parroquia: p?.nombre_parroquia || "Sin Parroquia",
+              parroquia_id: p?.cod_parr || null
+            };
+          });
+          return res.json({ status: "success", source: "supabase_manual_join", data: joinedData });
+        }
+      }
+      
+      // Fallback a datos simulados locales de Miranda Salud
+      res.json({
+        status: "success",
+        source: "local_simulation",
+        message: "Mostrando simulación unificada local de Miranda Salud.",
+        data: [
+          {
+            id_centro: "ALT_AS_GUA",
+            nombre_centro: "Ambulatorio Guaremal",
+            centro_asic_cod: "ASIC GUAREMAL",
+            estado_semaforo: "Verde",
+            horas_retraso: 0,
+            ultimo_reporte: new Date(Date.now() - 4 * 3600 * 1000).toISOString(),
+            actualizado_en: new Date().toISOString(),
+            nombre_asic: "ASIC Guaremal",
+            eje_geografico: "ALTOS MIRANDINOS",
+            eje_id: "altos_mirandinos",
+            nombre_municipio: "Guaicaipuro",
+            municipio_id: 1,
+            nombre_parroquia: "Guaremal",
+            parroquia_id: 101
+          },
+          {
+            id_centro: "ALT_AS_CAR_CDI",
+            nombre_centro: "CDI Carrizal",
+            centro_asic_cod: "ASIC CARRIZAL",
+            estado_semaforo: "Amarillo",
+            horas_retraso: 29,
+            ultimo_reporte: new Date(Date.now() - 29 * 3600 * 1000).toISOString(),
+            actualizado_en: new Date().toISOString(),
+            nombre_asic: "ASIC Carrizal",
+            eje_geografico: "ALTOS MIRANDINOS",
+            eje_id: "altos_mirandinos",
+            nombre_municipio: "Carrizal",
+            municipio_id: 2,
+            nombre_parroquia: "Carrizal",
+            parroquia_id: 201
+          }
+        ]
+      });
+    } catch (error: any) {
+      res.status(500).json({ status: "error", message: error.message });
+    }
+  });
+
+  // 2. Obtener resumen de reportes agrupados por ASIC (Vista resumen_asic)
+  app.get("/api/db/resumen-asic", async (req, res) => {
+    try {
+      if (supabaseServerClient) {
+        const { data, error } = await supabaseServerClient
+          .from("resumen_asic")
+          .select("*");
+          
+        if (!error && data) {
+          return res.json({ status: "success", source: "supabase_view", data });
+        }
+      }
+      
+      // Fallback simulado correspondientes al tipo ResumenASICData[]
+      res.json({
+        status: "success",
+        source: "local_simulation",
+        data: [
+          { eje: 'Altos Mirandinos', totalEstablecimientos: 45, totalActivos: 38, totalInactivos: 5, totalClausurados: 2, reportaron: 35, porcentajeReporte: 77.8 },
+          { eje: 'Valles del Tuy', totalEstablecimientos: 52, totalActivos: 42, totalInactivos: 8, totalClausurados: 2, reportaron: 40, porcentajeReporte: 76.9 },
+          { eje: 'Guarenas-Guatire', totalEstablecimientos: 38, totalActivos: 30, totalInactivos: 6, totalClausurados: 2, reportaron: 28, porcentajeReporte: 73.7 },
+          { eje: 'Barlovento', totalEstablecimientos: 29, totalActivos: 24, totalInactivos: 4, totalClausurados: 1, reportaron: 22, porcentajeReporte: 75.9 },
+          { eje: 'Metropolitano', totalEstablecimientos: 68, totalActivos: 58, totalInactivos: 8, totalClausurados: 2, reportaron: 55, porcentajeReporte: 80.9 }
+        ]
+      });
+    } catch (error: any) {
+      res.status(500).json({ status: "error", message: error.message });
+    }
+  });
+
+  // 3. Obtener noticias con información de autores unificada (vista_noticias_autores)
+  app.get("/api/db/noticias-autores", async (req, res) => {
+    try {
+      if (supabaseServerClient) {
+        const { data, error } = await supabaseServerClient
+          .from("vista_noticias_autores")
+          .select("*");
+          
+        if (!error && data) {
+          return res.json({ status: "success", source: "supabase_view", data });
+        }
+      }
+      
+      res.json({
+        status: "success",
+        source: "local_simulation",
+        data: [
+          {
+            id: 1,
+            titulo: 'Sistema SIG Miranda Activado',
+            categoria: 'informativa',
+            texto: 'El sistema de información geográfica ha sido desplegado exitosamente con vistas unificadas.',
+            fecha: new Date().toISOString(),
+            autor_nombre: 'Dra. María González',
+            autor_email: 'miranda.salud2026@gmail.com',
+            autor_rol: 'admin'
+          }
+        ]
+      });
+    } catch (error: any) {
+      res.status(500).json({ status: "error", message: error.message });
     }
   });
 

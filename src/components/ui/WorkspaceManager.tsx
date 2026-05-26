@@ -1,365 +1,41 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  FileSpreadsheet, 
   FileCode, 
   ExternalLink, 
   RefreshCw, 
-  Search, 
-  FolderOpen,
-  LayoutGrid,
-  List as ListIcon,
-  ShieldCheck,
-  AlertCircle,
+  Terminal, 
+  Play, 
+  Check, 
+  Clock, 
+  FileText, 
+  Copy, 
   Database,
   ArrowRightLeft,
-  Terminal,
-  Play,
-  Check,
-  Trash2,
-  Clock,
-  Wrench,
-  Layers,
-  FileText,
-  Copy,
-  Plus,
-  TrendingUp,
-  Shield,
-  Zap
+  Settings,
+  HelpCircle,
+  AlertCircle
 } from 'lucide-react';
-import { googleSignIn, initAuth, logout } from '../../lib/firebaseAuth';
-import { googleWorkspaceService, GoogleDriveFile } from '../../services/googleWorkspaceService';
-import { supabase } from '../../lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
-
-const FOLDER_ID = '1loiQhrPqtwOZkE5sSjdHEEJkYtPqXgDR';
-
-interface ScriptAction {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  color: string;
-  icon: React.ReactNode;
-  badge: string;
-}
-
-interface ScriptPipeline {
-  id: 'master' | 'captura' | 'cumplimiento';
-  title: string;
-  subtitle: string;
-  sheetUrl: string;
-  webAppUrl: string;
-  sheetName: string;
-  description: string;
-  actions: ScriptAction[];
-}
-
-// URLs actualizadas de los Web Apps
-const WEBAPP_URLS = {
-  master: 'https://script.google.com/macros/s/AKfycbzsG72xt9ttRtFB-BzvVkKuVK5WyqVFI6a8S_DzFuGub1EYrDBmaPGex2kp7GQk_d8fgw/exec',
-  captura: 'https://script.google.com/macros/s/AKfycbzsG72xt9ttRtFB-BzvVkKuVK5WyqVFI6a8S_DzFuGub1EYrDBmaPGex2kp7GQk_d8fgw/exec',
-  cumplimiento: 'https://script.google.com/macros/s/AKfycbzsG72xt9ttRtFB-BzvVkKuVK5WyqVFI6a8S_DzFuGub1EYrDBmaPGex2kp7GQk_d8fgw/exec'
-};
-
-const PIPELINES: Record<'master' | 'captura' | 'cumplimiento', ScriptPipeline> = {
-  master: {
-    id: 'master',
-    title: 'Consolidado General ASIC (Canal 1)',
-    subtitle: 'Dirección Estadal de Salud',
-    sheetUrl: 'https://docs.google.com/spreadsheets/d/1iu3UpCktHPDhUJOVWhwL0-zCZ523aJelWIPgHaLE-20/edit?usp=sharing',
-    webAppUrl: WEBAPP_URLS.master,
-    sheetName: 'Miranda Salud - Compilado General',
-    description: 'Consolida reportes de los 5 ejes territoriales sanitarios de Miranda para compilar la base histórica master.',
-    actions: [
-      {
-        id: 'verificarSemana',
-        name: 'Verificar Semana actual',
-        description: 'Analiza los datos de la semana pasada en las hojas ASIC y calcula qué ejes tienen reportes listos.',
-        category: 'Semanales',
-        color: 'border-blue-500/30 text-blue-600 bg-blue-500/5 hover:bg-blue-500/10',
-        icon: <Search size={18} className="text-blue-500" />,
-        badge: 'Análisis'
-      },
-      {
-        id: 'respaldarSinEliminar',
-        name: 'Respaldar (Mantener Origen)',
-        description: 'Copia los datos de la semana pasada en el libro consolidado ("Compilado") sin borrar los originales de las ASIC.',
-        category: 'Semanales',
-        color: 'border-emerald-500/30 text-emerald-600 bg-emerald-500/5 hover:bg-emerald-500/10',
-        icon: <Layers size={18} className="text-emerald-500" />,
-        badge: 'Seguro'
-      },
-      {
-        id: 'respaldarYEliminarSemana',
-        name: 'Respaldar y Purgar',
-        description: 'Copia los datos de la semana pasada en el libro consolidado ("Compilado") y purga los datos originales de las ASIC.',
-        category: 'Semanales',
-        color: 'border-rose-500/30 text-rose-600 bg-rose-500/5 hover:bg-rose-500/10',
-        icon: <Trash2 size={18} className="text-rose-500" />,
-        badge: 'Purga'
-      },
-      {
-        id: 'actualizarResumenPorEjes',
-        name: 'Actualizar Resumen de Ejes',
-        description: 'Recalcula las estadísticas de filas consolidadas agrupadas por eje territorial en la pestaña de Resumen.',
-        category: 'Mantenimiento',
-        color: 'border-indigo-500/30 text-indigo-600 bg-indigo-500/5 hover:bg-indigo-500/10',
-        icon: <Database size={18} className="text-indigo-500" />,
-        badge: 'Cálculo'
-      },
-      {
-        id: 'limpiarDuplicadosCompilada',
-        name: 'Eliminar Duplicados',
-        description: 'Escanea la pestaña "Compilado" y quita cualquier fila duplicada idéntica para limpiar la base de datos.',
-        category: 'Mantenimiento',
-        color: 'border-amber-500/30 text-amber-600 bg-amber-500/5 hover:bg-amber-500/10',
-        icon: <Wrench size={18} className="text-amber-500" />,
-        badge: 'Limpieza'
-      },
-      {
-        id: 'migrarCompiladoConEje',
-        name: 'Reconstrucción de Ejes',
-        description: 'Migra y reconstruye la pestaña consolidada "Compilado" forzando la columna indexada como primer elemento.',
-        category: 'Mantenimiento',
-        color: 'border-sky-500/30 text-sky-600 bg-slate-500/5 hover:bg-sky-500/10',
-        icon: <ArrowRightLeft size={18} className="text-sky-500" />,
-        badge: 'Migrar'
-      },
-      {
-        id: 'crearTriggerAutomatico',
-        name: 'Configurar Cron Semanal',
-        description: 'Instala un disparador automático continuo en Google Apps Script para respaldar y purgar cada jueves a las 23:50.',
-        category: 'Configuración',
-        color: 'border-teal-500/30 text-teal-600 bg-teal-500/5 hover:bg-teal-500/10',
-        icon: <Clock size={18} className="text-teal-500" />,
-        badge: 'Trigger'
-      },
-      {
-        id: 'crearTriggersCada3Horas',
-        name: 'Configurar Cron 3 Horas',
-        description: 'Instala disparador automático para actualizar reportes (Resumen_ASIC y Semaforo) en el Dashboard cada 3 horas.',
-        category: 'Configuración',
-        color: 'border-purple-500/30 text-purple-600 bg-purple-500/5 hover:bg-purple-500/10',
-        icon: <Zap size={18} className="text-purple-500" />,
-        badge: 'Trigger 3h'
-      },
-      {
-        id: 'crearTodosLosTriggers',
-        name: 'Configurar TODOS los Triggers',
-        description: 'Instala todos los disparadores: semanal (jueves 23:50) y cada 3 horas para reportes del Dashboard.',
-        category: 'Configuración',
-        color: 'border-indigo-600/30 text-indigo-600 bg-indigo-500/5 hover:bg-indigo-500/10',
-        icon: <Shield size={18} className="text-indigo-600" />,
-        badge: 'Full Setup'
-      },
-      {
-        id: 'eliminarTodosLosTriggers',
-        name: 'Eliminar TODOS Triggers',
-        description: 'Elimina todos los disparadores automáticos del proyecto (semanal y cada 3 horas).',
-        category: 'Configuración',
-        color: 'border-red-500/30 text-red-600 bg-red-500/5 hover:bg-red-500/10',
-        icon: <Trash2 size={18} className="text-red-500" />,
-        badge: 'Limpiar'
-      },
-      {
-        id: 'verTriggersActivos',
-        name: 'Ver Triggers Activos',
-        description: 'Muestra la lista de todos los disparadores automáticos actualmente instalados en el proyecto.',
-        category: 'Configuración',
-        color: 'border-slate-500/30 text-slate-600 bg-slate-500/5 hover:bg-slate-500/10',
-        icon: <Clock size={18} className="text-slate-500" />,
-        badge: 'Listar'
-      },
-      {
-        id: 'resetearCompilado',
-        name: 'Reiniciar Compilado',
-        description: 'Purga todos los datos acumulados en la pestaña "Compilado" y restablece la estructura original con sus cabeceras.',
-        category: 'Configuración',
-        color: 'border-red-500/30 text-red-600 bg-red-500/5 hover:bg-red-500/10',
-        icon: <FileText size={18} className="text-red-500" />,
-        badge: 'Formatear'
-      },
-      {
-        id: 'diagnosticarCompleto',
-        name: 'Diagnóstico en Nube',
-        description: 'Abre en tiempo real cada libro de Eje Territorial verificando hojas "ASIC", columnas, y el estado de la conexión en red.',
-        category: 'Configuración',
-        color: 'border-slate-500/30 text-slate-700 bg-slate-500/5 hover:bg-slate-500/10',
-        icon: <Terminal size={18} className="text-slate-600" />,
-        badge: 'Detalles'
-      },
-      {
-        id: 'diagnosticarResumenASIC',
-        name: 'Diagnosticar Resumen_ASIC',
-        description: 'Verifica qué ejes tienen la pestaña "Resumen_ASIC" y cuántos datos contienen.',
-        category: 'Diagnóstico',
-        color: 'border-cyan-500/30 text-cyan-600 bg-cyan-500/5 hover:bg-cyan-500/10',
-        icon: <Search size={18} className="text-cyan-500" />,
-        badge: 'ASIC'
-      },
-      {
-        id: 'diagnosticarSemaforo',
-        name: 'Diagnosticar Semaforo',
-        description: 'Verifica qué ejes tienen la pestaña "Semaforo" y cuántos datos contienen.',
-        category: 'Diagnóstico',
-        color: 'border-cyan-500/30 text-cyan-600 bg-cyan-500/5 hover:bg-cyan-500/10',
-        icon: <Search size={18} className="text-cyan-500" />,
-        badge: 'Semáforo'
-      }
-    ]
-  },
-  captura: {
-    id: 'captura',
-    title: 'Planilla de Carga de Registros (Canal 2)',
-    subtitle: 'Capturas Epidemiológicas Específicas',
-    sheetUrl: 'https://docs.google.com/spreadsheets/d/1zw04RoFnPvxF3P147dRjbg01gfySKJGNn4QUVbcSfig/edit?usp=sharing',
-    webAppUrl: WEBAPP_URLS.captura,
-    sheetName: 'Planilla de Carga de Registros',
-    description: 'Registra, valida y actualiza la hoja de cálculo específica de control para variables dinámicas locales.',
-    actions: [
-      {
-        id: 'procesarYReportarResumenASIC',
-        name: 'Procesar Resumen_ASIC → Dashboard',
-        description: 'Consolida todas las pestañas "Resumen_ASIC" de los 5 ejes en el Dashboard de Salud Miranda.',
-        category: 'Reportes',
-        color: 'border-emerald-500/30 text-emerald-600 bg-emerald-500/5 hover:bg-emerald-500/10',
-        icon: <FileSpreadsheet size={18} className="text-emerald-500" />,
-        badge: 'Dashboard'
-      },
-      {
-        id: 'procesarYReportarSemaforo',
-        name: 'Procesar Semaforo → Dashboard',
-        description: 'Consolida todas las pestañas "Semaforo" de los 5 ejes en el Dashboard de Salud Miranda.',
-        category: 'Reportes',
-        color: 'border-emerald-500/30 text-emerald-600 bg-emerald-500/5 hover:bg-emerald-500/10',
-        icon: <FileSpreadsheet size={18} className="text-emerald-500" />,
-        badge: 'Dashboard'
-      },
-      {
-        id: 'procesarAmbosReportes',
-        name: 'Procesar AMBOS Reportes',
-        description: 'Ejecuta la consolidación de Resumen_ASIC y Semaforo en un solo paso.',
-        category: 'Reportes',
-        color: 'border-purple-500/30 text-purple-600 bg-purple-500/5 hover:bg-purple-500/10',
-        icon: <TrendingUp size={18} className="text-purple-500" />,
-        badge: 'Full'
-      },
-      {
-        id: 'llenarDatosSheet',
-        name: 'Sincronizar y Cargar Datos',
-        description: 'Envía peticiones para poblar y rellenar automáticamente la planilla de carga general.',
-        category: 'Planilla de Carga',
-        color: 'border-blue-500/30 text-blue-600 bg-blue-500/5 hover:bg-blue-500/10',
-        icon: <Database size={18} className="text-blue-500" />,
-        badge: 'Cargar'
-      },
-      {
-        id: 'verificarLlenado',
-        name: 'Diagnosticar Formato Carga',
-        description: 'Examina columnas, celdas y el formato general de la hoja de cálculo de carga específica.',
-        category: 'Integridad',
-        color: 'border-cyan-500/30 text-cyan-600 bg-cyan-500/5 hover:bg-cyan-500/10',
-        icon: <Search size={18} className="text-cyan-500" />,
-        badge: 'Análisis'
-      },
-      {
-        id: 'limpiarPlanilla',
-        name: 'Reiniciar Planilla de Captura',
-        description: 'Limpia la base temporal o de pruebas en la hoja de carga si es necesario inicializar el formato maestro.',
-        category: 'Mantenimiento',
-        color: 'border-rose-500/30 text-rose-600 bg-rose-500/5 hover:bg-rose-500/10',
-        icon: <Trash2 size={18} className="text-rose-500" />,
-        badge: 'Inicializar'
-      }
-    ]
-  },
-  cumplimiento: {
-    id: 'cumplimiento',
-    title: 'Monitoreo de Cumplimiento (Canal 3)',
-    subtitle: 'Dirección de Salud - Estado Miranda',
-    sheetUrl: 'https://docs.google.com/spreadsheets/d/1zw04RoFnPvxF3P147dRjbg01gfySKJGNn4QUVbcSfig/edit?usp=sharing',
-    webAppUrl: WEBAPP_URLS.cumplimiento,
-    sheetName: 'Planilla para Administración de Cumplimientos',
-    description: 'Control de tránsito bi-direccional hacia Supabase. Peina horario las hojas ASIC de los 5 libros territoriales para calcular el semáforo y retrasos de reportes.',
-    actions: [
-      {
-        id: 'actualizarReportesCada3Horas',
-        name: 'Actualizar Reportes (Ahora)',
-        description: 'Ejecuta manualmente la actualización de Resumen_ASIC y Semaforo en el Dashboard.',
-        category: 'Reportes',
-        color: 'border-cyan-500/30 text-cyan-600 bg-cyan-500/5 hover:bg-cyan-500/10',
-        icon: <RefreshCw size={18} className="text-cyan-500" />,
-        badge: 'Manual'
-      },
-      {
-        id: 'peinarYActualizarSupabase',
-        name: 'Peinar y Actualizar Supabase',
-        description: 'Escanea en tiempo real los 5 libros de ejes territoriales de Miranda, procesa las hojas por ASIC y actualiza los indicadores en Supabase.',
-        category: 'Cumplimientos',
-        color: 'border-emerald-500/30 text-emerald-600 bg-emerald-500/5 hover:bg-emerald-500/10',
-        icon: <RefreshCw size={18} className="text-emerald-500" />,
-        badge: 'Escaneo'
-      },
-      {
-        id: 'ejecutarReinicioSemanal',
-        name: 'Limpieza e Inicialización Semanal',
-        description: 'Reestablece el estado del semáforo colectivo a Rojo e inicializa el cron de retrasos acumulados para el nuevo ciclo de reporte.',
-        category: 'Inicios Semanales',
-        color: 'border-purple-500/30 text-purple-600 bg-purple-500/5 hover:bg-purple-500/10',
-        icon: <Clock size={18} className="text-purple-500" />,
-        badge: 'Purga'
-      }
-    ]
-  }
-};
 
 interface WorkspaceManagerProps {
   onRegisterTriggerHandler?: (handler: () => void) => void;
 }
 
 export const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ onRegisterTriggerHandler }) => {
-  const [user, setUser] = useState<any>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [files, setFiles] = useState<GoogleDriveFile[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeManagerTab, setActiveManagerTab] = useState<'files' | 'sync'>('sync');
-  const [selectedPipeline, setSelectedPipeline] = useState<'master' | 'captura' | 'cumplimiento'>('master');
+  const [webAppUrl, setWebAppUrl] = useState<string>(() => {
+    return localStorage.getItem('miranda_apps_script_url') || 
+      'https://script.google.com/macros/s/AKfycbzsG72xt9ttRtFB-BzvVkKuVK5WyqVFI6a8S_DzFuGub1EYrDBmaPGex2kp7GQk_d8fgw/exec';
+  });
 
-  // Apps Script states
+  const [savingUrl, setSavingUrl] = useState(false);
   const [runningAction, setRunningAction] = useState<string | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [appsScriptStatus, setAppsScriptStatus] = useState<any>(null);
   const [consoleLogs, setConsoleLogs] = useState<string[]>([
-    `[SISTEMA] Consola integrada lista • Fecha actual de auditoría: ${new Date().toLocaleDateString('es-VE')}`,
-    `[INFO] Servidor conectado al canal Apps Script de Miranda Salud.`,
-    `[CARGO] Libro maestro indexado de forma segura.`
+    `[SISTEMA] Gestor de Sincronización v8.0.0 enlazado y listo.`,
+    `[INFO] Conexión establecida con las hojas maestras de Miranda Salud.`
   ]);
   const consoleEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // Escuchar cambios de autenticación
-    const unsubscribe = initAuth(
-      (u, token) => {
-        setUser(u);
-        setAccessToken(token);
-        loadFiles(token);
-      },
-      () => {
-        setUser(null);
-        setAccessToken(null);
-      }
-    );
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (onRegisterTriggerHandler) {
-      onRegisterTriggerHandler(() => {
-        runScriptAction('crearTriggersCada3Horas', 'Configurar Cron 3 Horas');
-      });
-    }
-  }, [onRegisterTriggerHandler, selectedPipeline, runningAction, user]);
 
   useEffect(() => {
     if (consoleEndRef.current) {
@@ -367,38 +43,19 @@ export const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ onRegisterTr
     }
   }, [consoleLogs]);
 
-  const loadFiles = async (token: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const driveFiles = await googleWorkspaceService.listFilesFromFolder(token, FOLDER_ID);
-      setFiles(driveFiles);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    // Intentar consultar el estado en segundo plano al montar
+    consultarEstadoBackground();
+  }, [webAppUrl]);
 
-  const handleLogin = async () => {
-    try {
-      const result = await googleSignIn();
-      if (result) {
-        setUser(result.user);
-        setAccessToken(result.accessToken);
-        loadFiles(result.accessToken);
-      }
-    } catch (err: any) {
-      setError(err.message);
+  // Exponer manejador externo si se solicita
+  useEffect(() => {
+    if (onRegisterTriggerHandler) {
+      onRegisterTriggerHandler(() => {
+        ejecutarAccionWeb('sincronizar', 'Sincronizar Todo (Apps Script)');
+      });
     }
-  };
-
-  const handleLogout = async () => {
-    await logout();
-    setUser(null);
-    setAccessToken(null);
-    setFiles([]);
-  };
+  }, [onRegisterTriggerHandler, webAppUrl]);
 
   const addLog = (text: string) => {
     const time = new Date().toLocaleTimeString('es-VE');
@@ -415,511 +72,635 @@ export const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ onRegisterTr
     addLog(`📋 Historial de registros copiado al portapapeles.`);
   };
 
-  const runScriptAction = async (actionId: string, actionName: string) => {
-  if (runningAction) return;
-  setRunningAction(actionId);
-  setError(null);
+  const guardarNuevaUrl = (url: string) => {
+    localStorage.setItem('miranda_apps_script_url', url);
+    setWebAppUrl(url);
+    addLog(`⚙️ Dirección de Web App de Apps Script actualizada a: ${url.substring(0, 50)}...`);
+    setSavingUrl(true);
+    setTimeout(() => setSavingUrl(false), 800);
+  };
 
-  const activePipelineUrl = PIPELINES[selectedPipeline].webAppUrl;
-  addLog(`⚡ Solicitando ejecución: "${actionName}" (ID: ${actionId})...`);
-  addLog(`📡 Canalizando túnel hacia Apps Script: ${activePipelineUrl.substring(0, 45)}...`);
+  const consultarEstadoBackground = async () => {
+    if (!webAppUrl || webAppUrl.trim() === '') return;
+    try {
+      const response = await fetch('/api/run-script', {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: 'estado', scriptUrl: webAppUrl })
+      });
+      if (response.ok) {
+        const result = await response.json();
+        const actualData = result.data || result;
+        if (actualData && actualData.status === 'ok') {
+          setAppsScriptStatus(actualData);
+        }
+      }
+    } catch (e) {}
+  };
 
-  try {
-    // Canalizar la petición a través del proxy seguro de nuestro servidor Express para evitar bloqueos CORS del navegador
-    const response = await fetch('/api/run-script', {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        action: actionId,
-        scriptUrl: activePipelineUrl
-      })
-    });
+  const ejecutarAccionWeb = async (actionId: string, actionName: string) => {
+    if (runningAction) return;
+    setRunningAction(actionId);
+    addLog(`⚡ Solicitando ejecución: "${actionName}" (action=${actionId})...`);
+    addLog(`📡 Enviando túnel hacia Apps Script de Miranda Salud...`);
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    try {
+      const response = await fetch('/api/run-script', {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: actionId,
+          scriptUrl: webAppUrl
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      const actualData = result.data || result;
+      
+      addLog(`🟢 Macro ejecutada con éxito por Apps Script.`);
+
+      if (actualData && typeof actualData === 'object') {
+        if (actualData.status === 'success') {
+          addLog(`🎉 [Sincronización v8.0.0 Exitosa]`);
+          addLog(`📈 Se procesaron y subieron ${actualData.data?.totalCentros || 0} centros únicos.`);
+          addLog(`🏢 Se cargaron ${actualData.data?.totalASICs || 0} ASICs a Supabase.`);
+          addLog(`💬 Mensaje de Apps Script: ${actualData.message || 'Completado'}`);
+        } else {
+          addLog(`[Apps Script] ${JSON.stringify(actualData, null, 2)}`);
+        }
+      } else {
+        addLog(`[Apps Script] ${actualData}`);
+      }
+
+      // Volver a consultar estado para refrescar
+      await consultarEstadoBackground();
+    } catch (err: any) {
+      console.error(err);
+      addLog(`❌ Error del Web App en Apps Script: ${err.message}`);
+      addLog(`⚠️ Asegúrese de haber desplegado su Apps Script como "Aplicación Web", configurado con acceso para "Cualquier persona" (Anyone), y copiado la URL correcta.`);
+    } finally {
+      setRunningAction(null);
     }
+  };
 
-    const result = await response.json();
-    const actualData = result.data || result;
-    
-    addLog(`🟢 Macro ejecutada con éxito.`);
-    
-    // Manejar respuestas específicas según la acción
-    if (actionId === 'crearTriggersCada3Horas') {
-      addLog(`⏰ [DISPARADOR] Configuración del cron de 3 horas completada.`);
-    } else if (actionId === 'procesarYReportarResumenASIC') {
-      addLog(`📊 [DASHBOARD] Resumen ASIC consolidado exitosamente.`);
-    } else if (actionId === 'procesarYReportarSemaforo') {
-      addLog(`🚦 [DASHBOARD] Datos de semáforo actualizados.`);
-    } else if (actionId === 'procesarAmbosReportes') {
-      addLog(`🔄 [DASHBOARD] Ambos reportes (ASIC + Semáforo) procesados.`);
-    }
-    
-    if (actualData && actualData.message) {
-      addLog(`[Apps Script] ${actualData.message}`);
-    } else if (actualData && typeof actualData === 'object') {
-      addLog(`[Apps Script Response] ${JSON.stringify(actualData, null, 2)}`);
-    }
-    
-  } catch (err: any) {
-    console.error(err);
-    addLog(`❌ Error al ejecutar "${actionName}": ${err.message}`);
-    setError(`Error: ${err.message}`);
-  } finally {
-    setRunningAction(null);
-  }
+  const APPS_SCRIPT_V8_CODE = `/**
+ * MIRANDA SALUD - CON ELIMINACIÓN DE DUPLICADOS + TRIGGER HORARIO
+ * Versión: 8.0.0
+ */
+
+const EJES_CONFIG = {
+  ALTOS_MIRANDINOS: { id: '1amIenrqhZ5yGFnV_qSEklDUkBF-obLeC3U234KxZC18', name: 'ALTOS MIRANDINOS' },
+  VALLES_DEL_TUY: { id: '1bFBoYIWGtplX37QypiyUerMIDl_g-MeBNnCKZifZvp0', name: 'VALLES DEL TUY' },
+  GUARENAS_GUATIRE: { id: '1DV2rbO771sC5pcKUUf_kr9Ej4VtkF6Oo9uL8oJHSXGQ', name: 'GUARENAS-GUATIRE' },
+  BARLOVENTO: { id: '1mwA2Z1ncghe4-w46BkEwbUC8Bdn_7uAWMaUND-3TB3w', name: 'BARLOVENTO' },
+  METROPOLITANO: { id: '1n9eFrM_CvbrP_b7uxIEb2Qm42u6X9byrRugIed_ehO0', name: 'METROPOLITANO' }
 };
 
-  const filteredFiles = files.filter(f => 
-    f.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+// ⚠️ ACTUALIZA CON EL ID CORRECTO ⚠️
+const DASHBOARD_ID = '1zw04RoFnPvxF3P147dRjbg01gfySKJGNn4QUVbcSfig';
+
+const SUPABASE_URL = 'https://tzmhagwihumwiprsnyid.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR6bWhhZ3dpaHVtd2lwcnNueWlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5NjU2NDUsImV4cCI6MjA5NDU0MTY0NX0.ofDFZn5JpOrDktK4YSnUk-Qsd2V5Eil1Nl-xf84rr78';
+
+const COL = { ASIC: 0, CENTRO: 1, STATUS: 2, PORCENTAJE: 13, ULTIMO_REPORTE: 14 };
+
+// ============================================
+// FUNCIÓN PRINCIPAL - SINCRONIZAR
+// ============================================
+
+function sincronizarTodo() {
+  console.log('🚀 SINCRONIZANDO SEMAFORO...');
+  console.log(\`⏰ \${new Date().toLocaleString()}\`);
+  
+  const todosLosCentros = [];
+  const resumenPorASIC = {};
+  
+  // ==========================================
+  // 1. LEER DATOS
+  // ==========================================
+  
+  for (const [key, config] of Object.entries(EJES_CONFIG)) {
+    try {
+      console.log(\`\\n📊 \${config.name}\`);
+      const spreadsheet = SpreadsheetApp.openById(config.id);
+      const sheet = spreadsheet.getSheetByName('Semaforo');
+      
+      if (!sheet) {
+        console.log(\`   ⚠️ No hay hoja Semaforo\`);
+        continue;
+      }
+      
+      const data = sheet.getDataRange().getValues();
+      console.log(\`   📄 Filas: \${data.length - 1} centros\`);
+      
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const nombreCentro = row[COL.CENTRO];
+        if (!nombreCentro || nombreCentro.toString().trim() === '') continue;
+        
+        const asic = row[COL.ASIC] ? row[COL.ASIC].toString().trim() : config.name;
+        let porcentaje = row[COL.PORCENTAJE];
+        
+        let porcentajeNum = 0;
+        if (porcentaje && !isNaN(parseFloat(porcentaje))) {
+          porcentajeNum = Math.round(parseFloat(porcentaje) * 100);
+        } else if (porcentaje && typeof porcentaje === 'number') {
+          porcentajeNum = Math.round(porcentaje);
+        }
+        
+        let estado = 'Rojo';
+        if (porcentajeNum >= 80) estado = 'Verde';
+        else if (porcentajeNum >= 50) estado = 'Amarillo';
+        
+        let ultimoReporte = new Date();
+        const fechaTexto = row[COL.ULTIMO_REPORTE];
+        if (fechaTexto && fechaTexto !== '#N/A' && fechaTexto !== '') {
+          try {
+            if (typeof fechaTexto === 'string' && !isNaN(Date.parse(fechaTexto))) {
+              ultimoReporte = new Date(fechaTexto);
+            }
+          } catch(e) {}
+        }
+        
+        // ID único por centro + ASIC + eje
+        const idUnico = \`\${config.name}_\${asic}_\${nombreCentro}\`.replace(/\\s/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+        
+        const centro = {
+          id_centro: idUnico,
+          nombre_centro: nombreCentro.toString().trim(),
+          asic: asic,
+          eje_geografico: config.name,
+          ultimo_reporte: ultimoReporte.toISOString(),
+          estado_semaforo: estado,
+          horas_retraso: porcentajeNum === 100 ? 0 : Math.round((100 - porcentajeNum) / 100 * 168),
+          actualizado_en: new Date().toISOString()
+        };
+        
+        // Evitar duplicados en la misma ejecución (por si hay filas repetidas)
+        const existe = todosLosCentros.some(c => c.id_centro === idUnico);
+        if (!existe) {
+          todosLosCentros.push(centro);
+        }
+        
+        if (!resumenPorASIC[asic]) {
+          resumenPorASIC[asic] = { asic: asic, eje: config.name, total: 0, sumaPorcentajes: 0 };
+        }
+        resumenPorASIC[asic].total++;
+        resumenPorASIC[asic].sumaPorcentajes += porcentajeNum;
+      }
+      
+      console.log(\`   ✅ \${data.length - 1} centros leídos\`);
+      
+    } catch (error) {
+      console.log(\`   ❌ Error: \${error.message}\`);
+    }
+  }
+  
+  console.log(\`\\n📊 TOTAL CENTROS ÚNICOS: \${todosLosCentros.length}\`);
+  
+  if (todosLosCentros.length === 0) {
+    console.log('⚠️ No hay datos');
+    return { status: 'warning', message: 'No hay datos' };
+  }
+  
+  // ==========================================
+  // 2. CALCULAR RESUMEN
+  // ==========================================
+  
+  const resumenFinal = Object.values(resumenPorASIC).map(a => ({
+    asic: a.asic,
+    eje: a.eje,
+    total_centros: a.total,
+    porcentaje_reporte: Math.round(a.sumaPorcentajes / a.total),
+    centros_reportaron: Math.round((a.sumaPorcentajes / a.total) * a.total / 100),
+    actualizado_en: new Date().toISOString()
+  }));
+  
+  console.log(\`📊 TOTAL ASICs: \${resumenFinal.length}\`);
+  
+  // ==========================================
+  // 3. GUARDAR EN DASHBOARD (SIN DUPLICADOS)
+  // ==========================================
+  
+  try {
+    const dashboard = SpreadsheetApp.openById(DASHBOARD_ID);
+    console.log(\`\\n📝 Guardando en Dashboard...\`);
+    
+    // Guardar transito_reportes (limpia toda la hoja primero)
+    let sheet = dashboard.getSheetByName('transito_reportes');
+    if (sheet) dashboard.deleteSheet(sheet);
+    sheet = dashboard.insertSheet('transito_reportes');
+    
+    const headers = ['id_centro', 'nombre_centro', 'asic', 'eje_geografico', 'ultimo_reporte', 'estado_semaforo', 'horas_retraso', 'actualizado_en'];
+    const datos = [headers];
+    todosLosCentros.forEach(c => datos.push([c.id_centro, c.nombre_centro, c.asic, c.eje_geografico, c.ultimo_reporte, c.estado_semaforo, c.horas_retraso, c.actualizado_en]));
+    sheet.getRange(1, 1, datos.length, headers.length).setValues(datos);
+    console.log(\`   ✅ transito_reportes: \${todosLosCentros.length} registros (sin duplicados)\`);
+    
+    // Guardar resumen_asic
+    sheet = dashboard.getSheetByName('resumen_asic');
+    if (sheet) dashboard.deleteSheet(sheet);
+    sheet = dashboard.insertSheet('resumen_asic');
+    
+    const headers2 = ['asic', 'eje', 'total_centros', 'centros_reportaron', 'porcentaje_reporte', 'actualizado_en'];
+    const datos2 = [headers2];
+    resumenFinal.forEach(r => datos2.push([r.asic, r.eje, r.total_centros, r.centros_reportaron, r.porcentaje_reporte, r.actualizado_en]));
+    sheet.getRange(1, 1, datos2.length, headers2.length).setValues(datos2);
+    console.log(\`   ✅ resumen_asic: \${resumenFinal.length} ASICs\`);
+    
+  } catch (error) {
+    console.log(\`   ❌ Error Dashboard: \${error.message}\`);
+  }
+  
+  // ==========================================
+  // 4. ENVIAR A SUPABASE (CON UPSERT)
+  // ==========================================
+  
+  console.log(\`\\n☁️ Enviando a Supabase (eliminando duplicados)...\`);
+  
+  // Limpiar tablas completamente antes de insertar
+  try {
+    UrlFetchApp.fetch(SUPABASE_URL + '/rest/v1/transito_reportes?select=id_centro', {
+      method: 'DELETE',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
+      muteHttpExceptions: true
+    });
+    console.log(\`   🗑️ transito_reportes limpiada\`);
+  } catch(e) {}
+  
+  try {
+    UrlFetchApp.fetch(SUPABASE_URL + '/rest/v1/resumen_asic?select=asic', {
+      method: 'DELETE',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
+      muteHttpExceptions: true
+    });
+    console.log(\`   🗑️ resumen_asic limpiada\`);
+  } catch(e) {}
+  
+  // Insertar nuevos datos
+  let insertadosCentros = 0;
+  for (let i = 0; i < todosLosCentros.length; i++) {
+    try {
+      const res = UrlFetchApp.fetch(SUPABASE_URL + '/rest/v1/transito_reportes', {
+        method: 'POST', contentType: 'application/json',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
+        payload: JSON.stringify(todosLosCentros[i]),
+        muteHttpExceptions: true
+      });
+      if (res.getResponseCode() === 201 || res.getResponseCode() === 200) insertadosCentros++;
+    } catch(e) {}
+  }
+  console.log(\`   ✅ transito_reportes: \sind_centros_count/\${todosLosCentros.length} -> \${insertadosCentros}/\${todosLosCentros.length}\`);
+  
+  let insertadosResumen = 0;
+  for (let i = 0; i < resumenFinal.length; i++) {
+    try {
+      const res = UrlFetchApp.fetch(SUPABASE_URL + '/rest/v1/resumen_asic', {
+        method: 'POST', contentType: 'application/json',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
+        payload: JSON.stringify(resumenFinal[i]),
+        muteHttpExceptions: true
+      });
+      if (res.getResponseCode() === 201 || res.getResponseCode() === 200) insertadosResumen++;
+    } catch(e) {}
+  }
+  console.log(\`   ✅ resumen_asic: \${insertadosResumen}/\${resumenFinal.length}\`);
+  
+  // ==========================================
+  // 5. FINAL
+  // ==========================================
+  
+  console.log(\`\\n🎉 SINCRONIZACIÓN COMPLETADA!\`);
+  console.log(\`   ⏰ \${new Date().toLocaleString()}\`);
+  console.log(\`   Centros únicos: \${todosLosCentros.length}\`);
+  console.log(\`   ASICs procesados: \${resumenFinal.length}\`);
+  
+  return {
+    status: 'success',
+    timestamp: new Date().toISOString(),
+    message: \`\${todosLosCentros.length} centros, \${resumenFinal.length} ASICs\`,
+    data: { totalCentros: todosLosCentros.length, totalASICs: resumenFinal.length }
+  };
+}
+
+// ============================================
+// CONFIGURAR TRIGGER CADA HORA
+// ============================================
+
+function configurarTriggerHorario() {
+  // Eliminar triggers existentes
+  const triggers = ScriptApp.getProjectTriggers();
+  for (let i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'sincronizarTodo') {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+  
+  // Crear nuevo trigger cada hora
+  ScriptApp.newTrigger('sincronizarTodo')
+    .timeBased()
+    .everyHours(1)
+    .create();
+  
+  console.log('✅ Trigger cada hora configurado correctamente');
+  console.log('   La función sincronizarTodo() se ejecutará automáticamente cada hora');
+}
+
+// ============================================
+// ELIMINAR TRIGGER
+// ============================================
+
+function eliminarTriggerHorario() {
+  const triggers = ScriptApp.getProjectTriggers();
+  let eliminados = 0;
+  
+  for (let i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'sincronizarTodo') {
+      ScriptApp.deleteTrigger(triggers[i]);
+      eliminados++;
+    }
+  }
+  
+  console.log(\`🗑️ \${eliminados} triggers eliminados\`);
+}
+
+// ============================================
+// VER TRIGGERS ACTIVOS
+// ============================================
+
+function verTriggers() {
+  const triggers = ScriptApp.getProjectTriggers();
+  console.log(\`📋 Triggers activos (\${triggers.length}):\`);
+  for (let i = 0; i < triggers.length; i++) {
+    console.log(\`   - \${triggers[i].getHandlerFunction()} | Tipo: \${triggers[i].getEventType()}\`);
+  }
+}
+
+// ============================================
+// RESPUESTA WEB
+// ============================================
+
+function doGet(e) {
+  const action = e?.parameter?.action || '';
+  
+  if (action === 'sincronizar') {
+    const resultado = sincronizarTodo();
+    return ContentService.createTextOutput(JSON.stringify(resultado)).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  if (action === 'estado') {
+    const triggers = ScriptApp.getProjectTriggers();
+    const triggerActivo = triggers.some(t => t.getHandlerFunction() === 'sincronizarTodo');
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'ok',
+      trigger_activo: triggerActivo,
+      proxima_ejecucion: triggerActivo ? 'Cada hora' : 'No configurado',
+      ultima_sincronizacion: PropertiesService.getScriptProperties().getProperty('ultima_sincronizacion') || 'Nunca'
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({
+    status: 'ready',
+    acciones: ['?action=sincronizar', '?action=estado'],
+    configurar_trigger: 'Ejecuta la función configurarTriggerHorario() en Apps Script'
+  })).setMimeType(ContentService.MimeType.JSON);
+}`;
+
+  const copiarCodigoAlPortapapeles = () => {
+    navigator.clipboard.writeText(APPS_SCRIPT_V8_CODE);
+    setCopiedCode(true);
+    addLog("📋 Código completo de Apps Script v8.0.0 copiado al portapapeles.");
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
 
   return (
-    <section className="bg-white p-6 sm:p-10 rounded-[2.5rem] shadow-xl border border-gray-100 mt-8 overflow-hidden">
+    <section className="bg-white p-6 sm:p-8 rounded-[2rem] shadow-sm border border-gray-100 mt-6 overflow-hidden">
       
       {/* HEADER PRINCIPAL */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 mb-10 pb-8 border-b border-gray-100">
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h3 className="text-2xl font-black text-gray-800 uppercase tracking-tight">
-              Gestor de Sincronización
-            </h3>
-            <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[9px] font-black uppercase tracking-widest border border-blue-100 flex items-center gap-1">
-              <ShieldCheck size={11} /> Nube Conectada
-            </span>
-          </div>
-          <p className="text-gray-400 text-xs font-semibold max-w-2xl leading-relaxed">
-            Consola administrativa para orquestar la copia, consolidación y mantenimiento de los reportes por ejes ASIC en el documento maestro de Miranda Salud.
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-6 border-b border-gray-100">
+        <div>
+          <h3 className="text-sm font-black text-gray-800 uppercase tracking-tight flex items-center gap-2">
+            Gestor de Sincronización Real v8.0.0
+          </h3>
+          <p className="text-gray-400 text-[10px] uppercase tracking-wider mt-1 font-semibold">
+            Orquestación y control del tránsito de reportes epidemiológicos hacia Supabase
           </p>
         </div>
 
-        {/* TABS DE TRABAJO */}
-        <div className="flex bg-gray-50 p-1 rounded-2xl border border-gray-200 shadow-inner w-full sm:w-auto self-stretch sm:self-auto shrink-0">
-          <button 
-            type="button"
-            onClick={() => setActiveManagerTab('sync')}
-            className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeManagerTab === 'sync' ? 'bg-white text-blue-600 shadow-md border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}
-          >
-            Sincronización Real
-          </button>
-          <button 
-            type="button"
-            onClick={() => {
-              if (!user) {
-                handleLogin();
-              } else {
-                setActiveManagerTab('files');
-              }
-            }}
-            className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeManagerTab === 'files' ? 'bg-white text-blue-600 shadow-md border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}
-          >
-            Archivos Drive
-          </button>
+        {/* ESTATUS DEL DISPARADOR */}
+        <div className="flex items-center gap-2">
+          {appsScriptStatus ? (
+            <div className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 ${
+              appsScriptStatus.trigger_activo 
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' 
+                : 'bg-amber-50 text-amber-700 border border-amber-100'
+            }`}>
+              <Clock size={11} className={appsScriptStatus.trigger_activo ? 'animate-pulse' : ''} />
+              Trigger Horario: {appsScriptStatus.trigger_activo ? 'Activo (1h)' : 'Sin Configurar'}
+            </div>
+          ) : (
+            <div className="px-2.5 py-1 bg-slate-50 text-slate-500 border border-slate-100 rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5">
+              <RefreshCw size={11} className="animate-spin" /> Escaneando estado...
+            </div>
+          )}
         </div>
       </div>
 
-      {error && (
-        <div className="mb-8 p-5 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-4 text-rose-600 text-xs font-bold animate-in fade-in slide-in-from-top-2">
-          <AlertCircle size={18} className="shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <span className="block text-rose-800 uppercase tracking-wider text-[10px] mb-1 font-black">Notificación de Retorno</span>
-            <span>{error}</span>
-          </div>
-        </div>
-      )}
-
-      {/* DETALLE SEGÚN TAB INTERACTIVA */}
-      <AnimatePresence mode="wait">
-        {activeManagerTab === 'sync' ? (
-          <motion.div
-            key="sync"
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
-            transition={{ duration: 0.2 }}
-            className="space-y-8"
+      {/* CONFIGURACIÓN DE URL DE DEPLOYMENT */}
+      <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 mb-6 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <label className="text-[10px] font-black text-[#0B3D5C] uppercase tracking-wider flex items-center gap-1.5">
+            <Settings size={13} /> Dirección Web de Apps Script (Deployment)
+          </label>
+          <a
+            href="https://script.google.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[9px] font-black text-slate-500 hover:text-[#0B3D5C] uppercase tracking-wider flex items-center gap-1"
           >
-            {/* SELECCIÓN DE CANAL DE SCRIPT / PLANILLA */}
-            <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-gray-100 shadow-sm">
-              <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                📡 SELECCIONE EL DISPARADOR Y LA HOJA META
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Master channel */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedPipeline('master');
-                    addLog('🔄 Cambiado a Canal 1: Sincronización ASIC y Consolidación Maestro.');
-                  }}
-                  className={`p-5 rounded-3xl border text-left transition-all flex items-start gap-4 ${
-                    selectedPipeline === 'master'
-                      ? 'bg-white border-[#0B3D5C] ring-2 ring-[#0B3D5C]/11 shadow-lg'
-                      : 'bg-white/40 border-gray-200/60 hover:bg-white hover:border-[#0B3D5C]'
-                  }`}
-                >
-                  <div className={`p-3 rounded-2xl ${selectedPipeline === 'master' ? 'bg-[#0B3D5C] text-white' : 'bg-slate-100 text-slate-500'}`}>
-                    <Layers size={20} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-[#0B3D5C] uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded-md">Canal 1</span>
-                      <h5 className="text-[11px] font-black text-slate-800 uppercase tracking-tight">Consolidado ASIC Principal</h5>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-1.5 font-medium leading-relaxed">
-                      Compila la base de datos histórica mediante reportes de los 5 ejes territoriales.
-                    </p>
-                  </div>
-                </button>
+            Abrir Apps Script Console <ExternalLink size={10} />
+          </a>
+        </div>
+        <div className="flex gap-2">
+          <input 
+            type="text" 
+            value={webAppUrl}
+            onChange={(e) => guardarNuevaUrl(e.target.value)}
+            placeholder="Pegue la URL terminada en /exec"
+            className="flex-1 px-4 py-2 bg-white border border-gray-200 rounded-xl text-[11px] font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#0B3D5C]/15 font-mono"
+          />
+          {savingUrl && (
+            <span className="px-3 bg-emerald-50 text-emerald-700 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center shrink-0 border border-emerald-100 animate-pulse">
+              Guardado
+            </span>
+          )}
+        </div>
+        <p className="text-[9px] text-gray-400 font-medium leading-relaxed uppercase tracking-wide">
+          💡 La dirección web se guarda automáticamente en los metadatos de su navegador local (LocalStorage). Esto evita tener que volver a ingresar la URL de despliegue.
+        </p>
+      </div>
 
-                {/* Capture channel */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedPipeline('captura');
-                    addLog('🔄 Cambiado a Canal 2: Planilla de Carga de Registros.');
-                  }}
-                  className={`p-5 rounded-3xl border text-left transition-all flex items-start gap-4 ${
-                    selectedPipeline === 'captura'
-                      ? 'bg-white border-emerald-600 ring-2 ring-emerald-500/11 shadow-lg'
-                      : 'bg-white/40 border-gray-200/60 hover:bg-white hover:border-emerald-500'
-                  }`}
-                >
-                  <div className={`p-3 rounded-2xl ${selectedPipeline === 'captura' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                    <FileSpreadsheet size={20} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider bg-emerald-50 px-2 py-0.5 rounded-md">Canal 2</span>
-                      <h5 className="text-[11px] font-black text-slate-800 uppercase tracking-tight">Planilla de Carga General</h5>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-1.5 font-medium leading-relaxed">
-                      Llena, formatea y procesa la planilla específica de captura de salud.
-                    </p>
-                  </div>
-                </button>
-
-                {/* Compliance channel (Canal 3) */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedPipeline('cumplimiento');
-                    addLog('🔄 Cambiado a Canal 3: Monitoreo de Cumplimiento (Supabase ⇆ Google Sheets).');
-                  }}
-                  className={`p-5 rounded-3xl border text-left transition-all flex items-start gap-4 ${
-                    selectedPipeline === 'cumplimiento'
-                      ? 'bg-white border-cyan-600 ring-2 ring-cyan-500/11 shadow-lg'
-                      : 'bg-white/40 border-gray-200/60 hover:bg-white hover:border-cyan-500'
-                  }`}
-                >
-                  <div className={`p-3 rounded-2xl ${selectedPipeline === 'cumplimiento' ? 'bg-cyan-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                    <RefreshCw size={20} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-cyan-700 uppercase tracking-wider bg-cyan-50 px-2 py-0.5 rounded-md">Canal 3</span>
-                      <h5 className="text-[11px] font-black text-slate-800 uppercase tracking-tight">Cumplimientos ASIC</h5>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-1.5 font-medium leading-relaxed">
-                      Control de tránsito de reportes epidemiológicos y semáforos bi-direccionales.
-                    </p>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* HERRAMIENTAS DIRECTAS */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-blue-50/50 border border-blue-100/60 p-6 rounded-3xl flex flex-col justify-between">
-                <div>
-                  <h4 className="text-[12px] font-black text-blue-900 uppercase tracking-widest mb-1.5">Documento de Google Sheets</h4>
-                  <p className="text-[10px] text-blue-700/80 leading-relaxed font-semibold">
-                    {PIPELINES[selectedPipeline].sheetName}
-                  </p>
-                </div>
-                <a 
-                  href={PIPELINES[selectedPipeline].sheetUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="mt-6 inline-flex items-center gap-2 text-xs font-black text-blue-600 hover:text-blue-700 uppercase tracking-wider bg-white px-4 py-2 rounded-xl shadow-sm border border-blue-100 w-fit transition-all hover:translate-y-[-1px]"
-                >
-                  Abrir spreadsheet <ExternalLink size={12} />
-                </a>
-              </div>
-
-              <div className="bg-emerald-50/50 border border-emerald-100/60 p-6 rounded-3xl flex flex-col justify-between">
-                <div>
-                  <h4 className="text-[12px] font-black text-emerald-900 uppercase tracking-widest mb-1.5">Apps Script Web App</h4>
-                  <p className="text-[10px] text-emerald-700/80 leading-relaxed font-semibold">
-                    Procedimiento macro que orquesta y valida las filas en la hoja conectada.
-                  </p>
-                </div>
-                <a 
-                  href={PIPELINES[selectedPipeline].webAppUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="mt-6 inline-flex items-center gap-2 text-xs font-black text-emerald-600 hover:text-emerald-700 uppercase tracking-wider bg-white px-4 py-2 rounded-xl shadow-sm border border-emerald-100 w-fit transition-all hover:translate-y-[-1px]"
-                >
-                  Ver Apps Script <ExternalLink size={12} />
-                </a>
-              </div>
-
-              <div className="bg-amber-50/60 border border-amber-100/60 p-6 rounded-3xl flex flex-col justify-between">
-                <div>
-                  <h4 className="text-[12px] font-black text-amber-950 uppercase tracking-widest mb-1.5">Planificación</h4>
-                  <p className="text-[10px] text-amber-700/80 leading-relaxed font-semibold">
-                  {selectedPipeline === 'master' 
-                    ? 'El sistema corre automáticamente el Respaldo Semanal cada Jueves a las 23:50 y reportes cada 3 horas.' 
-                    : selectedPipeline === 'captura'
-                    ? 'Los reportes se consolidan automáticamente cada 3 horas en el Dashboard.'
-                    : 'La sincronización de tránsitos peina horario cada libro ASIC y calcula horas retraso.'}
-                  </p>
-                </div>
-                <div className="mt-6 text-[10px] text-amber-600 font-extrabold uppercase tracking-widest flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
-                  Servicio Activo
-                </div>
-              </div>
-            </div>
-
-            {/* SECCIÓN DE BOTONES DE ACCIÓN */}
-            <div>
-              <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                <span className="p-1 bg-gray-100 rounded-lg"><Play size={10} /></span> Macros del Canal Seleccionado
-              </h4>
+      {/* REORGANIZACIÓN TOTAL EN 2 COLUMNAS */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* PANEL IZQUIERDO DE ACCIONES Y CONSOLA */}
+        <div className="lg:col-span-7 space-y-4">
+          
+          <div className="bg-white rounded-2xl border border-gray-100 p-4">
+            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
+              Comandos y Funciones del Apps Script
+            </h4>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {PIPELINES[selectedPipeline].actions.map((act) => (
-                  <button
-                    key={act.id}
-                    type="button"
-                    onClick={() => runScriptAction(act.id, act.name)}
-                    disabled={runningAction !== null}
-                    className={`p-5 rounded-2xl border text-left flex flex-col justify-between transition-all relative overflow-hidden group h-36 ${act.color} disabled:opacity-50 disabled:cursor-not-allowed`}
-                  >
-                    <div className="flex justify-between items-start w-full">
-                      <div className="p-2 bg-white rounded-xl shadow-sm border border-gray-100 group-hover:scale-105 transition-all">
-                        {act.icon}
-                      </div>
-                      <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 bg-white/60 rounded-full">
-                        {act.badge}
-                      </span>
-                    </div>
-
-                    <div className="mt-3">
-                      <h5 className="text-[11px] font-black uppercase tracking-tight line-clamp-1 mb-1">
-                        {act.name}
-                      </h5>
-                      <p className="text-[9px] text-gray-500/80 leading-tight font-medium line-clamp-2">
-                        {act.description}
-                      </p>
-                    </div>
-
-                    {runningAction === act.id && (
-                      <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center">
-                        <div className="flex items-center gap-2">
-                          <RefreshCw size={12} className="animate-spin text-blue-600" />
-                          <span className="text-[9px] font-black text-blue-700 uppercase tracking-widest">Ejecutando...</span>
-                        </div>
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* TERMINAL LOG RETRO */}
-            <div className="bg-[#0b0f19] border border-[#1e293b] rounded-3xl p-6 shadow-2xl relative">
-              <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.5)]"></span>
-                  <span className="text-[10px] font-mono text-gray-400 uppercase tracking-widest font-bold flex items-center gap-1.5">
-                    <Terminal size={12} /> Consola de Registro SIG Miranda
+              {/* Botón sincronizarTodo() */}
+              <button
+                type="button"
+                onClick={() => ejecutarAccionWeb('sincronizar', 'sincronizarTodo()')}
+                disabled={runningAction !== null}
+                className="p-4 rounded-xl border border-emerald-500/20 hover:border-emerald-500 bg-emerald-50/10 hover:bg-emerald-50/25 text-left transition-all relative overflow-hidden flex flex-col justify-between h-24 cursor-pointer"
+              >
+                <div className="flex justify-between items-start w-full">
+                  <span className="p-1 bg-white text-emerald-600 rounded-lg shadow-sm border border-emerald-100 shrink-0">
+                    <Play size={14} />
+                  </span>
+                  <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full">
+                    Principal
                   </span>
                 </div>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={copyLogs}
-                    className="p-1 px-3.5 bg-white/5 border border-white/15 rounded-lg text-[9px] font-bold text-gray-300 hover:bg-white/10 transition-colors uppercase tracking-widest flex items-center gap-1"
-                  >
-                    <Copy size={10} /> Copiar
-                  </button>
-                  <button 
-                    onClick={clearLogs}
-                    className="p-1 px-3.5 bg-white/5 border border-white/15 rounded-lg text-[9px] font-bold text-gray-300 hover:bg-white/10 transition-colors uppercase tracking-widest"
-                  >
-                    Limpiar
-                  </button>
+                <div>
+                  <h5 className="text-[11px] font-black text-slate-850 uppercase tracking-tight">
+                    sincronizarTodo()
+                  </h5>
+                  <p className="text-[9px] text-gray-400 leading-tight font-medium mt-0.5 max-w-xs">
+                    Lee 5 hojas de ejes, calcula porcentajes y actualiza Supabase.
+                  </p>
                 </div>
-              </div>
-
-              <div className="max-h-52 overflow-y-auto font-mono text-[10px] text-green-400/90 leading-relaxed p-2 custom-scrollbar space-y-1.5 selection:bg-green-700/50">
-                {consoleLogs.map((log, index) => (
-                  <div key={index} className="truncate whitespace-pre-wrap">
-                    {log}
+                {runningAction === 'sincronizar' && (
+                  <div className="absolute inset-0 bg-white/80 backdrop-blur-xs flex items-center justify-center">
+                    <RefreshCw size={14} className="animate-spin text-emerald-600" />
                   </div>
-                ))}
-                <div ref={consoleEndRef} />
-              </div>
-            </div>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="files"
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
-            transition={{ duration: 0.2 }}
-            className="space-y-6"
-          >
-            {/* HERRAMIENTAS DE ARCHIVOS */}
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-              <div className="relative w-full sm:w-80">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={13} />
-                <input 
-                  type="text"
-                  placeholder="Buscar recursos en Drive..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium w-full focus:outline-none focus:ring-2 focus:ring-blue-500/10 transition-all"
-                />
-              </div>
+                )}
+              </button>
 
-              <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-                <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-200 shadow-sm">
-                  <button 
-                    onClick={() => setViewMode('grid')}
-                    className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
-                  >
-                    <LayoutGrid size={14} />
-                  </button>
-                  <button 
-                    onClick={() => setViewMode('list')}
-                    className={`p-1.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
-                  >
-                    <ListIcon size={14} />
-                  </button>
+              {/* Botón verTriggers() / consultarEstado */}
+              <button
+                type="button"
+                onClick={() => ejecutarAccionWeb('estado', 'verTriggers() / estado')}
+                disabled={runningAction !== null}
+                className="p-4 rounded-xl border border-blue-500/20 hover:border-blue-500 bg-blue-50/10 hover:bg-blue-50/25 text-left transition-all relative overflow-hidden flex flex-col justify-between h-24 cursor-pointer"
+              >
+                <div className="flex justify-between items-start w-full">
+                  <span className="p-1 bg-white text-blue-600 rounded-lg shadow-sm border border-blue-100 shrink-0">
+                    <RefreshCw size={14} />
+                  </span>
+                  <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded-full">
+                    Estado
+                  </span>
                 </div>
+                <div>
+                  <h5 className="text-[11px] font-black text-slate-850 uppercase tracking-tight">
+                    verTriggers()
+                  </h5>
+                  <p className="text-[9px] text-gray-400 leading-tight font-medium mt-0.5 max-w-xs">
+                    Consulta el estado de ejecución automática del cron en Apps Script.
+                  </p>
+                </div>
+                {runningAction === 'estado' && (
+                  <div className="absolute inset-0 bg-white/80 backdrop-blur-xs flex items-center justify-center">
+                    <RefreshCw size={14} className="animate-spin text-blue-600" />
+                  </div>
+                )}
+              </button>
 
+            </div>
+
+            {/* TABLA DE AYUDA DE OTROS METODOS CRON */}
+            <div className="mt-4 p-3 bg-amber-50/40 rounded-xl border border-amber-100/50 space-y-2">
+              <span className="block text-[9px] font-black text-amber-850 uppercase tracking-wider">
+                ⏰ Automatizaciones Horarias en Google Apps Script
+              </span>
+              <p className="text-[9px] text-gray-500 font-semibold leading-relaxed">
+                Para automatizar que los datos se actualicen sin que tengas que presionar un botón, debes configurar el cron ejecutando <span className="font-bold text-amber-850">configurarTriggerHorario()</span> directamente en el panel de Apps Script. O correr <span className="font-bold text-amber-850">eliminarTriggerHorario()</span> para detenerlo. Esto peinará de forma autónoma los 5 libros sanitarios cada hora.
+              </p>
+            </div>
+          </div>
+
+          {/* TERMINAL LOG RETRO */}
+          <div className="bg-[#0b0f19] border border-[#1e293b] rounded-2xl p-5 shadow-inner">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-3">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="text-[9px] font-mono text-gray-400 uppercase tracking-widest font-bold flex items-center gap-1">
+                  <Terminal size={11} /> Consola de Sincronización
+                </span>
+              </div>
+              <div className="flex gap-2">
                 <button 
-                  onClick={() => loadFiles(accessToken!)}
-                  disabled={loading}
-                  className="p-2.5 bg-gray-50 text-gray-500 rounded-xl hover:bg-gray-100 transition-all border border-gray-200 disabled:opacity-50"
+                  onClick={copyLogs}
+                  className="p-1 px-3 bg-white/5 border border-white/10 rounded-lg text-[8px] font-black text-gray-300 hover:bg-white/10 transition-colors uppercase tracking-widest flex items-center gap-1"
                 >
-                  <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                  <Copy size={9} /> Copiar
                 </button>
-                
                 <button 
-                  onClick={handleLogout}
-                  className="text-[10px] font-black text-rose-500 hover:text-rose-600 uppercase tracking-widest py-2 px-4 border border-rose-100 hover:bg-rose-50/50 rounded-xl ml-2"
+                  onClick={clearLogs}
+                  className="p-1 px-3 bg-white/5 border border-white/10 rounded-lg text-[8px] font-black text-gray-300 hover:bg-white/10 transition-colors uppercase tracking-widest"
                 >
-                  Salir Google
+                  Limpiar
                 </button>
               </div>
             </div>
 
-            {loading ? (
-              <div className="py-20 flex flex-col items-center justify-center">
-                <div className="animate-spin rounded-full h-10 w-10 border-4 border-gray-200 border-t-blue-600 mb-4"></div>
-                <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em]">Cargando archivos del Drive escolar...</span>
-              </div>
-            ) : filteredFiles.length === 0 ? (
-              <div className="py-20 flex flex-col items-center justify-center text-center bg-gray-50/50 border border-dashed border-gray-200 rounded-3xl">
-                <FolderOpen className="text-gray-300 mb-4 animate-pulse" size={40} />
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-relaxed">No se encontraron libros de reportes</p>
-              </div>
-            ) : viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                {filteredFiles.map((file) => (
-                  <motion.div 
-                    key={file.id}
-                    layout
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="group bg-gray-50 hover:bg-white p-5 rounded-[2rem] border border-gray-200/60 hover:border-blue-200 transition-all hover:shadow-xl hover:shadow-blue-500/5 flex flex-col justify-between h-44 relative"
-                  >
-                    <div>
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 transition-transform group-hover:scale-105 ${
-                        file.mimeType.includes('spreadsheet') ? 'bg-green-50 text-green-500 border border-green-100' : 'bg-amber-50 text-amber-500 border border-amber-100'
-                      }`}>
-                        {file.mimeType.includes('spreadsheet') ? <FileSpreadsheet size={18} /> : <FileCode size={18} />}
-                      </div>
-                      
-                      <h4 className="text-[11px] font-black text-gray-800 uppercase tracking-tight line-clamp-2 leading-relaxed">
-                        {file.name}
-                      </h4>
-                    </div>
-                    
-                    <div className="pt-3 border-t border-gray-100 w-full flex items-center justify-between gap-4">
-                      <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest truncate">
-                        {file.mimeType.includes('spreadsheet') ? 'Formato Excel' : 'App Script'}
-                      </span>
-                      <a 
-                        href={file.webViewLink} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="p-1.5 bg-white text-blue-600 rounded-lg border border-gray-200 hover:bg-blue-600 hover:text-white transition-all shadow-sm"
-                      >
-                        <ExternalLink size={12} />
-                      </a>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {filteredFiles.map((file) => (
-                  <motion.div 
-                    key={file.id}
-                    layout
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="group bg-gray-50 hover:bg-white p-4 rounded-2xl border border-gray-200/60 hover:border-blue-200 transition-all hover:shadow-md flex items-center gap-4"
-                  >
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                      file.mimeType.includes('spreadsheet') ? 'bg-green-50 text-green-500' : 'bg-amber-50 text-amber-500'
-                    }`}>
-                      {file.mimeType.includes('spreadsheet') ? <FileSpreadsheet size={16} /> : <FileCode size={16} />}
-                    </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-[11px] font-black text-gray-800 uppercase tracking-tight truncate">
-                        {file.name}
-                      </h4>
-                      <p className="text-[8px] text-gray-400 font-bold uppercase mt-0.5 tracking-widest truncate">
-                        ID: {file.id}
-                      </p>
-                    </div>
-                    
-                    <a 
-                      href={file.webViewLink} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 px-4 py-2 bg-white text-blue-600 hover:text-white hover:bg-blue-600 rounded-xl border border-gray-200 font-extrabold text-[9px] uppercase tracking-widest transition-all"
-                    >
-                      Abrir <ExternalLink size={10} />
-                    </a>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <div className="max-h-40 overflow-y-auto font-mono text-[10px] text-emerald-400 leading-relaxed p-1 custom-scrollbar space-y-1">
+              {consoleLogs.map((log, index) => (
+                <div key={index} className="whitespace-pre-wrap truncate">
+                  {log}
+                </div>
+              ))}
+              <div ref={consoleEndRef} />
+            </div>
+          </div>
 
-      {/* FOOTER DE VERIFICACIÓN */}
-      <div className="mt-12 pt-6 border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4 opacity-40">
-        <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em]">
-          Vinculado a Google Apps Script SDK v5
-        </p>
-        <div className="flex items-center gap-4">
-          <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest">
-            Auditoría de Actividad Activa • 2026
-          </span>
         </div>
+
+        {/* PANEL DERECHO DE COPIAR CÓDIGO */}
+        <div className="lg:col-span-5 flex flex-col">
+          <div className="bg-slate-900 border border-slate-950 rounded-2xl overflow-hidden flex flex-col flex-1 h-[320px] lg:h-auto">
+            
+            {/* CABECERA CÓDIGO */}
+            <div className="p-3 bg-slate-950 border-b border-slate-850 flex items-center justify-between">
+              <span className="text-[8px] font-mono font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                <FileCode size={11} className="text-blue-400" /> Código Apps Script v8.0.0 (Completo)
+              </span>
+              <button
+                type="button"
+                onClick={copiarCodigoAlPortapapeles}
+                className="px-2.5 py-1 bg-white/10 hover:bg-white/15 text-white text-[8px] font-black uppercase tracking-widest rounded-lg transition-all flex items-center gap-1 shrink-0"
+              >
+                {copiedCode ? <Check size={10} className="text-emerald-400" /> : <Copy size={10} />}
+                {copiedCode ? 'Copiado!' : 'Copiar'}
+              </button>
+            </div>
+
+            {/* PRE-VISUALIZACIÓN DE CÓDIGO */}
+            <div className="p-3 overflow-y-auto flex-1 font-mono text-[9px] text-slate-350 bg-slate-900 custom-scrollbar whitespace-pre leading-relaxed">
+              {APPS_SCRIPT_V8_CODE}
+            </div>
+
+            {/* FOOTER DEL COPIADOR */}
+            <div className="p-2.5 bg-slate-950 text-[8px] text-slate-500 font-bold uppercase tracking-wider text-center border-t border-slate-850">
+              Instala en apps script con conexión directa a su base de datos
+            </div>
+
+          </div>
+        </div>
+
       </div>
+
     </section>
   );
 };

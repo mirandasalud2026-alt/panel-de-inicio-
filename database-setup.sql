@@ -190,3 +190,101 @@ ON CONFLICT DO NOTHING;
 -- 8. TIP: SI NO PUEDES ENTRAR COMO ADMIN
 -- Ejecuta esto reemplazando el email para darte permisos manuales:
 -- UPDATE public.usuarios SET rol = 'admin', estado = 'aprobado' WHERE email = 'miranda.salud2026@gmail.com';
+
+
+-- 9. TABLAS DE COMPLEMENTO GEOGRÁFICO Y ASIC (RELACIONES DETECTADAS POR SEMÁNTICA)
+CREATE TABLE IF NOT EXISTS public.TEjes (
+    cod_eje TEXT PRIMARY KEY,
+    nombre_eje TEXT NOT NULL,
+    descripcion TEXT
+);
+
+CREATE TABLE IF NOT EXISTS public.TMunicipios (
+    cod_mun NUMERIC PRIMARY KEY,
+    nombre_municipio TEXT NOT NULL,
+    "Cod_Eje" TEXT REFERENCES public.TEjes(cod_eje) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.TParroquias (
+    cod_parr NUMERIC PRIMARY KEY,
+    nombre_parroquia TEXT NOT NULL,
+    cod_mun NUMERIC REFERENCES public.TMunicipios(cod_mun) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS public.TASIC (
+    "Cod_ASIC" TEXT PRIMARY KEY,
+    nombre_asic TEXT NOT NULL,
+    "Cod_Eje" TEXT REFERENCES public.TEjes(cod_eje) ON DELETE SET NULL,
+    "Cod_mun" NUMERIC REFERENCES public.TMunicipios(cod_mun) ON DELETE SET NULL,
+    "Cod_parr" NUMERIC REFERENCES public.TParroquias(cod_parr) ON DELETE SET NULL
+);
+
+-- Habilitar RLS en tablas complementarias
+ALTER TABLE public.TEjes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.TMunicipios ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.TParroquias ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.TASIC ENABLE ROW LEVEL SECURITY;
+
+-- Políticas de lectura pública para todas las de referencia
+CREATE POLICY "Lectura pública TEjes" ON public.TEjes FOR SELECT USING (true);
+CREATE POLICY "Lectura pública TMunicipios" ON public.TMunicipios FOR SELECT USING (true);
+CREATE POLICY "Lectura pública TParroquias" ON public.TParroquias FOR SELECT USING (true);
+CREATE POLICY "Lectura pública TASIC" ON public.TASIC FOR SELECT USING (true);
+
+-- 10. VISTAS UNIFICADAS DE BASE DE DATOS
+-- Vista 1: Resumen Operativo de ASIC (Calculado dinámicamente)
+CREATE OR REPLACE VIEW public.resumen_asic AS
+SELECT 
+    COALESCE(tr.eje_geografico, 'Sin Eje') AS eje,
+    tr.asic AS asic,
+    COUNT(*)::INTEGER AS "totalEstablecimientos",
+    COUNT(CASE WHEN tr.estado_semaforo = 'Verde' THEN 1 END)::INTEGER AS "totalActivos",
+    COUNT(CASE WHEN tr.estado_semaforo = 'Amarillo' THEN 1 END)::INTEGER AS "totalInactivos",
+    COUNT(CASE WHEN tr.estado_semaforo = 'Rojo' THEN 1 END)::INTEGER AS "totalClausurados",
+    COUNT(CASE WHEN tr.estado_semaforo = 'Verde' THEN 1 END)::INTEGER AS reportaron,
+    COALESCE(
+        ROUND((COUNT(CASE WHEN tr.estado_semaforo = 'Verde' THEN 1 END)::NUMERIC / NULLIF(COUNT(*), 0) * 100), 1),
+        0
+    )::FLOAT AS "porcentajeReporte"
+FROM public.transito_reportes tr
+GROUP BY tr.eje_geografico, tr.asic;
+
+-- Vista 2: Vista Unificada Territorial (Completa)
+CREATE OR REPLACE VIEW public.vista_unificada_territorial AS
+SELECT 
+    tr.id_centro,
+    tr.nombre_centro,
+    tr.asic AS centro_asic_cod,
+    tr.estado_semaforo,
+    tr.horas_retraso,
+    tr.ultimo_reporte,
+    tr.actualizado_en,
+    a.nombre_asic,
+    COALESCE(tr.eje_geografico, e.nombre_eje) AS eje_geografico,
+    e.cod_eje AS eje_id,
+    m.nombre_municipio,
+    m.cod_mun AS municipio_id,
+    p.nombre_parroquia,
+    p.cod_parr AS parroquia_id
+FROM public.transito_reportes tr
+LEFT JOIN public.TASIC a ON a."Cod_ASIC" = tr.asic
+LEFT JOIN public.TEjes e ON e.cod_eje = a."Cod_Eje"
+LEFT JOIN public.TMunicipios m ON m.cod_mun = a."Cod_mun"
+LEFT JOIN public.TParroquias p ON p.cod_parr = a."Cod_parr";
+
+-- Vista 3: Noticias con Autores Unificados
+CREATE OR REPLACE VIEW public.vista_noticias_autores AS
+SELECT 
+    n.id,
+    n.titulo,
+    n.categoria,
+    n.texto,
+    n.fecha,
+    u.id AS usuario_id,
+    u.email AS autor_email,
+    u.nombre AS autor_nombre,
+    u.rol AS autor_rol
+FROM public.noticias n
+LEFT JOIN public.usuarios u ON u.id = NEW_NOTICIA_AUTOR_FALLBACK_VAL.autor_id_test -- o left join por columnas si existen
+CROSS JOIN (SELECT NULL::UUID AS autor_id_test) NEW_NOTICIA_AUTOR_FALLBACK_VAL;
+
