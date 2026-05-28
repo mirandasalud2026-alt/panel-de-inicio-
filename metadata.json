@@ -1,6 +1,6 @@
 {
   "name": "Miranda Salud",
-  "description": "Sistema de Información en Salud – Estado Miranda. PWA para gestión de información sanitaria.",
+  "description": "Sistema de Información en Salud – Estado Miranda. Gestión de tránsito y nóminas colectivas (Nominal-Quirúrgica, Nómina-Obstétrica, Nómina-Defunción) con respaldos automatizados a Google Drive.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

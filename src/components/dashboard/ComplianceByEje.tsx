@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useDashboardData } from '../../hooks/useDashboardData';
-import { Award, CheckCircle2, Building2, ChevronRight, TrendingUp, Sparkles, AlertCircle } from 'lucide-react';
+import { Award, CheckCircle2, Building2, ChevronRight, TrendingUp, Sparkles, AlertCircle, X, Check } from 'lucide-react';
 
 export default function ComplianceByEje() {
   const { ejes, isLoading } = useDashboardData();
   const [activeEje, setActiveEje] = useState<string>('');
+  const [showModal, setShowModal] = useState<boolean>(false);
+  const [modalEje, setModalEje] = useState<string>('');
 
   // Set the first available Eje as active on load
   useEffect(() => {
@@ -83,7 +85,11 @@ export default function ComplianceByEje() {
             return (
               <button
                 key={eje.eje_geografico}
-                onClick={() => setActiveEje(eje.eje_geografico)}
+                onClick={() => {
+                  setActiveEje(eje.eje_geografico);
+                  setModalEje(eje.eje_geografico);
+                  setShowModal(true);
+                }}
                 type="button"
                 className={`w-full text-left p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer flex flex-col gap-2 ${
                   isSelected 
@@ -232,6 +238,198 @@ export default function ComplianceByEje() {
           )}
         </div>
       </div>
+
+      {/* STYLE BLOCK FOR ANIMATIONS */}
+      <style>{`
+        @keyframes slideIn {
+          from { transform: translateX(100%); }
+          to { transform: translateX(0); }
+        }
+        .animate-slide-in {
+          animation: slideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+      `}</style>
+
+      {/* SIDE PANEL / DRAWER DETAIL OVERLAY */}
+      {showModal && modalEje && (
+        <div 
+          className="fixed inset-0 z-50 flex justify-end bg-slate-900/60 backdrop-blur-xs transition-opacity duration-300"
+          onClick={() => setShowModal(false)}
+        >
+          {(() => {
+            const selectedModalEjeData = (ejes || []).find(
+              e => ((e && e.eje_geografico) || '').toUpperCase().trim() === (modalEje || '').toUpperCase().trim()
+            );
+
+            if (!selectedModalEjeData) return null;
+
+            const metASICs = selectedModalEjeData.asics.filter(a => a.porcentaje >= 100);
+            const pendingASICs = selectedModalEjeData.asics.filter(a => a.porcentaje < 100);
+
+            return (
+              <div 
+                className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col justify-between border-l border-slate-150 animate-slide-in"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/85">
+                  <div className="flex items-center gap-2">
+                    <span className="p-2 rounded-xl bg-emerald-50 text-emerald-600 block shrink-0">
+                      <Award size={18} className="text-emerald-600" />
+                    </span>
+                    <div>
+                      <h3 className="text-xs font-black text-[#0B3D5C] uppercase tracking-wider">
+                        Eje {modalEje.replace('EJE', '').trim()}
+                      </h3>
+                      <span className="text-[8px] text-[#0B3D5C]/75 font-semibold uppercase tracking-widest block">
+                        Cumplimiento y Sincronización Directa
+                      </span>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setShowModal(false)}
+                    className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                {/* Body Content */}
+                <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
+                  
+                  {/* Summary Metric Cards */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                      <span className="text-[7.5px] text-gray-400 font-black uppercase tracking-widest block">
+                        Total de ASICs
+                      </span>
+                      <span className="text-base font-black text-[#0B3D5C] mt-1 block">
+                        {selectedModalEjeData.asics.length}
+                      </span>
+                    </div>
+                    <div className="bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100">
+                      <span className="text-[7.5px] text-emerald-600 font-black uppercase tracking-widest block">
+                        Cumplimiento Eje
+                      </span>
+                      <span className="text-base font-black text-emerald-700 mt-1 block">
+                        {selectedModalEjeData.porcentaje_eje}%
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Met Goal Segment */}
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-1">
+                      <Sparkles size={11} className="text-amber-500 shrink-0 animate-pulse" />
+                      <span className="text-[8.5px] font-black uppercase tracking-widest text-[#0B3D5C]">
+                        ASICs que cumplieron la meta (100%)
+                      </span>
+                    </div>
+                    
+                    {metASICs.length > 0 ? (
+                      <div className="flex flex-col gap-1.5">
+                        {metASICs.map((asic, idx) => (
+                          <div 
+                            key={'modal-met-' + idx} 
+                            className="p-3 bg-gradient-to-r from-emerald-500/10 to-emerald-500/5 hover:from-emerald-500/15 border border-emerald-500/15 rounded-2xl flex items-center justify-between gap-3 transition"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="shrink-0 p-1 bg-emerald-500 text-white rounded-md">
+                                <Check size={10} strokeWidth={3} />
+                              </span>
+                              <span className="text-[10px] font-black text-slate-800 uppercase tracking-wider truncate">
+                                {asic.asic}
+                              </span>
+                            </div>
+                            <span className="text-[8px] font-black bg-emerald-500 text-white px-2 py-0.5 rounded-full uppercase tracking-widest shrink-0">
+                              Al Día
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-center flex flex-col gap-1">
+                        <span className="text-[8.5px] font-black text-slate-400 uppercase tracking-widest">
+                          Ningún ASIC al 100% aún
+                        </span>
+                        <span className="text-[7.5px] text-slate-400 font-bold uppercase tracking-wider">
+                          La meta de cumplimiento rápido se logra al reportar con semáforo verde
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Remaining ASICs */}
+                  <div className="flex flex-col gap-2 mt-1">
+                    <span className="text-[8.5px] font-black uppercase tracking-widest text-slate-400">
+                      ASICs Próximos o en Progreso ({pendingASICs.length})
+                    </span>
+                    
+                    {pendingASICs.length > 0 ? (
+                      <div className="flex flex-col gap-2">
+                        {pendingASICs
+                          .sort((a,b) => b.porcentaje - a.porcentaje)
+                          .map((asic, idx) => {
+                            const isMid = asic.porcentaje >= 60;
+                            return (
+                              <div 
+                                key={'modal-pending-' + idx} 
+                                className="p-3 bg-slate-50/50 hover:bg-slate-50 border border-slate-105 rounded-2xl flex flex-col gap-2 transition"
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-[9px] font-black text-slate-700 uppercase tracking-wider truncate">
+                                    {asic.asic}
+                                  </span>
+                                  <span className={`text-[8.5px] font-black px-1.5 py-0.5 rounded-md ${
+                                    isMid ? 'text-amber-700 bg-amber-50' : 'text-rose-700 bg-rose-50'
+                                  }`}>
+                                    {asic.porcentaje}%
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center justify-between text-[7px] text-slate-400 font-bold uppercase tracking-wider">
+                                  <span>Cumplimiento:</span>
+                                  <span className="font-extrabold text-slate-600">
+                                    {asic.centros_reportaron} / {asic.total_centros} CENTROS
+                                  </span>
+                                </div>
+                                
+                                <div className="w-full h-1 bg-slate-200/60 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full rounded-full ${isMid ? 'bg-amber-400' : 'bg-rose-400'}`}
+                                    style={{ width: `${asic.porcentaje}%` }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-emerald-50 text-center rounded-2xl border border-emerald-100">
+                        <span className="text-[8.5px] font-black text-emerald-800 uppercase tracking-widest">
+                          ¡100% de cumplimiento alcanzado en todo el eje territorial!
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+
+                {/* Footer Action */}
+                <div className="p-4 border-t border-slate-100 bg-slate-50 flex flex-col">
+                  <button
+                    type="button"
+                    onClick={() => setShowModal(false)}
+                    className="w-full bg-[#0B3D5C] hover:bg-[#072d45] text-white py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all duration-150 shadow-sm cursor-pointer text-center"
+                  >
+                    Entendido
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
     </div>
   );

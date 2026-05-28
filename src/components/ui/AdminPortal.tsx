@@ -40,6 +40,9 @@ import { supabase, UserProfile } from '../../lib/supabase';
 import { googleSignIn, initAuth } from '../../lib/firebaseAuth';
 import { googleWorkspaceService } from '../../services/googleWorkspaceService';
 import { WorkspaceManager } from './WorkspaceManager';
+import NominalesManager from '../admin/NominalesManager';
+import GoogleScriptFormsTabs from '../admin/GoogleScriptFormsTabs';
+import { FileSpreadsheet } from 'lucide-react';
 
 interface Noticia {
   id: string | number;
@@ -125,7 +128,7 @@ const MOCK_TRANSITO_REPORTES: TransitoReporte[] = [
 
 export default function AdminPortal({ restricted = false }: { restricted?: boolean }) {
   const trigger3HoursRef = useRef<(() => void) | null>(null);
-  const [activeTab, setActiveTab] = useState<'mapa' | 'mapa_admin' | 'cumplimiento' | 'noticias' | 'calendario' | 'usuarios'>('cumplimiento');
+  const [activeTab, setActiveTab] = useState<'mapa' | 'mapa_admin' | 'cumplimiento' | 'noticias' | 'calendario' | 'usuarios' | 'nominales' | 'widgets_google'>('cumplimiento');
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
@@ -366,6 +369,8 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
 
   const tabs = [
     { id: 'cumplimiento', label: 'Tránsito', icon: <Activity size={14} /> },
+    { id: 'nominales', label: 'Ramas Nominales', icon: <Layers size={14} /> },
+    { id: 'widgets_google', label: 'Formularios Google', icon: <FileSpreadsheet size={14} /> },
     { id: 'mapa', label: 'Mapa SIG', icon: <MapIcon size={14} /> },
     { id: 'noticias', label: 'Noticias', icon: <Newspaper size={14} /> },
     { id: 'calendario', label: 'Calendario', icon: <Calendar size={14} /> },
@@ -675,6 +680,21 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
             </div>
           </motion.div>
         )}
+
+        {/* COMPONENTE MAESTRO DE SISTEMAS NOMINALES */}
+        {activeTab === 'nominales' && (
+          <motion.div key="nominales-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <NominalesManager />
+          </motion.div>
+        )}
+
+        {/* COMPONENTE DE FORMULARIOS DE GOOGLE APPS SCRIPT */}
+        {activeTab === 'widgets_google' && (
+          <motion.div key="widgets-google-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <GoogleScriptFormsTabs iframeHeight="720px" />
+          </motion.div>
+        )}
+
       </AnimatePresence>
 
       {/* LOGS COMPACTOS (opcional) */}

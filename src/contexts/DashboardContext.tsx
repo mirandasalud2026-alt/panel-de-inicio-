@@ -24,6 +24,8 @@ interface DashboardContextType {
   setSelectedTab: (tab: string) => void;
   fetchData: (silent?: boolean) => Promise<void>;
   syncSheets: () => Promise<void>;
+  fetchTransitoData: () => Promise<TransitoReporte[]>;
+  fetchResumenData: () => Promise<any[]>;
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -39,7 +41,36 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const [selectedEje, setSelectedEje] = useState<string>('TODO');
   const [selectedTab, setSelectedTab] = useState<string>('semaforo');
 
-  // Master fetch function to load live data, prioritizing direct Supabase client
+  // Expose direct Supabase fetching functions
+  const fetchTransitoData = useCallback(async (): Promise<TransitoReporte[]> => {
+    if (!supabase) {
+      throw new Error('Cliente de Supabase no inicializado dadas las variables de entorno.');
+    }
+    console.log('📡 Consultando Supabase directamente para transito_reportes...');
+    const { data, error: transitoErr } = await supabase
+      .from('transito_reportes')
+      .select('*')
+      .order('actualizado_en', { ascending: false });
+
+    if (transitoErr) throw transitoErr;
+    return data || [];
+  }, []);
+
+  const fetchResumenData = useCallback(async (): Promise<any[]> => {
+    if (!supabase) {
+      throw new Error('Cliente de Supabase no inicializado dadas las variables de entorno.');
+    }
+    console.log('📡 Consultando Supabase directamente para resumen_asic...');
+    const { data, error: resumenErr } = await supabase
+      .from('resumen_asic')
+      .select('*')
+      .order('asic', { ascending: true });
+
+    if (resumenErr) throw resumenErr;
+    return data || [];
+  }, []);
+
+  // Master fetch function to load live data, prioritizing direct Supabase client functions
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setIsLoading(true);
     setError(null);
@@ -50,23 +81,11 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       let transitoData: TransitoReporte[] = [];
       let resumenData: any[] = [];
 
-      // 1. Intentar consultar directamente Supabase desde el cliente JS
+      // 1. Intentar consultar directamente Supabase desde el cliente JS usando nuestras funciones
       if (supabase) {
         try {
-          console.log('📡 Consultando Supabase directamente desde el cliente...');
-          const { data: rawTransito, error: transitoErr } = await supabase
-            .from('transito_reportes')
-            .select('*')
-            .order('actualizado_en', { ascending: false });
-
-          if (transitoErr) throw transitoErr;
-
-          const { data: rawResumen, error: resumenErr } = await supabase
-            .from('resumen_asic')
-            .select('*')
-            .order('asic', { ascending: true });
-
-          if (resumenErr) throw resumenErr;
+          const rawTransito = await fetchTransitoData();
+          const rawResumen = await fetchResumenData();
 
           if (rawTransito && rawTransito.length > 0) {
             transitoData = rawTransito;
@@ -75,37 +94,11 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
             console.log(`✅ Datos sincronizados correctamente desde Supabase: ${rawTransito.length} reportes, ${resumenData.length} resumenes.`);
           }
         } catch (dbErr: any) {
-          console.warn('⚠️ Error al consultar directamente Supabase, intentando vía API proxy:', dbErr.message || dbErr);
+          console.warn('⚠️ Error al consultar directamente Supabase mediante funciones:', dbErr.message || dbErr);
         }
       }
 
-      // 2. Si no pudimos conectar directo, intentar llamar al API router (que tiene fallbacks incluidos)
-      if (!gotData) {
-        try {
-          console.log('📡 Consultando API local para reportes en tránsito...');
-          const responseTransito = await fetch('/api/db/transito-reportes');
-          if (responseTransito.ok) {
-            const resTransito = await responseTransito.json();
-            if (resTransito.status === 'success' && resTransito.data && resTransito.data.length > 0) {
-              transitoData = resTransito.data;
-              
-              const responseResumen = await fetch('/api/db/resumen-asic');
-              if (responseResumen.ok) {
-                const resResumen = await responseResumen.json();
-                if (resResumen.status === 'success') {
-                  resumenData = resResumen.data || [];
-                }
-              }
-              gotData = true;
-              console.log('✅ Datos de tránsito cargados exitosamente de la API local');
-            }
-          }
-        } catch (apiErr: any) {
-          console.warn('⚠️ Falló la llamada a la API local:', apiErr.message || apiErr);
-        }
-      }
-
-      // 3. Fallback de emergencia a Mock Data de alta fidelidad si todo lo demás falla
+      // 2. Fallback de emergencia a Mock Data de alta fidelidad si Supabase no tiene datos o falla
       if (!gotData) {
         console.log('💡 Utilizando datos de simulación local de Miranda Salud...');
         transitoData = [
@@ -179,7 +172,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     } finally {
       if (!silent) setIsLoading(false);
     }
-  }, []);
+  }, [fetchTransitoData, fetchResumenData]);
 
   // Sync function
   const syncSheets = useCallback(async () => {
@@ -262,7 +255,9 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     setSelectedEje,
     setSelectedTab,
     fetchData,
-    syncSheets
+    syncSheets,
+    fetchTransitoData,
+    fetchResumenData
   }), [
     reportes, 
     asics, 
@@ -275,7 +270,9 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     selectedEje, 
     selectedTab, 
     fetchData, 
-    syncSheets
+    syncSheets,
+    fetchTransitoData,
+    fetchResumenData
   ]);
 
   return (

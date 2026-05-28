@@ -1,0 +1,640 @@
+<!-- 
+  =========================================================================
+  FORMULARIO UNIFICADO INTEGRADO PARA GOOGLE APPS SCRIPT (Formulario_UNIFICADO.html)
+  SISTEMA DE INFORMACIÓN NOMINAL MIRANDA SALUD 2026
+  =========================================================================
+  Este archivo contiene el HTML + CSS (Tailwind) + JavaScript cliente.
+  Debe ser copiado como "Formulario_UNIFICADO.html" en la consola de 
+  google.script.com junto con el archivo Código.gs.
+-->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Miranda Salud - Formularios Colectivos Nominales</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter para UI y Fira Code / Space Grotesk -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Space+Grotesk:wght@500;700&display=swap">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    h1, h2, h3, h4 {
+      font-family: 'Space Grotesk', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-700 min-h-screen pb-12">
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 pt-6 gap-6">
+    
+    <!-- CABECERA PRINCIPAL ESTADO MIRANDA -->
+    <div class="flex flex-col sm:flex-row items-center justify-between border-b border-slate-200 pb-5 mb-6 gap-4">
+      <div class="flex items-center gap-3">
+        <div class="p-2.5 bg-[#0B3D5C] text-white rounded-2xl shadow-md">
+          <i data-lucide="layers" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h1 class="text-base font-black uppercase text-[#0B3D5C] tracking-tight leading-none mb-1">
+            Gobernación del Estado Bolivariano de Miranda
+          </h1>
+          <h2 class="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
+            Dirección Estadal de Salud • Sistema de Reporte Clínico
+          </h2>
+        </div>
+      </div>
+      <div>
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wide bg-emerald-50 text-emerald-700 border border-emerald-100 animate-pulse">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Conectado a Supabase
+        </span>
+      </div>
+    </div>
+
+    <!-- SELECTOR DE NÓMINA (SÓLO SI NO ES FORZADO POR PARÁMETRO) -->
+    <div class="bg-white p-2 rounded-2xl border border-slate-120 shadow-sm flex flex-wrap gap-1 mb-6">
+      <button 
+        onclick="switchForm('quirurgica')" 
+        id="btn-quirurgica"
+        class="flex-1 min-w-[120px] text-center px-4 py-3 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer bg-slate-100 text-slate-400"
+      >
+        <i data-lucide="activity" class="w-3.5 h-3.5 inline mr-1 -mt-0.5"></i> Quirúrgica
+      </button>
+      <button 
+        onclick="switchForm('obstetrica')" 
+        id="btn-obstetrica"
+        class="flex-1 min-w-[120px] text-center px-4 py-3 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer bg-slate-100 text-slate-400"
+      >
+        <i data-lucide="baby" class="w-3.5 h-3.5 inline mr-1 -mt-0.5"></i> Obstétrica
+      </button>
+      <button 
+        onclick="switchForm('defuncion')" 
+        id="btn-defuncion"
+        class="flex-1 min-w-[120px] text-center px-4 py-3 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer bg-slate-100 text-slate-400"
+      >
+        <i data-lucide="skull" class="w-3.5 h-3.5 inline mr-1 -mt-0.5"></i> Defunción
+      </button>
+    </div>
+
+    <!-- FORMULARIO CORRESPONDIENTE -->
+    <div class="bg-white p-6 sm:p-8 rounded-3xl border border-slate-150 shadow-xl relative">
+      <div id="loading-overlay" class="absolute inset-0 bg-white/70 backdrop-blur-sm rounded-3xl z-50 flex items-center justify-center hidden">
+        <div class="text-center space-y-2">
+          <div class="w-8 h-8 rounded-full border-2 border-[#0B3D5C] border-t-transparent animate-spin mx-auto"></div>
+          <p class="text-[9.5px] font-black text-[#0B3D5C] uppercase tracking-widest" id="loading-text">Buscando Información...</p>
+        </div>
+      </div>
+
+      <!-- BANNER DE RESPUESTA -->
+      <div id="banner-response" class="p-4 rounded-2xl mb-6 text-[10px] font-bold uppercase tracking-widest hidden flex items-center gap-2">
+        <i id="banner-icon" class="w-4 h-4 shrink-0"></i>
+        <span id="banner-msg">Mensaje de control.</span>
+      </div>
+
+      <form id="nominal-form" onsubmit="enviarFormulario(event)" class="space-y-6">
+        
+        <!-- SECCIÓN 0: FECHA Y UBICACIÓN -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+          <div>
+            <label class="text-[8.5px] font-black tracking-widest text-[#0B3D5C] uppercase block mb-1.5">
+              <i data-lucide="calendar" class="w-3 h-3 inline mr-1 -mt-0.5"></i> Fecha Real *
+            </label>
+            <input 
+              type="date" 
+              name="fecha" 
+              required 
+              id="f-fecha"
+              class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold focus:outline-none focus:border-[#0B3D5C]"
+            >
+          </div>
+          <div>
+            <label class="text-[8.5px] font-black tracking-widest text-slate-450 uppercase block mb-1.5">
+              <i data-lucide="map-pin" class="w-3 h-3 inline mr-1 -mt-0.5"></i> Estado Territorial
+            </label>
+            <select 
+              name="estado" 
+              id="f-estado"
+              class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold focus:outline-none focus:border-[#0B3D5C]"
+            >
+              <option value="MIRANDA" selected>ESTADO MIRANDA</option>
+              <option value="DISTRITO CAPITAL">DISTRITO CAPITAL</option>
+              <option value="LA GUAIRA">ESTADO LA GUAIRA</option>
+              <option value="ARAGUA">ESTADO ARAGUA</option>
+              <option value="CARABOBO">ESTADO CARABOBO</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[8.5px] font-black tracking-widest text-[#0B3D5C] uppercase block mb-1.5">
+              <i data-lucide="building" class="w-3 h-3 inline mr-1 -mt-0.5"></i> Centro de Salud *
+            </label>
+            <input 
+              type="text" 
+              name="centro_salud" 
+              required 
+              placeholder="Ej: Hosp Victorino Santaella"
+              class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold uppercase placeholder:text-slate-300 focus:outline-none focus:border-[#0B3D5C]"
+            >
+          </div>
+        </div>
+
+        <!-- SECCIÓN 1: DATOS CLÍNICOS DINÁMICOS POR TIPO DE FORMULARIO -->
+        <div id="dynamic-fields-space" class="space-y-6">
+          <!-- Se inyecta por Javascript -->
+        </div>
+
+        <!-- SECCIÓN 2: DATOS DEL MÉDICO TRATANTE / CERTIFICANTE -->
+        <div class="bg-indigo-50/30 p-5 rounded-2xl border border-indigo-120 space-y-4">
+          <div class="flex items-center gap-1.5 border-b border-indigo-120 pb-2">
+            <span class="px-2 py-0.5 rounded text-[8.5px] font-black bg-indigo-950 text-white uppercase">MÉDICO</span>
+            <h3 class="text-[10px] font-black text-[#0B3D5C] uppercase tracking-wider">Identificación del Clínico</h3>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 uppercase block mb-1.5">
+                Cédula Médico *
+              </label>
+              <div class="relative">
+                <input 
+                  type="text" 
+                  name="cedula_medico" 
+                  id="f-cedula-medico"
+                  required 
+                  placeholder="Ej: V-12345678"
+                  onblur="buscarMedicoEnServidor()"
+                  class="w-full bg-white border border-slate-200 rounded-xl pl-3 pr-10 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-indigo-500"
+                >
+                <button type="button" onclick="buscarMedicoEnServidor()" class="absolute right-2 top-2 text-[#0B3D5C]">
+                  <i data-lucide="search" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+              <span id="medico-status" class="text-[7.5px] font-black uppercase mt-1 block select-none"></span>
+            </div>
+
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 uppercase block mb-1.5">
+                Nombre(s) *
+              </label>
+              <input 
+                type="text" 
+                name="nombre_medico" 
+                id="f-nombre-medico"
+                required 
+                class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-indigo-500"
+              >
+            </div>
+
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 uppercase block mb-1.5">
+                Apellido(s) *
+              </label>
+              <input 
+                type="text" 
+                name="apellido_medico" 
+                id="f-apellido-medico"
+                required 
+                class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-indigo-500"
+              >
+            </div>
+
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 uppercase block mb-1.5">
+                Teléfono Médico
+              </label>
+              <input 
+                type="text" 
+                name="telefono_medico" 
+                id="f-telefono-medico"
+                placeholder="04xx-xxxxxxx"
+                class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold focus:outline-none focus:border-indigo-500"
+              >
+            </div>
+          </div>
+        </div>
+
+        <!-- BOTONERA ACCIÓN DE GUARDADO -->
+        <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+          <button 
+            type="button" 
+            onclick="limpiarFormulario()" 
+            class="px-5 py-3 border border-slate-200 hover:bg-slate-50 text-slate-400 font-black text-[9px] uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+          >
+            Limpiar Planilla
+          </button>
+          
+          <button 
+            type="submit" 
+            class="flex items-center gap-2 px-6 py-3 bg-[#0B3D5C] hover:bg-[#072B41] text-white font-black text-[9px] uppercase tracking-wider rounded-xl shadow-md transition-all cursor-pointer"
+          >
+            <i data-lucide="save" class="w-4 h-4"></i> Guardar Reporte Nominal
+          </button>
+        </div>
+
+      </form>
+    </div>
+
+    <!-- DOCUMENTACIÓN DE RESPALDO PIE DE PÁGINA -->
+    <div class="mt-6 bg-[#0B3D5C]/5 p-4 rounded-2xl border border-[#0B3D5C]/10 flex gap-3 text-slate-500 text-[9px] font-bold uppercase leading-relaxed tracking-wide">
+      <i data-lucide="shield-check" class="w-5 h-5 text-emerald-600 shrink-0"></i>
+      <div>
+        <p>
+          Este formulario se conecta de manera encriptada con la red central de salud Miranda. Los datos aquí guardados quedan cubiertos por el secreto médico y se sincronizan con las nóminas de resguardo temporal (Criterio de Autodestrucción en 7 días) y respaldas automáticamente en Google Drive cada Domingo a las 23:55.
+        </p>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Parámetros pasados dinámicamente desde GAS
+    let currentType = '<?= formType ?>' || 'quirurgica'; 
+    
+    window.addEventListener('load', () => {
+      // Seteamos fecha de hoy por defecto en el HTML
+      document.getElementById('f-fecha').value = new Date().toISOString().split('T')[0];
+      
+      // Inicializar iconos lucide
+      lucide.createIcons();
+      
+      // Forzar encendido del formulario por defecto
+      switchForm(currentType);
+    });
+
+    const formLayouts = {
+      quirurgica: `
+        <div class="bg-white p-5 border border-slate-200 rounded-2xl space-y-4">
+          <div class="flex items-center gap-1.5 border-b border-slate-100 pb-2">
+            <span class="px-2 py-0.5 rounded text-[8.5px] font-black bg-emerald-600 text-white uppercase">PACIENTE</span>
+            <h3 class="text-[10px] font-black text-[#0B3D5C] uppercase tracking-wider">Identificación del Paciente</h3>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">CÉDULA PACIENTE *</label>
+              <div class="relative">
+                <input type="text" name="cedula_paciente" id="p-cedula" required onblur="buscarPacienteEnServidor()" class="w-full bg-white border border-slate-200 rounded-xl pl-3 pr-10 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-[#0B3D5C]">
+                <button type="button" onclick="buscarPacienteEnServidor()" class="absolute right-2 top-2 text-[#0B3D5C]">
+                  <i data-lucide="search" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+              <span id="p-status" class="text-[7.5px] font-black uppercase mt-1 block"></span>
+            </div>
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">NOMBRE PACIENTE *</label>
+              <input type="text" name="nombre_paciente" id="p-nombre" required class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-[#0B3D5C]">
+            </div>
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">APELLIDO PACIENTE *</label>
+              <input type="text" name="apellido_paciente" id="p-apellido" required class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-[#0B3D5C]">
+            </div>
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">TELÉFONO CONTACTO</label>
+              <input type="text" name="telefono_paciente" id="p-telefono" placeholder="04xx-xxxxxxx" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold focus:outline-none focus:border-[#0B3D5C]">
+            </div>
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">EDAD PACIENTE *</label>
+              <input type="number" name="edad_paciente" id="p-edad" required min="0" max="120" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold focus:outline-none focus:border-[#0B3D5C]">
+            </div>
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">SEXO *</label>
+              <select name="sexo_paciente" id="p-sexo" required class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold focus:outline-none focus:border-[#0B3D5C]">
+                <option value="FEMENINO">FEMENINO</option>
+                <option value="MASCULINO">MASCULINO</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white p-5 border border-slate-200 rounded-2xl space-y-4">
+          <div class="flex items-center gap-1.5 border-b border-slate-100 pb-2">
+            <span class="px-2 py-0.5 rounded text-[8.5px] font-black bg-indigo-600 text-white uppercase">INTERVENCIÓN</span>
+            <h3 class="text-[10px] font-black text-[#0B3D5C] uppercase tracking-wider">Criterio Quirúrgico MPPS</h3>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">ESPECIALIDAD QUIRÚRGICA *</label>
+              <input type="text" name="especialidad_quirurgica" required placeholder="Ej: Traumatología" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-[#0B3D5C]">
+            </div>
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">TIPO DE INTERVENCIÓN *</label>
+              <input type="text" name="tipo_intervencion" required placeholder="Ej: Reducción Abierta de fémur" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-[#0B3D5C]">
+            </div>
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">PRIORIDAD *</label>
+              <select name="urgente_electiva" required class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold focus:outline-none focus:border-[#0B3D5C]">
+                <option value="ELECTIVA">ELECTIVA</option>
+                <option value="URGENTE">URGENTE / DE EMERGENCIA</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">CANTIDAD DE INTERVENCIÓN *</label>
+              <input type="number" name="cantidad_intervencion" required value="1" min="1" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold focus:outline-none focus:border-[#0B3D5C]">
+            </div>
+          </div>
+        </div>
+      `,
+      obstetrica: `
+        <div class="bg-white p-5 border border-slate-200 rounded-2xl space-y-4">
+          <div class="flex items-center gap-1.5 border-b border-slate-100 pb-2">
+            <span class="px-2 py-0.5 rounded text-[8.5px] font-black bg-pink-505 bg-pink-600 text-white uppercase">MADRE</span>
+            <h3 class="text-[10px] font-black text-[#0B3D5C] uppercase tracking-wider">Identificación de la Madre</h3>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">CÉDULA MADRE *</label>
+              <div class="relative">
+                <input type="text" name="cedula_madre" id="p-cedula" required onblur="buscarPacienteEnServidor()" class="w-full bg-white border border-slate-200 rounded-xl pl-3 pr-10 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-[#0B3D5C]">
+                <button type="button" onclick="buscarPacienteEnServidor()" class="absolute right-2 top-2 text-[#0B3D5C]">
+                  <i data-lucide="search" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+              <span id="p-status" class="text-[7.5px] font-black uppercase mt-1 block"></span>
+            </div>
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">NOMRE MADRE *</label>
+              <input type="text" name="nombre_madre" id="p-nombre" required class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-[#0B3D5C]">
+            </div>
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">APELLIDO MADRE *</label>
+              <input type="text" name="apellido_madre" id="p-apellido" required class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-[#0B3D5C]">
+            </div>
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">TELÉFONO CONTACTO</label>
+              <input type="text" name="telefono_madre" id="p-telefono" placeholder="04xx-xxxxxxx" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold focus:outline-none focus:border-[#0B3D5C]">
+            </div>
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">EDAD MADRE *</label>
+              <input type="number" name="edad_madre" id="p-edad" required min="10" max="65" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold focus:outline-none focus:border-[#0B3D5C]">
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white p-5 border border-slate-200 rounded-2xl space-y-4">
+          <div class="flex items-center gap-1.5 border-b border-slate-100 pb-2">
+            <span class="px-2 py-0.5 rounded text-[8.5px] font-black bg-rose-600 text-white uppercase">NEONATO</span>
+            <h3 class="text-[10px] font-black text-[#0B3D5C] uppercase tracking-wider">Detalles del Nacimiento</h3>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">NOMBRE INFANTE NACIDO *</label>
+              <input type="text" name="nombre_infante" required placeholder="Ej: Thiago José" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-[#0B3D5C]">
+            </div>
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">SEXO INFANTE *</label>
+              <select name="sexo_infante" required class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold focus:outline-none focus:border-[#0B3D5C]">
+                <option value="FEMENINO">FEMENINO</option>
+                <option value="MASCULINO">MASCULINO</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">TIPO DE PARTO *</label>
+              <select name="tipo_parto" required class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold focus:outline-none focus:border-[#0B3D5C]">
+                <option value="EUTÓCICO">EUTÓCICO (NATURAL)</option>
+                <option value="DISTÓCICO">DISTÓCICO (DIFICULTOSO)</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">TIPO DE INTERVENCIÓN *</label>
+              <select name="tipo_intervencion" required class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold focus:outline-none focus:border-[#0B3D5C]">
+                <option value="NATURAL">NATURAL (VAGINAL)</option>
+                <option value="CESÁREA">CESÁREA / QUIRÚRGICA</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      `,
+      defuncion: `
+        <div class="bg-white p-5 border border-slate-200 rounded-2xl space-y-4">
+          <div class="flex items-center gap-1.5 border-b border-slate-100 pb-2">
+            <span class="px-2 py-0.5 rounded text-[8.5px] font-black bg-rose-955 bg-rose-700 text-white uppercase">FALLECIDO</span>
+            <h3 class="text-[10px] font-black text-[#0B3D5C] uppercase tracking-wider">Identificación del Fallecido</h3>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">CÉDULA FALLEcido (OPC)</label>
+              <div class="relative">
+                <input type="text" name="cedula_fallecido" id="p-cedula" onblur="buscarPacienteEnServidor()" placeholder="V-12345678" class="w-full bg-white border border-slate-200 rounded-xl pl-3 pr-10 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-[#0B3D5C]">
+                <button type="button" onclick="buscarPacienteEnServidor()" class="absolute right-2 top-2 text-[#0B3D5C]">
+                  <i data-lucide="search" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+              <span id="p-status" class="text-[7.5px] font-black uppercase mt-1 block"></span>
+            </div>
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">NOMBRE FALLEcido *</label>
+              <input type="text" name="nombre_fallecido" id="p-nombre" required class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-[#0B3D5C]">
+            </div>
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">APELLIDO FALLEcido *</label>
+              <input type="text" name="apellido_fallecido" id="p-apellido" required class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-[#0B3D5C]">
+            </div>
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">EDAD *</label>
+              <input type="number" name="edad_fallecido" id="p-edad" required min="0" max="120" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold focus:outline-none focus:border-[#0B3D5C]">
+            </div>
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">SEXO *</label>
+              <select name="sexo_fallecido" id="p-sexo" required class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold focus:outline-none focus:border-[#0B3D5C]">
+                <option value="FEMENINO">FEMENINO</option>
+                <option value="MASCULINO">MASCULINO</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white p-5 border border-slate-200 rounded-2xl space-y-4">
+          <div class="flex items-center gap-1.5 border-b border-slate-100 pb-2">
+            <span class="px-2 py-0.5 rounded text-[8.5px] font-black bg-gray-900 text-white uppercase">FISIOPATOLOGÍA</span>
+            <h3 class="text-[10px] font-black text-[#0B3D5C] uppercase tracking-wider">Certificación de Defunción</h3>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">HORA DE FALLECIMIENTO *</label>
+              <input type="text" name="hora_fallecimiento" required placeholder="Ej: 14:45" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold focus:outline-none focus:border-[#0B3D5C]">
+            </div>
+            <div class="md:col-span-2">
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">PATOLOGÍA (CAUSA MUERTE) *</label>
+              <input type="text" name="patologia" required placeholder="Ej: Choque Cardiogénico" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-[#0B3D5C]">
+            </div>
+            <div class="md:col-span-3">
+              <label class="text-[8.5px] font-black tracking-widest text-slate-450 block mb-1.5">OBSERVACIONES ADICIONALES</label>
+              <textarea name="observacion" rows="2" placeholder="Ingrese comentarios diagnósticos o forenses obligatorios..." class="w-full bg-white border border-slate-200 rounded-xl p-3 text-[10.5px] font-bold focus:outline-none focus:border-[#0B3D5C]"></textarea>
+            </div>
+          </div>
+        </div>
+      `
+    };
+
+    function switchForm(type) {
+      currentType = type;
+      
+      // Manejo estético de pestañas
+      ['quirurgica', 'obstetrica', 'defuncion'].forEach(t => {
+        const btn = document.getElementById('btn-' + t);
+        if (btn) {
+          if (t === type) {
+            btn.className = "flex-1 min-w-[120px] text-center px-4 py-3 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer bg-[#0B3D5C] text-white shadow-md";
+          } else {
+            btn.className = "flex-1 min-w-[120px] text-center px-4 py-3 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer bg-slate-100 text-slate-400 hover:text-slate-700";
+          }
+        }
+      });
+      
+      // Cargar campos específicos
+      document.getElementById('dynamic-fields-space').innerHTML = formLayouts[type];
+      
+      // Limpiar estados de búsqueda
+      document.getElementById('medico-status').innerText = "";
+      document.getElementById('banner-response').classList.add('hidden');
+      
+      // Re-inicializar iconos inyectados
+      lucide.createIcons();
+    }
+
+    // BUSCAR PACIENTE/MADRE/FALLECIDO EN EL SERVIDOR (LLAMA A GOOGLE SCRIPT RUN)
+    function buscarPacienteEnServidor() {
+      const inputCedula = document.getElementById('p-cedula');
+      const statusSpan = document.getElementById('p-status');
+      if (!inputCedula || !inputCedula.value.trim()) return;
+
+      statusSpan.className = "text-[7.5px] font-black uppercase mt-1 block text-slate-400 animate-pulse";
+      statusSpan.innerText = "Buscando en Supabase...";
+      
+      google.script.run
+        .withSuccessHandler(function(data) {
+          if (data) {
+            statusSpan.className = "text-[7.5px] font-black uppercase mt-1 block text-emerald-600 animate-bounce";
+            statusSpan.innerText = "✓ Precargado desde su base de datos";
+            
+            // Auto-llenar campos paciente
+            const valMap = {
+              'p-nombre': data.nombre,
+              'p-apellido': data.apellido,
+              'p-telefono': data.telefono || '',
+              'p-edad': data.edad || '',
+              'p-sexo': data.sexo || 'FEMENINO'
+            };
+            
+            for (let id in valMap) {
+              const el = document.getElementById(id);
+              if (el) el.value = valMap[id];
+            }
+          } else {
+            statusSpan.className = "text-[7.5px] font-black uppercase mt-1 block text-amber-500";
+            statusSpan.innerText = "⚡ Nuevo - Se creará ficha al guardar";
+          }
+        })
+        .withFailureHandler(function(err) {
+          statusSpan.className = "text-[7.5px] font-black uppercase mt-1 block text-rose-500";
+          statusSpan.innerText = "Error de enlace: Nuevo paciente.";
+        })
+        .buscarPaciente(inputCedula.value);
+    }
+
+    // BUSCAR MEDICO EN EL SERVIDOR (LLAMA A GOOGLE SCRIPT RUN)
+    function buscarMedicoEnServidor() {
+      const inputCedula = document.getElementById('f-cedula-medico');
+      const statusSpan = document.getElementById('medico-status');
+      if (!inputCedula || !inputCedula.value.trim()) return;
+
+      statusSpan.className = "text-[7.5px] font-black uppercase mt-1 block text-slate-400 animate-pulse";
+      statusSpan.innerText = "Verificando Credenciales...";
+      
+      google.script.run
+        .withSuccessHandler(function(data) {
+          if (data) {
+            statusSpan.className = "text-[7.5px] font-black uppercase mt-1 block text-emerald-600 animate-bounce";
+            statusSpan.innerText = "✓ Médico Autorizado Encontrado";
+            
+            document.getElementById('f-nombre-medico').value = data.nombre;
+            document.getElementById('f-apellido-medico').value = data.apellido;
+            document.getElementById('f-telefono-medico').value = data.telefono || '';
+          } else {
+            statusSpan.className = "text-[7.5px] font-black uppercase mt-1 block text-indigo-500";
+            statusSpan.innerText = "⚡ Colegiado Nuevo - Se guardará su credencial";
+          }
+        })
+        .withFailureHandler(function(err) {
+          statusSpan.className = "text-[7.5px] font-black uppercase mt-1 block text-rose-500";
+          statusSpan.innerText = "Error de red: Médico nuevo.";
+        })
+        .buscarMedico(inputCedula.value);
+    }
+
+    function mostrarOverlay(show, text="Procesando...") {
+      const overlay = document.getElementById('loading-overlay');
+      document.getElementById('loading-text').innerText = text;
+      if (show) {
+        overlay.classList.remove('hidden');
+      } else {
+        overlay.classList.add('hidden');
+      }
+    }
+
+    function mostrarBanner(type, message) {
+      const banner = document.getElementById('banner-response');
+      const icon = document.getElementById('banner-icon');
+      const msg = document.getElementById('banner-msg');
+      
+      banner.classList.remove('hidden', 'bg-emerald-50', 'text-emerald-800', 'border-emerald-100', 'bg-rose-50', 'text-rose-800', 'border-rose-100');
+      
+      if (type === 'success') {
+        banner.classList.add('bg-emerald-50', 'text-emerald-800', 'border', 'border-emerald-100');
+        icon.setAttribute('data-lucide', 'check-circle');
+        msg.innerText = message;
+      } else {
+        banner.classList.add('bg-rose-50', 'text-rose-800', 'border', 'border-rose-100');
+        icon.setAttribute('data-lucide', 'alert-circle');
+        msg.innerText = message;
+      }
+      
+      lucide.createIcons();
+      banner.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // ENVIAR PLANILLA NOMINAL DE GUARDADO COMPLETO
+    function enviarFormulario(event) {
+      event.preventDefault();
+      mostrarOverlay(true, "Registrando en Supabase...");
+      
+      // Convertir FormData a Object plano
+      const formEl = document.getElementById('nominal-form');
+      const formData = new FormData(formEl);
+      const payload = {};
+      formData.forEach((value, key) => {
+        payload[key] = value;
+      });
+      
+      google.script.run
+        .withSuccessHandler(function(res) {
+          mostrarOverlay(false);
+          if (res && res.success) {
+            mostrarBanner('success', "¡REGISTRO DE NÓMINA GUARDADO Y ASOCIADO EXITOSAMENTE CON ID: " + res.id + "!");
+            limpiarFormulario();
+          } else {
+            mostrarBanner('error', "No se pudo consolidar el reporte. Inténte nuevamente.");
+          }
+        })
+        .withFailureHandler(function(err) {
+          mostrarOverlay(false);
+          mostrarBanner('error', "Error Crítico del Servidor: " + (err.message || err));
+        })
+        .guardarRegistroClinico(currentType, payload);
+    }
+
+    function limpiarFormulario() {
+      const inputs = document.getElementById('nominal-form').querySelectorAll('input[type="text"], input[type="number"], textarea');
+      inputs.forEach(input => {
+        if (input.name !== 'fecha' && input.name !== 'estado') {
+          input.value = "";
+        }
+      });
+      
+      const pStatus = document.getElementById('p-status');
+      if (pStatus) pStatus.innerText = "";
+      
+      // Reset fecha
+      document.getElementById('f-fecha').value = new Date().toISOString().split('T')[0];
+    }
+  </script>
+</body>
+</html>
