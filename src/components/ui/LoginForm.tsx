@@ -28,25 +28,79 @@ export default function LoginForm() {
       if (email === 'miranda.salud2026@gmail.com' && password === 'Roble.26') {
         localStorage.setItem('sim_demo_admin', 'true');
         localStorage.setItem('sim_demo_role', 'admin');
+        localStorage.removeItem('sim_demo_cod_eje');
+        localStorage.removeItem('sim_demo_cod_asic');
+        localStorage.removeItem('sim_demo_id_centro');
+        navigate('/admin/dashboard');
+        setLoading(false);
+        return;
+      }
+
+      if (email === 'oficina_eje@miranda.gob.ve' && password === 'Eje.26') {
+        localStorage.setItem('sim_demo_admin', 'true');
+        localStorage.setItem('sim_demo_role', 'directivo');
+        localStorage.setItem('sim_demo_cod_eje', 'altos_mirandinos');
+        localStorage.removeItem('sim_demo_cod_asic');
+        localStorage.removeItem('sim_demo_id_centro');
+        navigate('/admin/dashboard');
+        setLoading(false);
+        return;
+      }
+
+      if (email === 'oficina_asic@miranda.gob.ve' && password === 'Asic.26') {
+        localStorage.setItem('sim_demo_admin', 'true');
+        localStorage.setItem('sim_demo_role', 'directivo');
+        localStorage.removeItem('sim_demo_cod_eje');
+        localStorage.setItem('sim_demo_cod_asic', 'ASIC CARRIZAL');
+        localStorage.removeItem('sim_demo_id_centro');
+        navigate('/admin/dashboard');
+        setLoading(false);
+        return;
+      }
+
+      if (email === 'oficina_centro@miranda.gob.ve' && password === 'Centro.26') {
+        localStorage.setItem('sim_demo_admin', 'true');
+        localStorage.setItem('sim_demo_role', 'oficina');
+        localStorage.removeItem('sim_demo_cod_eje');
+        localStorage.removeItem('sim_demo_cod_asic');
+        localStorage.setItem('sim_demo_id_centro', 'ALT_AS_GUA');
         navigate('/admin/dashboard');
         setLoading(false);
         return;
       }
 
       if (email === 'directivo@miranda.gob.ve' && password === 'Directo.26') {
-        // We simulate a directivo profile
         localStorage.setItem('sim_demo_admin', 'true');
         localStorage.setItem('sim_demo_role', 'directivo');
+        localStorage.removeItem('sim_demo_cod_eje');
+        localStorage.removeItem('sim_demo_cod_asic');
+        localStorage.removeItem('sim_demo_id_centro');
         navigate('/admin/dashboard');
         setLoading(false);
         return;
       }
 
-      const { error: authError } = await supabase.auth.signInWithPassword({
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password
       });
       if (authError) throw authError;
+
+      // Realizar query inmediato a la tabla pública 'usuarios' para obtener el perfil territorial
+      if (authData?.user) {
+        const { data: perfil, error: perfilError } = await supabase
+          .from('usuarios')
+          .select('rol, cod_eje, cod_asic, id_centro')
+          .eq('id', authData.user.id)
+          .single();
+        
+        if (perfilError) {
+          console.warn('Fallo recuperando perfil territorial en login:', perfilError.message);
+        } else if (perfil) {
+          console.log('Perfil territorial cargado correctamente:', perfil);
+        }
+      }
+
       navigate('/admin/dashboard');
     } catch (err: any) {
       setError(err.message === 'Invalid login credentials' ? 'Credenciales incorrectas.' : 'Error de conexión.');

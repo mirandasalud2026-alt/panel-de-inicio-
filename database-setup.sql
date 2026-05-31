@@ -231,23 +231,27 @@ CREATE POLICY "Lectura pública TMunicipios" ON public.TMunicipios FOR SELECT US
 CREATE POLICY "Lectura pública TParroquias" ON public.TParroquias FOR SELECT USING (true);
 CREATE POLICY "Lectura pública TASIC" ON public.TASIC FOR SELECT USING (true);
 
--- 10. VISTAS UNIFICADAS DE BASE DE DATOS
--- Vista 1: Resumen Operativo de ASIC (Calculado dinámicamente)
-CREATE OR REPLACE VIEW public.resumen_asic AS
-SELECT 
-    COALESCE(tr.eje_geografico, 'Sin Eje') AS eje,
-    tr.asic AS asic,
-    COUNT(*)::INTEGER AS "totalEstablecimientos",
-    COUNT(CASE WHEN tr.estado_semaforo = 'Verde' THEN 1 END)::INTEGER AS "totalActivos",
-    COUNT(CASE WHEN tr.estado_semaforo = 'Amarillo' THEN 1 END)::INTEGER AS "totalInactivos",
-    COUNT(CASE WHEN tr.estado_semaforo = 'Rojo' THEN 1 END)::INTEGER AS "totalClausurados",
-    COUNT(CASE WHEN tr.estado_semaforo = 'Verde' THEN 1 END)::INTEGER AS reportaron,
-    COALESCE(
-        ROUND((COUNT(CASE WHEN tr.estado_semaforo = 'Verde' THEN 1 END)::NUMERIC / NULLIF(COUNT(*), 0) * 100), 1),
-        0
-    )::FLOAT AS "porcentajeReporte"
-FROM public.transito_reportes tr
-GROUP BY tr.eje_geografico, tr.asic;
+-- 10. COMPONENTES DE BASE DE DATOS Y TABLAS SINCROLEIDAS
+-- Tabla resumen_asic (Sincronizada por Google Sheets, contiene el resumen agregativo de ASICs)
+CREATE TABLE IF NOT EXISTS public.resumen_asic (
+    asic TEXT PRIMARY KEY,
+    eje TEXT,
+    total_centros INTEGER DEFAULT 0,
+    centros_reportaron INTEGER DEFAULT 0,
+    porcentaje_reporte NUMERIC DEFAULT 0,
+    actualizado_en TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Asegurar políticas de lectura y escritura para la tabla resumen_asic
+ALTER TABLE public.resumen_asic ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Lectura pública resumen_asic" ON public.resumen_asic;
+CREATE POLICY "Lectura pública resumen_asic" ON public.resumen_asic FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins pueden editar resumen_asic" ON public.resumen_asic;
+CREATE POLICY "Admins pueden editar resumen_asic" ON public.resumen_asic FOR ALL USING (
+    get_user_role() = 'admin'
+);
 
 -- Vista 2: Vista Unificada Territorial (Completa)
 CREATE OR REPLACE VIEW public.vista_unificada_territorial AS
@@ -285,6 +289,5 @@ SELECT
     u.nombre AS autor_nombre,
     u.rol AS autor_rol
 FROM public.noticias n
-LEFT JOIN public.usuarios u ON u.id = NEW_NOTICIA_AUTOR_FALLBACK_VAL.autor_id_test -- o left join por columnas si existen
-CROSS JOIN (SELECT NULL::UUID AS autor_id_test) NEW_NOTICIA_AUTOR_FALLBACK_VAL;
+LEFT JOIN public.usuarios u ON u.id = NULL::UUID;
 

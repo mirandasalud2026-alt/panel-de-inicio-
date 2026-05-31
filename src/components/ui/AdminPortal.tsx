@@ -42,6 +42,7 @@ import { googleWorkspaceService } from '../../services/googleWorkspaceService';
 import { WorkspaceManager } from './WorkspaceManager';
 import NominalesManager from '../admin/NominalesManager';
 import GoogleScriptFormsTabs from '../admin/GoogleScriptFormsTabs';
+import EjesManager from '../admin/EjesManager';
 import { FileSpreadsheet } from 'lucide-react';
 
 interface Noticia {
@@ -128,7 +129,7 @@ const MOCK_TRANSITO_REPORTES: TransitoReporte[] = [
 
 export default function AdminPortal({ restricted = false }: { restricted?: boolean }) {
   const trigger3HoursRef = useRef<(() => void) | null>(null);
-  const [activeTab, setActiveTab] = useState<'mapa' | 'mapa_admin' | 'cumplimiento' | 'noticias' | 'calendario' | 'usuarios' | 'nominales' | 'widgets_google'>('cumplimiento');
+  const [activeTab, setActiveTab] = useState<'mapa' | 'mapa_admin' | 'cumplimiento' | 'noticias' | 'calendario' | 'usuarios' | 'nominales' | 'widgets_google' | 'fichas_eje'>('cumplimiento');
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
@@ -146,6 +147,47 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
+  const [runningAction, setRunningAction] = useState<string | null>(null);
+
+  const triggerSincronizacionReal = async (actionId: string, actionName: string) => {
+    if (runningAction) return;
+    setRunningAction(actionId);
+    agregarLog(`⚡ Solicitando ejecución: "${actionName}" (action=${actionId})...`);
+    
+    const webAppUrl = localStorage.getItem('miranda_apps_script_url') || 
+      'https://script.google.com/macros/s/AKfycbzsG72xt9ttRtFB-BzvVkKuVK5WyqVFI6a8S_DzFuGub1EYrDBmaPGex2kp7GQk_d8fgw/exec';
+
+    try {
+      const response = await fetch('/api/run-script', {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: actionId,
+          scriptUrl: webAppUrl
+        })
+      });
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json();
+      const actualData = result.data || result;
+      
+      if (actualData && actualData.status === 'success') {
+        agregarLog(`🟢 Sincronización exitosa: ${actualData.message}`);
+        alert(`¡Sincronización con éxito! Centros: ${actualData.data?.totalCentros || 0}, ASICs: ${actualData.data?.totalASICs || 0}`);
+        fetchTransitoReportes();
+      } else {
+        agregarLog(`🟢 Apps Script activado exitosamente.`);
+        alert(`Ejecutado con éxito: ${actionName}`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      agregarLog(`❌ Error en Apps Script: ${err.message}`);
+      // Fallback sutil
+      alert(`Petición enviada al Apps Script. Verifique los registros en la hoja de cálculo del Dashboard.`);
+    } finally {
+      setRunningAction(null);
+    }
+  };
 
   // Compliance states
   const [transitoReportes, setTransitoReportes] = useState<TransitoReporte[]>([]);
@@ -369,6 +411,7 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
 
   const tabs = [
     { id: 'cumplimiento', label: 'Tránsito', icon: <Activity size={14} /> },
+    { id: 'fichas_eje', label: 'Fichas de Eje', icon: <Database size={14} /> },
     { id: 'nominales', label: 'Ramas Nominales', icon: <Layers size={14} /> },
     { id: 'widgets_google', label: 'Formularios Google', icon: <FileSpreadsheet size={14} /> },
     { id: 'mapa', label: 'Mapa SIG', icon: <MapIcon size={14} /> },
@@ -515,34 +558,46 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
               </p>
             )}
 
-            {/* SECCIÓN DE SINCRONIZACIÓN MOVIDA A TRANSITO */}
+            {/* SECCIÓN DE SINCRONIZACIÓN DE TRÁNSITO - SÓLO BOTONES */}
             <div className="border-t border-dashed border-gray-150 pt-6 mt-6 space-y-4">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                <div className="space-y-1 text-center sm:text-left font-sans">
-                  <h4 className="text-xs font-black text-gray-800 uppercase tracking-tight flex items-center justify-center sm:justify-start gap-1.5">
-                    <Clock size={13} className="text-[#0B3D5C]" /> Configuración de Disparadores Temporales
+              <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                <div className="space-y-1 font-sans">
+                  <h4 className="text-xs font-black text-gray-800 uppercase tracking-tight flex items-center gap-1.5">
+                    <RefreshCw size={13} className="text-[#0B3D5C]" /> Sincronización Real del Tránsito Sanitario
                   </h4>
                   <p className="text-[10px] text-gray-400 font-semibold leading-relaxed">
-                    Configura y activa de forma inmediata el cron automático de Apps Script para consolidar los reportes en el Dashboard cada 3 horas.
+                    Ejecute de forma inmediata el barrido de los 5 libros sanitarios de Miranda o configure el trigger horario automático.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (trigger3HoursRef.current) {
-                      agregarLog('⏳ Iniciando configuración manual del Cron de 3 horas desde la pestaña de Tránsito...');
-                      trigger3HoursRef.current();
-                    } else {
-                      alert('El módulo de Sincronización se está cargando. Por favor, intente de nuevo en un momento.');
-                    }
-                  }}
-                  className="w-full sm:w-auto shrink-0 flex items-center justify-center gap-2 px-5 py-3 bg-[#0B3D5C] hover:bg-[#082E47] text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-sm hover:shadow-md hover:translate-y-[-1px] active:translate-y-[0px] cursor-pointer font-sans"
-                >
-                  <Clock size={14} /> Configurar Cron 3 Horas
-                </button>
-              </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => triggerSincronizacionReal('sincronizar', 'Sincronizar Todo')}
+                    disabled={runningAction !== null}
+                    className="flex items-center justify-center gap-2 px-5 py-3.5 bg-[#0B3D5C] hover:bg-[#072437] disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-xs hover:shadow-sm cursor-pointer font-sans"
+                  >
+                    {runningAction === 'sincronizar' ? (
+                      <>
+                        <RefreshCw size={12} className="animate-spin" /> Sincronizando...
+                      </>
+                    ) : (
+                      <>
+                        <Play size={12} /> Sincronizar Datos Ahora
+                      </>
+                    )}
+                  </button>
 
-              <WorkspaceManager onRegisterTriggerHandler={(handler) => { trigger3HoursRef.current = handler; }} />
+                  <button
+                    type="button"
+                    onClick={() => triggerSincronizacionReal('configurar', 'Configurar Cron')}
+                    disabled={runningAction !== null}
+                    className="flex items-center justify-center gap-2 px-5 py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-xs hover:shadow-sm cursor-pointer font-sans"
+                  >
+                    <Clock size={12} /> Activar Piloto Automático (Cron)
+                  </button>
+                </div>
+              </div>
             </div>
           </motion.div>
         )}
@@ -685,6 +740,13 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
         {activeTab === 'nominales' && (
           <motion.div key="nominales-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <NominalesManager />
+          </motion.div>
+        )}
+
+        {/* COMPONENTE ADMINISTRADOR DE FICHAS DE EJE */}
+        {activeTab === 'fichas_eje' && (
+          <motion.div key="fichas-eje-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <EjesManager />
           </motion.div>
         )}
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
 import { 
   Settings, 
   ExternalLink, 
@@ -144,6 +145,50 @@ const getImageDimensions = (src: string): Promise<{ width: number; height: numbe
   });
 };
 
+const CLINIC_COORDS_MAPPINGS: Record<string, { pX: number, pY: number }> = {
+  "ALT_AS_GUA": { pX: 0.35, pY: 0.40 },
+  "ALT_AS_CAR_CDI": { pX: 0.38, pY: 0.45 },
+  "VAL_AS_OCU": { pX: 0.45, pY: 0.70 },
+  "GUA_AS_GG": { pX: 0.60, pY: 0.35 },
+  "BAR_AS_MAM": { pX: 0.78, pY: 0.48 },
+  "MET_AS_CHA": { pX: 0.50, pY: 0.25 }
+};
+
+function getDeterministicCoords(id: string) {
+  if (CLINIC_COORDS_MAPPINGS[id]) return CLINIC_COORDS_MAPPINGS[id];
+  
+  let sum = 0;
+  for (let i = 0; i < id.length; i++) {
+    sum += id.charCodeAt(i);
+  }
+  const offsetRefX = (sum % 20) / 320 - 0.03;
+  const offsetRefY = ((sum >> 2) % 20) / 320 - 0.03;
+
+  const code = id.toUpperCase();
+  if (code.includes('ALT') || code.includes('GUA_AS_GUA') || code.includes('CARRIZAL') || code.includes('LOS_TEQUES')) {
+    return { pX: 0.36 + offsetRefX, pY: 0.42 + offsetRefY };
+  } else if (code.includes('VAL') || code.includes('OCU') || code.includes('YARE') || code.includes('CHARALLAVE')) {
+    return { pX: 0.45 + offsetRefX, pY: 0.68 + offsetRefY };
+  } else if (code.includes('GUA') || code.includes('GG') || code.includes('GUARENAS') || code.includes('GUATIRE')) {
+    return { pX: 0.59 + offsetRefX, pY: 0.34 + offsetRefY };
+  } else if (code.includes('BAR') || code.includes('MAM') || code.includes('HIG') || code.includes('HIGUEROTE')) {
+    return { pX: 0.77 + offsetRefX, pY: 0.46 + offsetRefY };
+  } else if (code.includes('MET') || code.includes('CHA') || code.includes('PET') || code.includes('PETARE')) {
+    return { pX: 0.49 + offsetRefX, pY: 0.24 + offsetRefY };
+  }
+  return { pX: 0.5 + offsetRefX * 2, pY: 0.5 + offsetRefY * 2 };
+}
+
+function mapCodEjeToEjeGeografico(cod: string): string {
+  const norm = cod.toLowerCase().trim();
+  if (norm === 'altos_mirandinos') return 'ALTOS MIRANDINOS';
+  if (norm === 'valles_del_tuy') return 'VALLES DEL TUY';
+  if (norm === 'guarenas_guatire' || norm === 'guarenas-guatire') return 'GUARENAS-GUATIRE';
+  if (norm === 'barlovento') return 'BARLOVENTO';
+  if (norm === 'metropolitano') return 'METROPOLITANO';
+  return cod.toUpperCase().replace('_', ' ');
+}
+
 export default function InteractiveMirandaMap({ isAdminMode = false }: InteractiveMirandaMapProps) {
   const [activeEje, setActiveEje] = useState<Eje>(INITIAL_EJES[0]);
   const [ejes, setEjes] = useState<Eje[]>(INITIAL_EJES);
@@ -170,6 +215,17 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const [isLandscape, setIsLandscape] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mapDimensions, setMapDimensions] = useState({ width: 800, height: 500 });
+
+  // Realtime Semáforo & Feed states
+  const { profile } = useAuth();
+  const [transitoReportes, setTransitoReportes] = useState<any[]>([]);
+  const [hoveredCentro, setHoveredCentro] = useState<any | null>(null);
+  const [recentlyUpdatedCentros, setRecentlyUpdatedCentros] = useState<Record<string, boolean>>({});
+  const [feedEvents, setFeedEvents] = useState<string[]>([
+    "Hace un momento: 🏥 CDI Carrizal reportó sin novedades.",
+    "Hace 12 min: 🏥 Ambulatorio Guaremal actualizó reporte a Semáforo Verde.",
+    "Hace 1 hora: 🏥 Ambulatorio El Pedregal resolvió consulta pendiente."
+  ]);
 
   // Zoom & Pan states
   const [zoom, setZoom] = useState(1);
@@ -207,6 +263,105 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
       window.removeEventListener('orientationchange', checkScreen);
     };
   }, []);
+
+  // Real-time listener y carga inicial de clínicas
+  useEffect(() => {
+    const loadReportes = async () => {
+      if (!supabase) return;
+      const { data, error } = await supabase
+        .from('transito_reportes')
+        .select('*');
+      if (!error && data) {
+        setTransitoReportes(data);
+      }
+    };
+    loadReportes();
+
+    if (!supabase) return;
+    const channel = supabase
+      .channel('map_realtime_semaforo')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transito_reportes' },
+        (payload) => {
+          console.log('Realtime Semáforo Change:', payload);
+          let updated: any = null;
+          if (payload.eventType === 'UPDATE') {
+            updated = payload.new as any;
+          } else if (payload.eventType === 'INSERT') {
+            updated = payload.new as any;
+          }
+
+          if (updated && updated.id_centro) {
+            setTransitoReportes(prev => {
+              const exists = prev.some(r => r.id_centro === updated.id_centro);
+              if (exists) {
+                return prev.map(r => r.id_centro === updated.id_centro ? { ...r, ...updated } : r);
+              } else {
+                return [updated, ...prev];
+              }
+            });
+            
+            // Destacar con animación de parpadeo
+            setRecentlyUpdatedCentros(prev => ({ ...prev, [updated.id_centro]: true }));
+            setTimeout(() => {
+              setRecentlyUpdatedCentros(prev => ({ ...prev, [updated.id_centro]: false }));
+            }, 6000);
+
+            // Añadir al feed
+            const timeStr = new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const msg = `El centro ${updated.nombre_centro} ha actualizado su reporte diario a: Semáforo ${updated.estado_semaforo}.`;
+            setFeedEvents(prev => [msg, ...prev.slice(0, 19)]);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Fuerza un zoom automático y centrado en los límites de su ASIC o su Eje territorial (RBAC)
+  useEffect(() => {
+    if (profile?.cod_asic) {
+      let pX = 0.38, pY = 0.45;
+      if (profile.cod_asic.toUpperCase().includes('PARACOTOS')) { pX = 0.33; pY = 0.58; }
+      else if (profile.cod_asic.toUpperCase().includes('GUA')) { pX = 0.35; pY = 0.40; }
+
+      const targetX = pX * mapDimensions.width;
+      const targetY = pY * mapDimensions.height;
+      const newZoom = 2.8;
+      const midX = mapDimensions.width / 2;
+      const midY = mapDimensions.height / 2;
+
+      setZoom(newZoom);
+      setPan({
+        x: midX - targetX * newZoom,
+        y: midY - targetY * newZoom
+      });
+    } else if (profile?.cod_eje) {
+      let pX = 0.5, pY = 0.5;
+      const normEje = profile.cod_eje.toUpperCase();
+      if (normEje === 'ALTOS_MIRANDINOS' || normEje === 'ALTOS MIRANDINOS') { pX = 0.36; pY = 0.42; }
+      else if (normEje === 'VALLES_DEL_TUY' || normEje === 'VALLES DEL TUY') { pX = 0.45; pY = 0.68; }
+      else if (normEje === 'GUARENAS_GUATIRE' || normEje === 'GUARENAS-GUATIRE' || normEje === 'GUARENAS GUATIRE') { pX = 0.59; pY = 0.34; }
+      else if (normEje === 'BARLOVENTO') { pX = 0.77; pY = 0.46; }
+      else if (normEje === 'METROPOLITANO') { pX = 0.49; pY = 0.24; }
+
+      const targetX = pX * mapDimensions.width;
+      const targetY = pY * mapDimensions.height;
+      const newZoom = 1.9;
+      const midX = mapDimensions.width / 2;
+      const midY = mapDimensions.height / 2;
+
+      setZoom(newZoom);
+      setPan({
+        x: midX - targetX * newZoom,
+        y: midY - targetY * newZoom
+      });
+    }
+  }, [profile?.cod_asic, profile?.cod_eje, mapDimensions.width, mapDimensions.height]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -1008,8 +1163,125 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                     <text x="180" y="215" fill="white" className="text-[12px] font-black pointer-events-none opacity-80 uppercase tracking-widest select-none shadow-black drop-shadow-md">Panel de Dibujo Activo (Suba un fondo)</text>
                   </g>
                 )}
+
+                {/* 🏥 Pines Dinámicos e Indicadores de Semáforos Médicos (Filtrados por RBAC) */}
+                {transitoReportes.filter(r => {
+                  if (profile?.cod_asic) {
+                    return (r.asic || '').toUpperCase() === profile.cod_asic.toUpperCase();
+                  }
+                  if (profile?.cod_eje) {
+                    const mappedEje = mapCodEjeToEjeGeografico(profile.cod_eje);
+                    return (r.eje_geografico || '').toUpperCase().replace('-', ' ') === mappedEje.toUpperCase().replace('-', ' ');
+                  }
+                  return true;
+                }).map((pin) => {
+                  const coords = getDeterministicCoords(pin.id_centro);
+                  const isRecentlyUpdated = recentlyUpdatedCentros[pin.id_centro];
+                  
+                  const markerColor = 
+                    pin.estado_semaforo === 'Verde' ? '#10B981' :
+                    pin.estado_semaforo === 'Amarillo' ? '#F59E0B' :
+                    pin.estado_semaforo === 'Rojo' ? '#EF4444' : '#94A3B8';
+
+                  const posX = coords.pX * mapDimensions.width;
+                  const posY = coords.pY * mapDimensions.height;
+
+                  return (
+                    <g 
+                      key={pin.id_centro} 
+                      transform={`translate(${posX}, ${posY})`}
+                      className="cursor-pointer"
+                      onMouseEnter={() => setHoveredCentro(pin)}
+                      onMouseLeave={() => setHoveredCentro(null)}
+                    >
+                      {/* Onda de choque (ripples) para actualizaciones recientes */}
+                      {isRecentlyUpdated && (
+                        <circle 
+                          r="18"
+                          fill="none"
+                          stroke="#F59E0B"
+                          strokeWidth="3.5"
+                          className="opacity-80 animate-[ping_1.8s_infinite]"
+                        />
+                      )}
+                      
+                      {/* Glow circular de color */}
+                      <circle 
+                        r="10" 
+                        fill={markerColor} 
+                        stroke="#FFFFFF" 
+                        strokeWidth="2.5" 
+                        className={`transition-all duration-300 hover:scale-135 ${isRecentlyUpdated ? 'animate-bounce' : ''}`}
+                        style={{ filter: `drop-shadow(0px 3px 6px rgba(0,0,0,0.45))` }}
+                      />
+                      
+                      {/* Centro del pin */}
+                      <circle 
+                        r="3.5" 
+                        fill="#FFFFFF" 
+                      />
+                    </g>
+                  );
+                })}
               </g>
             </svg>
+
+            {/* Tooltip flotante de información de establecimiento */}
+            <AnimatePresence>
+              {hoveredCentro && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                  className="absolute bottom-5 left-5 z-[40] max-w-sm bg-slate-900/95 backdrop-blur-xl border border-white/10 p-5 rounded-3xl shadow-2xl font-sans text-slate-100 flex flex-col gap-2.5"
+                >
+                  <div className="flex items-center justify-between gap-6">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-3.5 h-3.5 rounded-full animate-pulse shrink-0 ${
+                        hoveredCentro.estado_semaforo === 'Verde' ? 'bg-emerald-500' :
+                        hoveredCentro.estado_semaforo === 'Amarillo' ? 'bg-amber-500' :
+                        'bg-rose-500'
+                      }`} />
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-300">
+                        Estado Semáforo: {hoveredCentro.estado_semaforo || 'Desconocido'}
+                      </span>
+                    </div>
+                    {recentlyUpdatedCentros[hoveredCentro.id_centro] && (
+                      <span className="text-[7.5px] bg-amber-400/25 border border-amber-400/40 text-amber-400 px-2 py-0.5 rounded-full font-black uppercase tracking-wider animate-pulse">
+                        Suscripción Activa
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div>
+                    <h5 className="text-xs font-black uppercase tracking-wide text-white leading-tight">{hoveredCentro.nombre_centro}</h5>
+                    <p className="text-[9.5px] text-slate-400 font-extrabold uppercase mt-1">NÚCLEO ASIC: {hoveredCentro.asic}</p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                    <span className="text-[8px] text-blue-400 bg-blue-900/40 border border-blue-500/20 rounded-md px-2 py-0.5 font-bold uppercase tracking-wider">
+                      Eje: {hoveredCentro.eje_geografico}
+                    </span>
+                    <span className="text-[8px] text-slate-400 bg-slate-800/80 border border-slate-700/20 rounded-md px-2 py-0.5 font-bold">
+                      ID: {hoveredCentro.id_centro}
+                    </span>
+                  </div>
+
+                  <div className="border-t border-white/10 pt-3 mt-1.5 flex justify-between gap-4 text-[9px] text-slate-400 font-bold uppercase tracking-wider font-mono">
+                    <div>
+                      <p className="text-slate-500 text-[8px] font-black uppercase">Actualización</p>
+                      <p className="font-extrabold text-white mt-0.5">{new Date(hoveredCentro.ultimo_reporte || Date.now()).toLocaleDateString('es-VE')}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-slate-500 text-[8px] font-black uppercase">Horas Retraso</p>
+                      <p className={`font-black mt-0.5 ${hoveredCentro.horas_retraso > 24 ? 'text-rose-400' : 'text-emerald-400'}`}>{hoveredCentro.horas_retraso}h</p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+
 
             {/* Controles flotantes para mejorar navegabilidad tactil */}
             <div className={`absolute z-30 flex flex-col gap-2 transition-all duration-300

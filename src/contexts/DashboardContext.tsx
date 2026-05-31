@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
 import { 
   calculateDashboardState, 
   triggerGoogleSheetsSync, 
@@ -8,6 +9,16 @@ import {
   EjeSummary, 
   DashboardStats 
 } from '../services/dashboardService';
+
+function mapCodEjeToEjeGeografico(cod: string): string {
+  const norm = cod.toLowerCase().trim();
+  if (norm === 'altos_mirandinos') return 'ALTOS MIRANDINOS';
+  if (norm === 'valles_del_tuy') return 'VALLES DEL TUY';
+  if (norm === 'guarenas_guatire' || norm === 'guarenas-guatire') return 'GUARENAS-GUATIRE';
+  if (norm === 'barlovento') return 'BARLOVENTO';
+  if (norm === 'metropolitano') return 'METROPOLITANO';
+  return cod.toUpperCase().replace('_', ' ');
+}
 
 interface DashboardContextType {
   reportes: TransitoReporte[];
@@ -236,13 +247,37 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     };
   }, [fetchData]);
 
+  const { profile } = useAuth();
+
+  useEffect(() => {
+    if (profile?.cod_eje) {
+      setSelectedEje(mapCodEjeToEjeGeografico(profile.cod_eje));
+    }
+  }, [profile?.cod_eje]);
+
+  const filteredReportes = useMemo(() => {
+    let result = reportes;
+    if (profile?.cod_eje) {
+      const mappedEje = mapCodEjeToEjeGeografico(profile.cod_eje);
+      result = result.filter(r => 
+        (r.eje_geografico || '').toUpperCase().replace('-', ' ') === mappedEje.toUpperCase().replace('-', ' ')
+      );
+    }
+    if (profile?.cod_asic) {
+      result = result.filter(r => 
+        (r.asic || '').toUpperCase() === profile.cod_asic.toUpperCase()
+      );
+    }
+    return result;
+  }, [reportes, profile?.cod_eje, profile?.cod_asic]);
+
   // Derive consolidated dashboards state
   const { asics, ejes, stats } = useMemo(() => {
-    return calculateDashboardState(reportes, resumenAsicsDb);
-  }, [reportes, resumenAsicsDb]);
+    return calculateDashboardState(filteredReportes, resumenAsicsDb);
+  }, [filteredReportes, resumenAsicsDb]);
 
   const value = useMemo(() => ({
-    reportes,
+    reportes: filteredReportes,
     asics,
     ejes,
     stats,
@@ -259,7 +294,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     fetchTransitoData,
     fetchResumenData
   }), [
-    reportes, 
+    filteredReportes, 
     asics, 
     ejes, 
     stats, 

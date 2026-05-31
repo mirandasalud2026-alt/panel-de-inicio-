@@ -13,19 +13,29 @@ CREATE TABLE IF NOT EXISTS public.usuarios (
 -- 2. Habilitar Seguridad (RLS)
 ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
 
+-- 2b. Función para evitar recursión en consultas RLS (SECURITY DEFINER + row_security = off)
+CREATE OR REPLACE FUNCTION public.get_user_role()
+RETURNS TEXT AS $$
+BEGIN
+  RETURN (
+    SELECT rol FROM public.usuarios 
+    WHERE id = auth.uid()
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET row_security TO 'off';
+
 -- 3. Políticas de seguridad
 DROP POLICY IF EXISTS "Usuarios pueden ver su propio perfil" ON public.usuarios;
 CREATE POLICY "Usuarios pueden ver su propio perfil" ON public.usuarios
-    FOR SELECT USING (auth.uid() = id);
+    FOR SELECT TO authenticated
+    USING (auth.uid() = id OR get_user_role() = 'admin');
 
 DROP POLICY IF EXISTS "Admins pueden ver todos los perfiles" ON public.usuarios;
-CREATE POLICY "Admins pueden ver todos los perfiles" ON public.usuarios
-    FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM public.usuarios
-            WHERE id = auth.uid() AND rol = 'admin'
-        )
-    );
+DROP POLICY IF EXISTS "Admins gestionan todo" ON public.usuarios;
+CREATE POLICY "Admins gestionan todo" ON public.usuarios
+    FOR ALL TO authenticated
+    USING (get_user_role() = 'admin')
+    WITH CHECK (get_user_role() = 'admin');
 
 -- 4. Función Trigger - LA CLAVE MAESTRA
 -- Esta función se encarga de asignar el rol de 'admin' automáticamente al correo solicitado.
@@ -84,7 +94,7 @@ CREATE POLICY "Todos pueden ver config mapa" ON public.mapa_config FOR SELECT US
 
 DROP POLICY IF EXISTS "Admins pueden editar config mapa" ON public.mapa_config;
 CREATE POLICY "Admins pueden editar config mapa" ON public.mapa_config FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin')
+    get_user_role() = 'admin'
 );
 
 DROP POLICY IF EXISTS "Todos pueden ver poligonos" ON public.mapa_poligonos;
@@ -92,7 +102,7 @@ CREATE POLICY "Todos pueden ver poligonos" ON public.mapa_poligonos FOR SELECT U
 
 DROP POLICY IF EXISTS "Admins pueden editar poligonos" ON public.mapa_poligonos;
 CREATE POLICY "Admins pueden editar poligonos" ON public.mapa_poligonos FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin')
+    get_user_role() = 'admin'
 );
 
 -- 8. Tabla para Calendario / Jornadas
@@ -114,7 +124,7 @@ CREATE POLICY "Todos pueden ver calendario" ON public.calendario FOR SELECT USIN
 
 DROP POLICY IF EXISTS "Admins pueden editar calendario" ON public.calendario;
 CREATE POLICY "Admins pueden editar calendario" ON public.calendario FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin')
+    get_user_role() = 'admin'
 );
 
 -- 9. Tabla para Noticias
@@ -136,7 +146,7 @@ CREATE POLICY "Todos pueden ver noticias" ON public.noticias FOR SELECT USING (t
 
 DROP POLICY IF EXISTS "Admins pueden editar noticias" ON public.noticias;
 CREATE POLICY "Admins pueden editar noticias" ON public.noticias FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin')
+    get_user_role() = 'admin'
 );
 
 -- 10. Tabla de Tránsito de Reportes (Monitoreo de Cumplimiento Canal 3)
@@ -160,66 +170,119 @@ CREATE POLICY "Todos pueden ver transito_reportes" ON public.transito_reportes F
 
 DROP POLICY IF EXISTS "Admins pueden editar transito_reportes" ON public.transito_reportes;
 CREATE POLICY "Admins pueden editar transito_reportes" ON public.transito_reportes FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin')
+    get_user_role() = 'admin'
 );
 
 
 -- 11. TABLAS DE COMPLEMENTO GEOGRÁFICO Y ASIC (RELACIONES DETECTADAS POR SEMÁNTICA)
-CREATE TABLE IF NOT EXISTS public.TEjes (
+CREATE TABLE IF NOT EXISTS public."TEjes" (
     cod_eje TEXT PRIMARY KEY,
     nombre_eje TEXT NOT NULL,
     descripcion TEXT
 );
 
-CREATE TABLE IF NOT EXISTS public.TMunicipios (
+CREATE TABLE IF NOT EXISTS public."TMunicipios" (
     cod_mun NUMERIC PRIMARY KEY,
     nombre_municipio TEXT NOT NULL,
-    "Cod_Eje" TEXT REFERENCES public.TEjes(cod_eje) ON DELETE SET NULL
+    "Cod_Eje" TEXT REFERENCES public."TEjes"(cod_eje) ON DELETE SET NULL
 );
 
-CREATE TABLE IF NOT EXISTS public.TParroquias (
+CREATE TABLE IF NOT EXISTS public."TParroquias" (
     cod_parr NUMERIC PRIMARY KEY,
     nombre_parroquia TEXT NOT NULL,
-    cod_mun NUMERIC REFERENCES public.TMunicipios(cod_mun) ON DELETE CASCADE
+    cod_mun NUMERIC REFERENCES public."TMunicipios"(cod_mun) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS public.TASIC (
+CREATE TABLE IF NOT EXISTS public."TASIC" (
     "Cod_ASIC" TEXT PRIMARY KEY,
     nombre_asic TEXT NOT NULL,
-    "Cod_Eje" TEXT REFERENCES public.TEjes(cod_eje) ON DELETE SET NULL,
-    "Cod_mun" NUMERIC REFERENCES public.TMunicipios(cod_mun) ON DELETE SET NULL,
-    "Cod_parr" NUMERIC REFERENCES public.TParroquias(cod_parr) ON DELETE SET NULL
+    "Cod_Eje" TEXT REFERENCES public."TEjes"(cod_eje) ON DELETE SET NULL,
+    "Cod_mun" NUMERIC REFERENCES public."TMunicipios"(cod_mun) ON DELETE SET NULL,
+    "Cod_parr" NUMERIC REFERENCES public."TParroquias"(cod_parr) ON DELETE SET NULL
 );
 
+-- Columnas adicionales para la Ficha Técnica de las ASIC
+ALTER TABLE public."TASIC" ADD COLUMN IF NOT EXISTS nombre_asic TEXT;
+ALTER TABLE public."TASIC" ADD COLUMN IF NOT EXISTS "Cod_Eje" TEXT;
+ALTER TABLE public."TASIC" ADD COLUMN IF NOT EXISTS "Cod_mun" NUMERIC;
+ALTER TABLE public."TASIC" ADD COLUMN IF NOT EXISTS "Cod_parr" NUMERIC;
+ALTER TABLE public."TASIC" ADD COLUMN IF NOT EXISTS responsable TEXT;
+ALTER TABLE public."TASIC" ADD COLUMN IF NOT EXISTS population_estimada INT DEFAULT 0; -- o poblacion_estimada
+ALTER TABLE public."TASIC" ADD COLUMN IF NOT EXISTS poblacion_estimada INT DEFAULT 0;
+ALTER TABLE public."TASIC" ADD COLUMN IF NOT EXISTS telefono_contacto TEXT;
+ALTER TABLE public."TASIC" ADD COLUMN IF NOT EXISTS correo_contacto TEXT;
+ALTER TABLE public."TASIC" ADD COLUMN IF NOT EXISTS numero_centros INT DEFAULT 0;
+
+ALTER TABLE public."TEjes" ADD COLUMN IF NOT EXISTS nombre_eje TEXT;
+ALTER TABLE public."TEjes" ADD COLUMN IF NOT EXISTS descripcion TEXT;
+
+ALTER TABLE public."TMunicipios" ADD COLUMN IF NOT EXISTS nombre_municipio TEXT;
+ALTER TABLE public."TMunicipios" ADD COLUMN IF NOT EXISTS "Cod_Eje" TEXT;
+
+ALTER TABLE public."TParroquias" ADD COLUMN IF NOT EXISTS nombre_parroquia TEXT;
+ALTER TABLE public."TParroquias" ADD COLUMN IF NOT EXISTS cod_mun NUMERIC;
+
 -- Habilitar RLS en tablas complementarias
-ALTER TABLE public.TEjes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.TMunicipios ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.TParroquias ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.TASIC ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."TEjes" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."TMunicipios" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."TParroquias" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."TASIC" ENABLE ROW LEVEL SECURITY;
 
 -- Políticas de lectura pública para todas las de referencia
-CREATE POLICY "Lectura pública TEjes" ON public.TEjes FOR SELECT USING (true);
-CREATE POLICY "Lectura pública TMunicipios" ON public.TMunicipios FOR SELECT USING (true);
-CREATE POLICY "Lectura pública TParroquias" ON public.TParroquias FOR SELECT USING (true);
-CREATE POLICY "Lectura pública TASIC" ON public.TASIC FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Lectura pública TEjes" ON public."TEjes";
+CREATE POLICY "Lectura pública TEjes" ON public."TEjes" FOR SELECT USING (true);
 
--- 12. VISTAS UNIFICADAS DE BASE DE DATOS
--- Vista 1: Resumen Operativo de ASIC (Calculado dinámicamente)
-CREATE OR REPLACE VIEW public.resumen_asic AS
-SELECT 
-    COALESCE(tr.eje_geografico, 'Sin Eje') AS eje,
-    tr.asic AS asic,
-    COUNT(*)::INTEGER AS "totalEstablecimientos",
-    COUNT(CASE WHEN tr.estado_semaforo = 'Verde' THEN 1 END)::INTEGER AS "totalActivos",
-    COUNT(CASE WHEN tr.estado_semaforo = 'Amarillo' THEN 1 END)::INTEGER AS "totalInactivos",
-    COUNT(CASE WHEN tr.estado_semaforo = 'Rojo' THEN 1 END)::INTEGER AS "totalClausurados",
-    COUNT(CASE WHEN tr.estado_semaforo = 'Verde' THEN 1 END)::INTEGER AS reportaron,
-    COALESCE(
-        ROUND((COUNT(CASE WHEN tr.estado_semaforo = 'Verde' THEN 1 END)::NUMERIC / NULLIF(COUNT(*), 0) * 100), 1),
-        0
-    )::FLOAT AS "porcentajeReporte"
-FROM public.transito_reportes tr
-GROUP BY tr.eje_geografico, tr.asic;
+DROP POLICY IF EXISTS "Lectura pública TMunicipios" ON public."TMunicipios";
+CREATE POLICY "Lectura pública TMunicipios" ON public."TMunicipios" FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Lectura pública TParroquias" ON public."TParroquias";
+CREATE POLICY "Lectura pública TParroquias" ON public."TParroquias" FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Lectura pública TASIC" ON public."TASIC";
+CREATE POLICY "Lectura pública TASIC" ON public."TASIC" FOR SELECT USING (true);
+
+-- Políticas de escritura para administradores en tablas complementarias (Evita el bloqueo de RLS al guardar fichas)
+DROP POLICY IF EXISTS "Admins pueden editar TEjes" ON public."TEjes";
+CREATE POLICY "Admins pueden editar TEjes" ON public."TEjes" FOR ALL USING (
+    get_user_role() = 'admin'
+);
+
+DROP POLICY IF EXISTS "Admins pueden editar TMunicipios" ON public."TMunicipios";
+CREATE POLICY "Admins pueden editar TMunicipios" ON public."TMunicipios" FOR ALL USING (
+    get_user_role() = 'admin'
+);
+
+DROP POLICY IF EXISTS "Admins pueden editar TParroquias" ON public."TParroquias";
+CREATE POLICY "Admins pueden editar TParroquias" ON public."TParroquias" FOR ALL USING (
+    get_user_role() = 'admin'
+);
+
+DROP POLICY IF EXISTS "Admins pueden editar TASIC" ON public."TASIC";
+CREATE POLICY "Admins pueden editar TASIC" ON public."TASIC" FOR ALL USING (
+    get_user_role() = 'admin'
+);
+
+-- 12. COMPONENTES DE BASE DE DATOS Y TABLAS SINCROLEIDAS
+-- Tabla resumen_asic (Sincronizada por Google Sheets, contiene el resumen agregativo de ASICs)
+CREATE TABLE IF NOT EXISTS public.resumen_asic (
+    asic TEXT PRIMARY KEY,
+    eje TEXT,
+    total_centros INTEGER DEFAULT 0,
+    centros_reportaron INTEGER DEFAULT 0,
+    porcentaje_reporte NUMERIC DEFAULT 0,
+    actualizado_en TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Asegurar políticas de lectura y escritura para la tabla resumen_asic
+ALTER TABLE public.resumen_asic ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Lectura pública resumen_asic" ON public.resumen_asic;
+CREATE POLICY "Lectura pública resumen_asic" ON public.resumen_asic FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins pueden editar resumen_asic" ON public.resumen_asic;
+CREATE POLICY "Admins pueden editar resumen_asic" ON public.resumen_asic FOR ALL USING (
+    get_user_role() = 'admin'
+);
 
 -- Vista 2: Vista Unificada Territorial (Completa)
 CREATE OR REPLACE VIEW public.vista_unificada_territorial AS
@@ -239,10 +302,10 @@ SELECT
     p.nombre_parroquia,
     p.cod_parr AS parroquia_id
 FROM public.transito_reportes tr
-LEFT JOIN public.TASIC a ON a."Cod_ASIC" = tr.asic
-LEFT JOIN public.TEjes e ON e.cod_eje = a."Cod_Eje"
-LEFT JOIN public.TMunicipios m ON m.cod_mun = a."Cod_mun"
-LEFT JOIN public.TParroquias p ON p.cod_parr = a."Cod_parr";
+LEFT JOIN public."TASIC" a ON a."Cod_ASIC" = tr.asic
+LEFT JOIN public."TEjes" e ON e.cod_eje = a."Cod_Eje"
+LEFT JOIN public."TMunicipios" m ON m.cod_mun = a."Cod_mun"
+LEFT JOIN public."TParroquias" p ON p.cod_parr = a."Cod_parr";
 
 -- Vista 3: Noticias con Autores Unificados
 CREATE OR REPLACE VIEW public.vista_noticias_autores AS
@@ -257,6 +320,5 @@ SELECT
     u.nombre AS autor_nombre,
     u.rol AS autor_rol
 FROM public.noticias n
-LEFT JOIN public.usuarios u ON u.id = NEW_NOTICIA_AUTOR_FALLBACK_VAL.autor_id_test -- o left join por columnas si existen
-CROSS JOIN (SELECT NULL::UUID AS autor_id_test) NEW_NOTICIA_AUTOR_FALLBACK_VAL;
+LEFT JOIN public.usuarios u ON u.id = NULL::UUID;
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useDashboardData } from '../../hooks/useDashboardData';
+import { useAuth } from '../../hooks/useAuth';
 import { RefreshCw, MapPin, Globe, Loader2, Calendar } from 'lucide-react';
 
 export default function DashboardHeader() {
@@ -12,6 +13,8 @@ export default function DashboardHeader() {
     isLoading,
     fetchData
   } = useDashboardData();
+
+  const { profile } = useAuth();
 
   const EjesList = [
     { id: 'TODO', label: 'TODOS LOS EJES' },
@@ -86,30 +89,52 @@ export default function DashboardHeader() {
       </div>
 
       {/* Segmented/scroll Eje Filters */}
-      <div className="border-t border-slate-50 pt-3">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-thin scrollbar-thumb-slate-200">
-          <div className="flex items-center gap-1 text-slate-400 text-[9px] font-black uppercase tracking-wider shrink-0 mr-1.5">
-            <MapPin size={11} className="text-slate-400" />
-            Filtrar:
+      {profile?.cod_asic ? (
+        <div className="border-t border-slate-50 pt-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 px-3.5 py-2 rounded-2xl text-[10px] font-black uppercase tracking-wider text-amber-700">
+            <MapPin size={13} className="text-amber-600 shrink-0" />
+            <span>Jurisdicción Restringida a ASIC: {profile.cod_asic}</span>
           </div>
-          {EjesList.map(e => {
-            const isSelected = selectedEje === e.id;
-            return (
-              <button
-                key={e.id}
-                onClick={() => setSelectedEje(e.id)}
-                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider shrink-0 transition-all ${
-                  isSelected 
-                    ? 'bg-[#0B3D5C] text-white shadow-sm font-black' 
-                    : 'bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-700'
-                }`}
-              >
-                {e.label}
-              </button>
-            );
-          })}
+          <span className="text-[8px] sm:text-[9px] uppercase font-black text-rose-500 bg-rose-50 border border-rose-100 px-3 py-1 rounded-full tracking-wider">
+            Selector territorial bloqueado por RBAC
+          </span>
         </div>
-      </div>
+      ) : profile?.cod_eje ? (
+        <div className="border-t border-slate-50 pt-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 px-3.5 py-2 rounded-2xl text-[10px] font-black uppercase tracking-wider text-amber-700">
+            <MapPin size={13} className="text-amber-600 shrink-0" />
+            <span>Jurisdicción Restringida a Eje: {profile.cod_eje.toUpperCase().replace('_', ' ')}</span>
+          </div>
+          <span className="text-[8px] sm:text-[9px] uppercase font-black text-rose-500 bg-rose-50 border border-rose-100 px-3 py-1 rounded-full tracking-wider">
+            Selector territorial bloqueado por RBAC
+          </span>
+        </div>
+      ) : (
+        <div className="border-t border-slate-50 pt-3">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-thin scrollbar-thumb-slate-200">
+            <div className="flex items-center gap-1 text-slate-400 text-[9px] font-black uppercase tracking-wider shrink-0 mr-1.5">
+              <MapPin size={11} className="text-slate-400" />
+              Filtrar:
+            </div>
+            {EjesList.map(e => {
+              const isSelected = selectedEje === e.id;
+              return (
+                <button
+                  key={e.id}
+                  onClick={() => setSelectedEje(e.id)}
+                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider shrink-0 transition-all ${
+                    isSelected 
+                      ? 'bg-[#0B3D5C] text-white shadow-sm font-black' 
+                      : 'bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                  }`}
+                >
+                  {e.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
     </div>
   );

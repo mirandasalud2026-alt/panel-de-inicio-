@@ -115,15 +115,34 @@ export function useAuth() {
       const isDemo = localStorage.getItem('sim_demo_admin') === 'true';
       if (!isDemo) return false;
 
-      const demoRole = localStorage.getItem('sim_demo_role');
+      const demoRole = localStorage.getItem('sim_demo_role') || 'oficina';
+      const codEje = localStorage.getItem('sim_demo_cod_eje') || undefined;
+      const codAsic = localStorage.getItem('sim_demo_cod_asic') || undefined;
+      const idCentro = localStorage.getItem('sim_demo_id_centro') || undefined;
+
       if (demoRole === 'directivo') {
-        setUser({ email: 'directivo@miranda.gob.ve' } as User);
+        setUser({ email: codEje ? 'oficina_eje@miranda.gob.ve' : codAsic ? 'oficina_asic@miranda.gob.ve' : 'directivo@miranda.gob.ve' } as User);
         setProfile({
           id: 'demo-directivo',
-          nombre: 'Director de Vigilancia (Demo)',
-          email: 'directivo@miranda.gob.ve',
+          nombre: codEje ? 'Director de Eje (Altos Mirandinos)' : codAsic ? 'Director de ASIC (Carrizal)' : 'Director de Vigilancia (Demo)',
+          email: codEje ? 'oficina_eje@miranda.gob.ve' : codAsic ? 'oficina_asic@miranda.gob.ve' : 'directivo@miranda.gob.ve',
           rol: 'directivo',
-          estado: 'aprobado'
+          estado: 'aprobado',
+          cod_eje: codEje,
+          cod_asic: codAsic,
+          id_centro: idCentro
+        });
+      } else if (demoRole === 'oficina') {
+        setUser({ email: idCentro ? 'oficina_centro@miranda.gob.ve' : 'oficina@miranda.gob.ve' } as User);
+        setProfile({
+          id: 'demo-oficina',
+          nombre: idCentro ? 'Coordinador de Centro (Guaremal)' : 'Gestor Operativo (Demo)',
+          email: idCentro ? 'oficina_centro@miranda.gob.ve' : 'oficina@miranda.gob.ve',
+          rol: 'oficina',
+          estado: 'aprobado',
+          cod_eje: codEje,
+          cod_asic: codAsic,
+          id_centro: idCentro
         });
       } else {
         setUser({ email: 'miranda.salud2026@gmail.com' } as User);
@@ -132,7 +151,10 @@ export function useAuth() {
           nombre: 'Administrador Central (Demo)',
           email: 'miranda.salud2026@gmail.com',
           rol: 'admin',
-          estado: 'aprobado'
+          estado: 'aprobado',
+          cod_eje: codEje,
+          cod_asic: codAsic,
+          id_centro: idCentro
         });
       }
       setLoading(false);

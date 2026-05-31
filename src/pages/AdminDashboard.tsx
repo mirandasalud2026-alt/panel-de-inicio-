@@ -1,10 +1,10 @@
 import { useAuth } from '../hooks/useAuth';
 import { Navigate } from 'react-router-dom';
-import DirectorDashboard from '../components/ui/DirectorDashboard';
 import MinimalistDashboard from '../components/ui/MinimalistDashboard';
 import OficinaDashboard from '../components/ui/OficinaDashboard';
 import AdminPortal from '../components/ui/AdminPortal';
 import InteractiveMirandaMap from '../components/InteractiveMirandaMap';
+import ReporteDiarioTabular from '../components/admin/ReporteDiarioTabular';
 import { supabase } from '../lib/supabase';
 import { LogOut, User, ShieldCheck, Clock, FileCheck, ExternalLink, LayoutDashboard, TrendingUp, AlertTriangle, LayoutGrid } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -69,6 +69,69 @@ export default function AdminDashboard() {
              Cerrar Sesión
            </button>
         </div>
+      </div>
+    );
+  }
+
+  // Si es Coordinador de Centro (id_centro definido), bypass completo al mapa y mandarlo al formulario de carga diaria del centro específico
+  if (profile.id_centro) {
+    return (
+      <div className="min-h-screen bg-[#F3F4F6] pb-10 font-sans flex flex-col justify-start">
+        <div className="sticky top-0 z-30 shadow-md shrink-0">
+          <div className="h-2 w-full flex text-slate-700">
+            <div className="flex-1 bg-[#FFD700]"></div>
+            <div className="flex-1 bg-[#002F6C]"></div>
+            <div className="flex-1 bg-[#CF0921]"></div>
+            <div className="flex-1 bg-[#008751]"></div>
+          </div>
+
+          <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-6 md:px-8">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-[#0B3D5C] rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm">
+                🏥
+              </div>
+              <div>
+                <h2 className="text-sm font-black text-slate-800 leading-none uppercase">Carga Diaria de Consultas y Emergencias</h2>
+                <p className="text-[10px] text-gray-400 mt-1 font-black uppercase tracking-wider">Coordinador de Centro • Miranda Salud</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 sm:gap-6">
+              <div className="hidden xs:flex flex-col items-end">
+                <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">{profile.nombre}</span>
+                <span className="text-[9px] font-black px-2.5 py-1 mt-1 rounded-full uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100">
+                  ID Centro: {profile.id_centro}
+                </span>
+              </div>
+              
+              <button 
+                onClick={() => {
+                  localStorage.removeItem('sim_demo_admin');
+                  localStorage.removeItem('sim_demo_role');
+                  localStorage.removeItem('sim_demo_cod_eje');
+                  localStorage.removeItem('sim_demo_cod_asic');
+                  localStorage.removeItem('sim_demo_id_centro');
+                  supabase?.auth.signOut();
+                  if (!supabase) window.location.href = '/login';
+                }}
+                className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all shadow-sm"
+                title="Cerrar sesión"
+              >
+                <LogOut size={18} />
+              </button>
+            </div>
+          </header>
+        </div>
+
+        <main className="max-w-4xl mx-auto p-6 md:p-8 w-full mt-4">
+          <ReporteDiarioTabular idCentro={String(profile.id_centro)} />
+        </main>
+
+        <footer className="mt-8 px-6 text-center opacity-30">
+          <p className="text-[10px] text-[#0B3D5C] font-extrabold uppercase tracking-[0.3em]">
+            Miranda Salud • Seguridad Reforzada 2026
+          </p>
+        </footer>
       </div>
     );
   }
@@ -183,7 +246,7 @@ export default function AdminDashboard() {
         </div>
 
         <main className="max-w-7xl mx-auto p-6 md:p-8 w-full">
-          <DirectorDashboard />
+          <MinimalistDashboard />
         </main>
 
         <footer className="mt-8 px-6 text-center opacity-30">
