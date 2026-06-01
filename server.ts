@@ -248,21 +248,21 @@ async function startServer() {
           return res.json({ status: "success", source: "supabase_view", data });
         }
         
-        console.warn("Fallo o no existe la vista unificada en Supabase, intentando JOIN manual en backend:", error);
+        console.warn("Fallo o no existe la vista unificada en Supabase, intentando JOIN manual en backend:");
         
         // Manual fallback query joins
         const { data: transito } = await supabaseServerClient.from("transito_reportes").select("*");
-        const { data: tasic } = await supabaseServerClient.from("TASIC").select("*");
-        const { data: tejes } = await supabaseServerClient.from("TEjes").select("*");
-        const { data: tmunicipios } = await supabaseServerClient.from("TMunicipios").select("*");
-        const { data: tparroquias } = await supabaseServerClient.from("TParroquias").select("*");
+        const { data: tasic } = await supabaseServerClient.from("tasic").select("*");
+        const { data: tejes } = await supabaseServerClient.from("tejes").select("*");
+        const { data: tmunicipios } = await supabaseServerClient.from("tmunicipios").select("*");
+        const { data: tparroquias } = await supabaseServerClient.from("tparroquias").select("*");
         
         if (transito) {
           const joinedData = transito.map((tr: any) => {
-            const a = tasic?.find((x: any) => x.Cod_ASIC === tr.asic || x.cod_asic === tr.asic);
-            const e = tejes?.find((x: any) => x.cod_eje === a?.Cod_Eje || x.cod_eje === a?.cod_eje);
-            const m = tmunicipios?.find((x: any) => x.cod_mun == a?.Cod_mun || x.cod_mun == a?.cod_mun);
-            const p = tparroquias?.find((x: any) => x.cod_parr == a?.Cod_parr || x.cod_parr == a?.cod_parr);
+            const a = tasic?.find((x: any) => x.cod_asic === tr.asic || x.Cod_ASIC === tr.asic);
+            const e = tejes?.find((x: any) => x.cod_eje === a?.cod_eje || x.cod_eje === a?.Cod_Eje);
+            const m = tmunicipios?.find((x: any) => x.cod_mun == a?.cod_mun || x.cod_mun == a?.Cod_mun);
+            const p = tparroquias?.find((x: any) => x.cod_parr == a?.cod_parr || x.cod_parr == a?.Cod_parr);
             
             return {
               id_centro: tr.id_centro,
@@ -274,7 +274,7 @@ async function startServer() {
               actualizado_en: tr.actualizado_en,
               nombre_asic: a ? a.nombre_asic : tr.asic,
               eje_geografico: tr.eje_geografico || e?.nombre_eje || "Sin Eje",
-              eje_id: e?.cod_eje || a?.Cod_Eje || "Sin Eje",
+              eje_id: e?.cod_eje || a?.cod_eje || "Sin Eje",
               nombre_municipio: m?.nombre_municipio || "Sin Municipio",
               municipio_id: m?.cod_mun || null,
               nombre_parroquia: p?.nombre_parroquia || "Sin Parroquia",

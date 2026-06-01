@@ -193,43 +193,81 @@ ON CONFLICT DO NOTHING;
 
 
 -- 9. TABLAS DE COMPLEMENTO GEOGRÁFICO Y ASIC (RELACIONES DETECTADAS POR SEMÁNTICA)
-CREATE TABLE IF NOT EXISTS public.TEjes (
+CREATE TABLE IF NOT EXISTS public.tejes (
     cod_eje TEXT PRIMARY KEY,
     nombre_eje TEXT NOT NULL,
-    descripcion TEXT
+    eje TEXT,
+    responsable TEXT,
+    poblacion_estimada INTEGER,
+    url_imagen_mapa TEXT,
+    descripcion_texto TEXT,
+    contacto_emergencia TEXT
 );
 
-CREATE TABLE IF NOT EXISTS public.TMunicipios (
+CREATE TABLE IF NOT EXISTS public.tmunicipios (
     cod_mun NUMERIC PRIMARY KEY,
     nombre_municipio TEXT NOT NULL,
-    "Cod_Eje" TEXT REFERENCES public.TEjes(cod_eje) ON DELETE SET NULL
+    cod_eje TEXT REFERENCES public.tejes(cod_eje) ON DELETE SET NULL
 );
 
-CREATE TABLE IF NOT EXISTS public.TParroquias (
+CREATE TABLE IF NOT EXISTS public.tparroquias (
     cod_parr NUMERIC PRIMARY KEY,
     nombre_parroquia TEXT NOT NULL,
-    cod_mun NUMERIC REFERENCES public.TMunicipios(cod_mun) ON DELETE CASCADE
+    cod_mun NUMERIC REFERENCES public.tmunicipios(cod_mun) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS public.TASIC (
-    "Cod_ASIC" TEXT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS public.tasic (
+    cod_asic TEXT PRIMARY KEY,
     nombre_asic TEXT NOT NULL,
-    "Cod_Eje" TEXT REFERENCES public.TEjes(cod_eje) ON DELETE SET NULL,
-    "Cod_mun" NUMERIC REFERENCES public.TMunicipios(cod_mun) ON DELETE SET NULL,
-    "Cod_parr" NUMERIC REFERENCES public.TParroquias(cod_parr) ON DELETE SET NULL
+    cod_eje TEXT REFERENCES public.tejes(cod_eje) ON DELETE SET NULL,
+    cod_mun NUMERIC REFERENCES public.tmunicipios(cod_mun) ON DELETE SET NULL,
+    cod_parr NUMERIC REFERENCES public.tparroquias(cod_parr) ON DELETE SET NULL,
+    responsable TEXT,
+    poblacion_estimada INTEGER,
+    telefono_contacto TEXT,
+    correo_contacto TEXT,
+    numero_centros INTEGER
 );
 
 -- Habilitar RLS en tablas complementarias
-ALTER TABLE public.TEjes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.TMunicipios ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.TParroquias ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.TASIC ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tejes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tmunicipios ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tparroquias ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tasic ENABLE ROW LEVEL SECURITY;
 
 -- Políticas de lectura pública para todas las de referencia
-CREATE POLICY "Lectura pública TEjes" ON public.TEjes FOR SELECT USING (true);
-CREATE POLICY "Lectura pública TMunicipios" ON public.TMunicipios FOR SELECT USING (true);
-CREATE POLICY "Lectura pública TParroquias" ON public.TParroquias FOR SELECT USING (true);
-CREATE POLICY "Lectura pública TASIC" ON public.TASIC FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Lectura pública tejes" ON public.tejes;
+CREATE POLICY "Lectura pública tejes" ON public.tejes FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Lectura pública tmunicipios" ON public.tmunicipios;
+CREATE POLICY "Lectura pública tmunicipios" ON public.tmunicipios FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Lectura pública tparroquias" ON public.tparroquias;
+CREATE POLICY "Lectura pública tparroquias" ON public.tparroquias FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Lectura pública tasic" ON public.tasic;
+CREATE POLICY "Lectura pública tasic" ON public.tasic FOR SELECT USING (true);
+
+-- Políticas de escritura para administradores en tablas complementarias
+DROP POLICY IF EXISTS "Admins pueden editar tejes" ON public.tejes;
+CREATE POLICY "Admins pueden editar tejes" ON public.tejes FOR ALL USING (
+    get_user_role() = 'admin'
+);
+
+DROP POLICY IF EXISTS "Admins pueden editar tmunicipios" ON public.tmunicipios;
+CREATE POLICY "Admins pueden editar tmunicipios" ON public.tmunicipios FOR ALL USING (
+    get_user_role() = 'admin'
+);
+
+DROP POLICY IF EXISTS "Admins pueden editar tparroquias" ON public.tparroquias;
+CREATE POLICY "Admins pueden editar tparroquias" ON public.tparroquias FOR ALL USING (
+    get_user_role() = 'admin'
+);
+
+DROP POLICY IF EXISTS "Admins pueden editar tasic" ON public.tasic;
+CREATE POLICY "Admins pueden editar tasic" ON public.tasic FOR ALL USING (
+    get_user_role() = 'admin'
+);
 
 -- 10. COMPONENTES DE BASE DE DATOS Y TABLAS SINCROLEIDAS
 -- Tabla resumen_asic (Sincronizada por Google Sheets, contiene el resumen agregativo de ASICs)
@@ -271,10 +309,10 @@ SELECT
     p.nombre_parroquia,
     p.cod_parr AS parroquia_id
 FROM public.transito_reportes tr
-LEFT JOIN public.TASIC a ON a."Cod_ASIC" = tr.asic
-LEFT JOIN public.TEjes e ON e.cod_eje = a."Cod_Eje"
-LEFT JOIN public.TMunicipios m ON m.cod_mun = a."Cod_mun"
-LEFT JOIN public.TParroquias p ON p.cod_parr = a."Cod_parr";
+LEFT JOIN public.tasic a ON a.cod_asic = tr.asic
+LEFT JOIN public.tejes e ON e.cod_eje = a.cod_eje
+LEFT JOIN public.tmunicipios m ON m.cod_mun = a.cod_mun
+LEFT JOIN public.tparroquias p ON p.cod_parr = a.cod_parr;
 
 -- Vista 3: Noticias con Autores Unificados
 CREATE OR REPLACE VIEW public.vista_noticias_autores AS
@@ -290,4 +328,24 @@ SELECT
     u.rol AS autor_rol
 FROM public.noticias n
 LEFT JOIN public.usuarios u ON u.id = NULL::UUID;
+
+-- Vista 4: Directiva de Redes Comunales 2026 (Clasificación epidemiológica por rango etario)
+CREATE OR REPLACE VIEW public.v_redes_comunales_2026 AS
+SELECT 
+    e.cod_eje,
+    e.nombre_eje,
+    e.responsable AS responsable_eje,
+    e.url_imagen_mapa,
+    a.cod_asic,
+    a.nombre_asic,
+    m.nombre_municipio,
+    COALESCE(a.poblacion_estimada, 0) AS poblacion_estimada,
+    ROUND(COALESCE(a.poblacion_estimada, 0) * 0.12)::INTEGER AS total_infantiles_0_5,
+    ROUND(COALESCE(a.poblacion_estimada, 0) * 0.14)::INTEGER AS total_infantiles_6_11,
+    ROUND(COALESCE(a.poblacion_estimada, 0) * 0.15)::INTEGER AS total_adolescentes,
+    ROUND(COALESCE(a.poblacion_estimada, 0) * 0.44)::INTEGER AS total_adultos,
+    ROUND(COALESCE(a.poblacion_estimada, 0) * 0.15)::INTEGER AS total_adulto_mayor
+FROM public.tasic a
+LEFT JOIN public.tejes e ON e.cod_eje = a.cod_eje
+LEFT JOIN public.tmunicipios m ON m.cod_mun = a.cod_mun;
 

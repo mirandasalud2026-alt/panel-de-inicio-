@@ -104,6 +104,7 @@ export default function MinimalistDashboard() {
   // Datos dinámicos cargados de Supabase
   const [dbEjes, setDbEjes] = useState<EjeMeta[]>([]);
   const [dbAsics, setDbAsics] = useState<AsicDbData[]>([]);
+  const [vRedesData, setVRedesData] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   
   // Estado de edición en Nivel 3
@@ -119,41 +120,24 @@ export default function MinimalistDashboard() {
   // Filtro de búsqueda para ASICs en Nivel 2
   const [asicSearch, setAsicSearch] = useState<string>('');
 
-  // Cargar datos de la BD (con retrocompatibilidad)
+  // Cargar datos de la BD (con retrocompatibilidad y cargando de v_redes_comunales_2026)
   const cargarValores = async () => {
     setLoading(true);
     try {
       if (!supabase) {
         // Fallback a simulación si no hay Supabase en el ambiente
         setDbEjes(Object.values(STATIC_EJES_META));
+        setVRedesData([]);
         setLoading(false);
         return;
       }
 
-      // 1. Obtener Ejes reales con metadatos
+      // 1. Obtener Ejes reales con metadatos de la tabla 'TEjes'
       const { data: ejesData, error: ejesError } = await supabase
         .from('TEjes')
         .select('*');
 
-      if (!ejesError && ejesData) {
-        const mergedEjesList = Object.entries(STATIC_EJES_META).map(([key, item]) => {
-          const dbRecord = ejesData.find(r => r.cod_eje === key || r.cod_eje?.toLowerCase() === key);
-          return {
-            cod_eje: key,
-            nombre: dbRecord?.Eje || dbRecord?.nombre_eje || item.nombre,
-            responsable: dbRecord?.responsable !== undefined && dbRecord?.responsable !== null ? dbRecord.responsable : item.responsable,
-            poblacion_estimada: dbRecord?.poblacion_estimada !== undefined && dbRecord?.poblacion_estimada !== null ? Number(dbRecord.poblacion_estimada) : item.poblacion_estimada,
-            url_imagen_mapa: dbRecord?.url_imagen_mapa || item.url_imagen_mapa,
-            descripcion_texto: dbRecord?.descripcion_texto || dbRecord?.descripcion || item.descripcion_texto,
-            contacto_emergencia: dbRecord?.contacto_emergencia || item.contacto_emergencia
-          };
-        });
-        setDbEjes(mergedEjesList);
-      } else {
-        setDbEjes(Object.values(STATIC_EJES_META));
-      }
-
-      // 2. Obtener ASICs reales con metadatos
+      // 2. Obtener ASICs reales con metadatos de la tabla 'TASIC'
       const { data: asicsData, error: asicsError } = await supabase
         .from('TASIC')
         .select('*');
@@ -161,11 +145,47 @@ export default function MinimalistDashboard() {
       if (!asicsError && asicsData) {
         setDbAsics(asicsData);
       } else {
-        console.warn('No se pudo leer la tabla TASIC de Supabase, usando cálculo en base a reportes.');
+        console.warn('No se pudo leer la tabla TASIC de Supabase.', asicsError);
       }
+
+      // 3. Obtener Data Digerida de la Vista v_redes_comunales_2026_mayus
+      const { data: redesData, error: redesError } = await supabase
+        .from('v_redes_comunales_2026_mayus')
+        .select('*');
+
+      if (!redesError && redesData) {
+        setVRedesData(redesData);
+      } else {
+        console.warn('No se pudo cargar la vista v_redes_comunales_2026_mayus:', redesError);
+        setVRedesData([]);
+      }
+
+      // 4. Mapear y agrupar ejes combinando v_redes_comunales_2026_mayus, TEjes y fallbacks
+      const mergedEjesList = Object.entries(STATIC_EJES_META).map(([key, item]) => {
+        const keyLower = key.toLowerCase().trim();
+        
+        // Registro correspondiente de TEjes
+        const dbRecord = ejesData?.find((r: any) => String(r.cod_eje || '').toLowerCase().trim() === keyLower);
+
+        // Registro de la vista de redes agrupado/emparejado por cod_eje
+        const redesMatch = redesData?.find((r: any) => String(r.cod_eje || '').toLowerCase().trim() === keyLower);
+
+        return {
+          cod_eje: key,
+          nombre: redesMatch?.nombre_eje || dbRecord?.nombre_eje || dbRecord?.Eje || dbRecord?.eje || item.nombre,
+          responsable: redesMatch?.responsable || redesMatch?.responsable_eje || dbRecord?.responsable || item.responsable,
+          poblacion_estimada: Number(redesMatch?.poblacion_estimada || dbRecord?.poblacion_estimada || item.poblacion_estimada),
+          url_imagen_mapa: redesMatch?.url_imagen_mapa || dbRecord?.url_imagen_mapa || item.url_imagen_mapa,
+          descripcion_texto: dbRecord?.descripcion_texto || dbRecord?.descripcion || item.descripcion_texto,
+          contacto_emergencia: dbRecord?.contacto_emergencia || item.contacto_emergencia
+        };
+      });
+      setDbEjes(mergedEjesList);
+
     } catch (err) {
       console.error('Error cargando iniciales en panel directivo:', err);
       setDbEjes(Object.values(STATIC_EJES_META));
+      setVRedesData([]);
     } finally {
       setLoading(false);
     }
@@ -194,19 +214,41 @@ export default function MinimalistDashboard() {
       return normReportEje === normTargetEje || normReportEje.includes(normTargetEje) || normTargetEje.includes(normReportEje);
     });
 
-    // Agrupar ASICs por nombre único
-    const uniqueAsicNames = Array.from(new Set(asicsEnReportes.map((r: any) => String(r.asic || '').trim()).filter(Boolean))) as string[];
+    const matchingRedesRows = vRedesData.filter(row => {
+      const rowEje = String(row.cod_eje || row.Cod_Eje || '').toLowerCase().trim();
+      return rowEje === selectedEjeKey.toLowerCase().trim();
+    });
     
-    // Unir datos de la Base de Datos con los reportes
-    return uniqueAsicNames.map((asicName: string) => {
-      // Buscar correspondencia en la tabla TASIC de forma tolerante a capitalización y espaciado
-      const dbMatch = dbAsics.find((a: any) => 
-        (String(a.nombre_asic || '')).toLowerCase().trim() === asicName.toLowerCase().trim() ||
-        (String(a.Cod_ASIC || '')).toLowerCase().trim() === asicName.toLowerCase().trim()
+    // Obtener súper keys únicas de ASICs
+    const allAsicIdentifiers = Array.from(new Set([
+      ...matchingRedesRows.map(row => String(row.cod_asic || row.Cod_ASIC || '').trim().toLowerCase()),
+      ...matchingRedesRows.map(row => String(row.nombre_asic || row['Nombre ASIC'] || '').trim().toLowerCase()),
+      ...asicsEnReportes.map(r => String(r.asic || '').trim().toLowerCase())
+    ])).filter(Boolean);
+
+    return allAsicIdentifiers.map((identifier) => {
+      // Buscar coincidencia en vRedesData
+      const redesMatch = matchingRedesRows.find(r => 
+        String(r.cod_asic || r.Cod_ASIC || '').toLowerCase().trim() === identifier ||
+        String(r.nombre_asic || r['Nombre ASIC'] || '').toLowerCase().trim() === identifier
       );
 
-      // Filtrar reportes específicos de este ASIC
-      const reportsOfAsic = asicsEnReportes.filter((r: any) => (String(r.asic || '')).trim().toLowerCase() === asicName.toLowerCase());
+      // Buscar coincidencia en dbAsics
+      const dbMatch = dbAsics.find(a => 
+        String(a.cod_asic || a.Cod_ASIC || '').toLowerCase().trim() === identifier ||
+        String(a.nombre_asic || a['Nombre ASIC'] || '').toLowerCase().trim() === identifier
+      );
+
+      const asicName = redesMatch?.nombre_asic || redesMatch?.['Nombre ASIC'] || dbMatch?.nombre_asic || dbMatch?.['Nombre ASIC'] || identifier.toUpperCase();
+      const asicCode = redesMatch?.cod_asic || redesMatch?.Cod_ASIC || dbMatch?.cod_asic || dbMatch?.Cod_ASIC || identifier;
+
+      // Filtrar reportes del ASIC
+      const reportsOfAsic = asicsEnReportes.filter((r: any) => 
+        String(r.asic || '').trim().toLowerCase() === identifier ||
+        String(r.asic || '').trim().toLowerCase() === String(asicCode).trim().toLowerCase() ||
+        String(r.asic || '').trim().toLowerCase() === String(asicName).trim().toLowerCase()
+      );
+      
       const totalCentrosCalculado = reportsOfAsic.length;
       const reportaronHoy = reportsOfAsic.filter((c: any) => c.estado_semaforo === 'Verde').length;
 
@@ -217,7 +259,6 @@ export default function MinimalistDashboard() {
       if (totalCentrosCalculado === 0) {
         semaforo = 'Rojo';
       } else if (reportsOfAsic.some((c: any) => c.estado_semaforo === 'Rojo')) {
-        // Si hay algún reporte crítico en rojo, el ASIC se alerta
         semaforo = porcentaje >= 70 ? 'Amarillo' : 'Rojo';
       } else if (porcentaje >= 80) {
         semaforo = 'Verde';
@@ -228,24 +269,45 @@ export default function MinimalistDashboard() {
       }
 
       return {
-        cod_asic: dbMatch?.Cod_ASIC || asicName,
+        cod_asic: asicCode,
         nombre_asic: asicName,
-        responsable: dbMatch?.responsable || 'Sin Asignar',
-        poblacion_estimada: dbMatch?.poblacion_estimada || 0,
+        nombre_municipio: redesMatch?.nombre_municipio || dbMatch?.nombre_municipio || 'Municipio de Miranda',
+        responsable: redesMatch?.responsable_eje || dbMatch?.responsable || 'Sin Asignar',
+        poblacion_estimada: redesMatch?.poblacion_estimada || dbMatch?.poblacion_estimada || 0,
         telefono_contacto: dbMatch?.telefono_contacto || 'No registrado',
         correo_contacto: dbMatch?.correo_contacto || 'No registrado',
-        numero_centros: dbMatch?.numero_centros || totalCentrosCalculado || 0,
-        porcentaje_reporte: Math.round(porcentaje),
+        numero_centros: redesMatch?.numero_centros || dbMatch?.numero_centros || totalCentrosCalculado || 0,
+        porcentaje_reporte: totalCentrosCalculado > 0 ? Math.round(porcentaje) : 0,
         semaforo,
         centrosTotal: totalCentrosCalculado,
         reportaronTotal: reportaronHoy,
-        centrosDetalles: reportsOfAsic
+        centrosDetalles: reportsOfAsic,
+        total_infantiles_0_5: redesMatch?.total_infantiles_0_5 || redesMatch?.Total_infantiles_0_5 || redesMatch?.['total_infantiles_0_5'] || 0,
+        total_infantiles_6_11: redesMatch?.total_infantiles_6_11 || redesMatch?.Total_infantiles_6_11 || redesMatch?.['total_infantiles_6_11'] || 0,
+        total_adolescentes: redesMatch?.total_adolescentes || redesMatch?.Total_adolescentes || redesMatch?.['total_adolescentes'] || 0,
+        total_adultos: redesMatch?.total_adultos || redesMatch?.Total_adultos || redesMatch?.['total_adultos'] || 0,
+        total_adulto_mayor: redesMatch?.total_adulto_mayor || redesMatch?.Total_adulto_mayor || redesMatch?.['total_adulto_mayor'] || 0
       };
     }).filter((a: any) => {
-      if (!asicSearch.trim()) return true;
-      return (String(a.nombre_asic || '')).toLowerCase().includes(asicSearch.toLowerCase());
+      const matchSearch = !asicSearch.trim() || 
+        String(a.nombre_asic || '').toLowerCase().includes(asicSearch.toLowerCase()) ||
+        String(a.nombre_municipio || '').toLowerCase().includes(asicSearch.toLowerCase());
+      return matchSearch;
     });
-  }, [selectedEjeKey, reportes, dbAsics, asicSearch]);
+  }, [selectedEjeKey, reportes, dbAsics, vRedesData, asicSearch]);
+
+  // Agrupar ASICs por municipio para desglosar ordenadamente (Drill-down)
+  const asicsByMunicipio = useMemo(() => {
+    const agrupados: Record<string, any[]> = {};
+    asicsDelEje.forEach(a => {
+      const muni = a.nombre_municipio || 'Otros Municipios';
+      if (!agrupados[muni]) {
+        agrupados[muni] = [];
+      }
+      agrupados[muni].push(a);
+    });
+    return agrupados;
+  }, [asicsDelEje]);
 
   // ASIC seleccionado en el tercer nivel
   const selectedAsic = useMemo(() => {
@@ -278,14 +340,17 @@ export default function MinimalistDashboard() {
 
       // Armamos los datos correspondientes para la tabla TASIC
       const payload = {
-        Cod_ASIC: selectedAsic.cod_asic,
-        nombre_asic: selectedAsic.nombre_asic,
-        Cod_Eje: selectedEjeKey,
+        "Cod_ASIC": selectedAsic.cod_asic,
+        "Nombre ASIC": selectedAsic.nombre_asic,
+        "Cod_Eje": selectedEjeKey,
         responsable: editResponsable.trim(),
         poblacion_estimada: Number(editPoblacion),
         telefono_contacto: editTelefono.trim(),
         correo_contacto: editCorreo.trim(),
-        numero_centros: Number(editCentros)
+        numero_centros: Number(editCentros),
+        cod_asic: selectedAsic.cod_asic,
+        nombre_asic: selectedAsic.nombre_asic,
+        cod_eje: selectedEjeKey
       };
 
       const { error } = await supabase
@@ -529,85 +594,139 @@ export default function MinimalistDashboard() {
                 </div>
               </div>
 
-              {/* LIST OF ASICS */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {asicsDelEje.map((asic) => {
-                  // Determinar color de semáforo interactivo
-                  const colorMap = {
-                    Verde: {
-                      bg: 'bg-emerald-50 border-emerald-200 hover:border-emerald-300',
-                      badge: 'bg-emerald-500 text-white',
-                      dot: 'bg-emerald-400',
-                      text: 'text-emerald-950',
-                      desc: 'Reportes al día (100% de centros activos)'
-                    },
-                    Amarillo: {
-                      bg: 'bg-amber-50 border-amber-200 hover:border-amber-300',
-                      badge: 'bg-amber-500 text-white',
-                      dot: 'bg-amber-400',
-                      text: 'text-amber-950',
-                      desc: 'Rezagado (atención con retraso intermedio)'
-                    },
-                    Rojo: {
-                      bg: 'bg-rose-50 border-rose-200 hover:border-rose-300',
-                      badge: 'bg-rose-500 text-white',
-                      dot: 'bg-rose-400',
-                      text: 'text-rose-950',
-                      desc: 'Sin reportes médicos cargados recientemente'
-                    }
-                  }[asic.semaforo];
-
+              {/* LIST OF ASICS GROUPED BY MUNICIPIO */}
+              <div className="space-y-8">
+                {Object.entries(asicsByMunicipio).map(([municipioName, value]) => {
+                  const items = value as any[];
                   return (
-                    <motion.div
-                      key={asic.cod_asic}
-                      whileHover={{ scale: 1.01 }}
-                      className={`p-5 rounded-3xl border transition-all flex flex-col justify-between space-y-4 ${colorMap.bg}`}
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full ${colorMap.badge}`}>
-                            {asic.semaforo === 'Verde' ? 'Al Día' : asic.semaforo === 'Amarillo' ? 'Rezago' : 'Crítico'}
-                          </span>
-                          <span className="text-[10px] font-black text-gray-400 uppercase">
-                            {asic.centrosTotal} Centros
-                          </span>
-                        </div>
-                        
-                        <h4 className="text-xs font-black text-[#0B3D5C] uppercase tracking-tight pt-1">
-                          {asic.nombre_asic}
+                    <div key={municipioName} className="space-y-4">
+                      <div className="flex items-center gap-2 border-b border-gray-150 pb-2">
+                        <MapPin size={15} className="text-[#0B3D5C]" />
+                        <h4 className="text-xs font-black text-[#0B3D5C] uppercase tracking-wider">
+                          Municipio: {municipioName}
                         </h4>
-                        <p className="text-[9px] text-gray-500 font-bold uppercase truncate">
-                          Director: {asic.responsable || 'Por Asignar'}
-                        </p>
+                        <span className="text-[9px] uppercase font-bold text-slate-400 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                          {items.length} ASIC{items.length !== 1 ? 's' : ''}
+                        </span>
                       </div>
 
-                      <div className="space-y-4">
-                        <div className="border-t border-dashed border-gray-200/50 pt-3 flex items-center justify-between text-[10px]">
-                          <div>
-                            <span className="text-[8px] font-bold text-gray-400 uppercase block leading-none">Inasistencias / Consultas</span>
-                            <span className={`font-black ${colorMap.text}`}>
-                              {asic.reportaronTotal} de {asic.centrosTotal} con Reporte
-                            </span>
-                          </div>
-                          
-                          <span className={`font-black text-xs ${colorMap.text}`}>
-                            {asic.porcentaje_reporte}%
-                          </span>
-                        </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                        {items.map((asic) => {
+                          // Determinar color de semáforo interactivo
+                          const colorMap = {
+                            Verde: {
+                              bg: 'bg-white border-gray-150 hover:border-emerald-300',
+                              badge: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
+                              dot: 'bg-emerald-400',
+                              text: 'text-[#0B3D5C]',
+                              desc: 'Reportes al día'
+                            },
+                            Amarillo: {
+                              bg: 'bg-amber-50/20 border-amber-150 hover:border-amber-300',
+                              badge: 'bg-amber-50 text-amber-700 border border-amber-100',
+                              dot: 'bg-amber-400',
+                              text: 'text-amber-950',
+                              desc: 'Rezagado'
+                            },
+                            Rojo: {
+                              bg: 'bg-rose-50/20 border-rose-150 hover:border-rose-300',
+                              badge: 'bg-rose-50 text-rose-700 border border-rose-100',
+                              dot: 'bg-rose-400',
+                              text: 'text-rose-950',
+                              desc: 'Sin reportes recientes'
+                            }
+                          }[asic.semaforo] || {
+                            bg: 'bg-white border-gray-150',
+                            badge: 'bg-slate-50 text-slate-700 border border-slate-100',
+                            dot: 'bg-slate-400',
+                            text: 'text-slate-700',
+                            desc: 'Sin datos'
+                          };
 
-                        <button
-                          onClick={() => {
-                            setSelectedAsicCod(asic.cod_asic);
-                            setLevel(3);
-                          }}
-                          className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 bg-[#0B3D5C] hover:bg-[#072437] text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer block text-center shadow-xs"
-                        >
-                          <Building2 size={11} /> Ver Ficha Técnica
-                        </button>
-                      </div>
-                    </motion.div>
-                  );
-                })}
+                          return (
+                            <motion.div
+                              key={asic.cod_asic}
+                              whileHover={{ y: -2, scale: 1.01 }}
+                              className={`p-5 rounded-3xl border transition-all flex flex-col justify-between space-y-4 shadow-sm ${colorMap.bg}`}
+                            >
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full ${colorMap.badge}`}>
+                                    ASIC {asic.cod_asic}
+                                  </span>
+                                  <span className="text-[10px] font-black text-gray-400 uppercase">
+                                    {asic.centrosTotal || asic.numero_centros || 0} Centros
+                                  </span>
+                                </div>
+                                
+                                <h4 className="text-xs font-black text-[#0B3D5C] uppercase tracking-tight pt-1">
+                                  {asic.nombre_asic}
+                                </h4>
+                                <p className="text-[9px] text-gray-450 font-bold uppercase truncate">
+                                  Director: {asic.responsable || 'Por Asignar'}
+                                </p>
+                              </div>
+
+                              {/* INDICADORES DEMOGRÁFICOS SQL DIGERIDOS */}
+                              <div className="bg-gray-50/60 p-3 rounded-2xl border border-gray-100 space-y-2">
+                                <span className="text-[8px] font-black uppercase text-gray-450 tracking-wider block border-b border-gray-200 pb-1 leading-none">
+                                  Carga Demográfica Estimada
+                                </span>
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[9px] font-medium text-slate-600">
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-400 font-bold uppercase text-[8px]">0-5 años:</span>
+                                    <strong className="text-slate-700 font-extrabold">{formatearNumero(asic.total_infantiles_0_5)}</strong>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-405 font-bold uppercase text-[8px]">6-11 años:</span>
+                                    <strong className="text-slate-700 font-extrabold">{formatearNumero(asic.total_infantiles_6_11)}</strong>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-405 font-bold uppercase text-[8px]">Adolescentes:</span>
+                                    <strong className="text-slate-700 font-extrabold">{formatearNumero(asic.total_adolescentes)}</strong>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-405 font-bold uppercase text-[8px]">Adultos:</span>
+                                    <strong className="text-slate-700 font-extrabold">{formatearNumero(asic.total_adultos)}</strong>
+                                  </div>
+                                  <div className="flex justify-between col-span-2 border-t border-dashed border-gray-200 pt-1 mt-1 font-bold">
+                                    <span className="text-rose-500 font-black uppercase text-[8px]">Adulto Mayor (60+):</span>
+                                    <strong className="text-rose-600 font-black">{formatearNumero(asic.total_adulto_mayor)}</strong>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="space-y-3">
+                                <div className="border-t border-dashed border-gray-200/50 pt-2 flex items-center justify-between text-[10px]">
+                                  <div>
+                                    <span className="text-[8px] font-bold text-gray-450 uppercase block leading-none">Tránsito Semanal</span>
+                                    <span className={`font-black uppercase text-[9px] ${colorMap.text}`}>
+                                      {asic.reportaronTotal} de {asic.centrosTotal || asic.numero_centros || 1} Reportado
+                                    </span>
+                                  </div>
+                                  
+                                  <span className={`font-black text-xs ${colorMap.text}`}>
+                                    {asic.porcentaje_reporte}%
+                                  </span>
+                                </div>
+
+                                <button
+                                  onClick={() => {
+                                    setSelectedAsicCod(asic.cod_asic);
+                                    setLevel(3);
+                                  }}
+                                  className="w-full flex items-center justify-center gap-1.5 px-4 py-2 bg-[#0B3D5C] hover:bg-[#072437] text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all cursor-pointer text-center shadow-xs"
+                                >
+                                  <Building2 size={11} /> Ficha Técnica & Más
+                              </button>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
 
                 {asicsDelEje.length === 0 && (
                   <div className="col-span-full py-16 text-center border-2 border-dashed border-gray-200 rounded-[2rem]">

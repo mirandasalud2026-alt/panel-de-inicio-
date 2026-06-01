@@ -33,6 +33,7 @@ import {
   Trash2,
   Database,
   AlertCircle,
+  AlertTriangle,
   ChevronUp,
   ChevronDown,
   Maximize2,

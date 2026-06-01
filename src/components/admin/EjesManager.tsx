@@ -121,7 +121,7 @@ export default function EjesManager() {
       }
 
       const { data, error } = await supabase
-        .from('TEjes')
+        .from('tejes')
         .select('*');
 
       if (error) throw error;
@@ -199,7 +199,7 @@ export default function EjesManager() {
         cargarFormulario(activeEje);
       }
     } catch (err: any) {
-      console.error('Error fetching TEjes:', err);
+      console.error('Error fetching tejes:', err);
       // Usar fallbacks completos
       const fallbackList = Object.entries(FALLBACK_EJES_DATA).map(([cod, item]) => ({
         cod_eje: cod,
@@ -255,9 +255,9 @@ export default function EjesManager() {
 
     try {
       if (supabase) {
-        // Hacemos el upsert en la tabla TEjes
+        // Hacemos el upsert en la tabla tejes
         const { error } = await supabase
-          .from('TEjes')
+          .from('tejes')
           .upsert(payload, { onConflict: 'cod_eje' });
 
         if (error) throw error;
@@ -324,7 +324,7 @@ export default function EjesManager() {
         <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-gray-100">
           <RefreshCw size={28} className="animate-spin text-[#0B3D5C]" />
           <p className="text-[10px] uppercase font-black tracking-widest text-[#0B3D5C] mt-3 animate-pulse">
-            Sincronizando con Supabase public.TEjes...
+            Sincronizando con Supabase public.tejes...
           </p>
         </div>
       ) : (
