@@ -746,7 +746,7 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
         {/* COMPONENTE ADMINISTRADOR DE FICHAS DE EJE */}
         {activeTab === 'fichas_eje' && (
           <motion.div key="fichas-eje-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <EjesManager />
+            <EjesManager supabase={supabase} />
           </motion.div>
         )}
 

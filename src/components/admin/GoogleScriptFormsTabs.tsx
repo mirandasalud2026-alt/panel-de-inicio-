@@ -13,6 +13,7 @@ export default function GoogleScriptFormsTabs({
 }: GoogleScriptFormsTabsProps) {
   const [activeTab, setActiveTab] = useState<FormType>(defaultTab);
 
+  // Mapeo limpio y optimizado para las pestañas de carga médica
   const tabs: { id: FormType; label: string; icon: React.ReactNode; color: string; hoverBg: string; activeRing: string }[] = [
     {
       id: 'quirurgica',
@@ -64,14 +65,14 @@ export default function GoogleScriptFormsTabs({
           })}
         </div>
 
-        {/* Leyenda Técnica Corta */}
+        {/* Leyenda Técnica Centralizada */}
         <div className="hidden lg:flex items-center gap-2 text-[9px] text-[#0B3D5C] font-semibold bg-slate-50 border border-slate-150 px-3 py-1.5 rounded-xl uppercase tracking-widest leading-relaxed">
           <Settings size={11} className="text-slate-400 shrink-0" />
           <span>Sincronización Transaccional en Caliente (Google / Supabase)</span>
         </div>
       </div>
 
-      {/* Widget Interactivo Seleccionado */}
+      {/* Widget Interactivo Seleccionado (Fuerza refresco seguro por pestaña) */}
       <div className="w-full">
         <NominalIframeWidget
           key={`iframe-tab-${activeTab}`}

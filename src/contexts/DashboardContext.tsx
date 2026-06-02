@@ -52,7 +52,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const [selectedEje, setSelectedEje] = useState<string>('TODO');
   const [selectedTab, setSelectedTab] = useState<string>('semaforo');
 
-  // Expose direct Supabase fetching functions
+  // Consulta directa a transito_reportes
   const fetchTransitoData = useCallback(async (): Promise<TransitoReporte[]> => {
     if (!supabase) {
       throw new Error('Cliente de Supabase no inicializado dadas las variables de entorno.');
@@ -67,125 +67,51 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     return data || [];
   }, []);
 
+  // CONSULTA MAESTRA FIX: Removido el .order() problemático para evitar la discrepancia de columnas
   const fetchResumenData = useCallback(async (): Promise<any[]> => {
     if (!supabase) {
       throw new Error('Cliente de Supabase no inicializado dadas las variables de entorno.');
     }
-    console.log('📡 Consultando Supabase directamente para resumen_asic...');
+    console.log('📡 Consultando Supabase directamente para la tabla maestra TASIC (Sin ordenamiento)...');
     const { data, error: resumenErr } = await supabase
-      .from('resumen_asic')
-      .select('*')
-      .order('asic', { ascending: true });
+      .from('TASIC')
+      .select('*');
 
     if (resumenErr) throw resumenErr;
     return data || [];
   }, []);
 
-  // Master fetch function to load live data, prioritizing direct Supabase client functions
+  // Función de carga unificada sin fallbacks de simulación local
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setIsLoading(true);
     setError(null);
     try {
-      console.log('🔄 Intentando cargar datos de tránsito de salud...');
+      console.log('🔄 Sincronizando datos reales de tránsito de salud...');
       
-      let gotData = false;
-      let transitoData: TransitoReporte[] = [];
-      let resumenData: any[] = [];
-
-      // 1. Intentar consultar directamente Supabase desde el cliente JS usando nuestras funciones
-      if (supabase) {
-        try {
-          const rawTransito = await fetchTransitoData();
-          const rawResumen = await fetchResumenData();
-
-          if (rawTransito && rawTransito.length > 0) {
-            transitoData = rawTransito;
-            resumenData = rawResumen || [];
-            gotData = true;
-            console.log(`✅ Datos sincronizados correctamente desde Supabase: ${rawTransito.length} reportes, ${resumenData.length} resumenes.`);
-          }
-        } catch (dbErr: any) {
-          console.warn('⚠️ Error al consultar directamente Supabase mediante funciones:', dbErr.message || dbErr);
-        }
+      if (!supabase) {
+        throw new Error('Supabase no está disponible. Revisa tus variables VITE_.');
       }
 
-      // 2. Fallback de emergencia a Mock Data de alta fidelidad si Supabase no tiene datos o falla
-      if (!gotData) {
-        console.log('💡 Utilizando datos de simulación local de Miranda Salud...');
-        transitoData = [
-          {
-            id_centro: "ALT_AS_GUA",
-            nombre_centro: "Ambulatorio Guaremal",
-            asic: "ASIC Guaremal",
-            eje_geografico: "ALTOS MIRANDINOS",
-            ultimo_reporte: new Date(Date.now() - 4 * 3600 * 1000).toISOString(),
-            estado_semaforo: "Verde",
-            horas_retraso: 0,
-            actualizado_en: new Date().toISOString()
-          },
-          {
-            id_centro: "ALT_AS_CAR_CDI",
-            nombre_centro: "CDI Carrizal",
-            asic: "ASIC Carrizal",
-            eje_geografico: "ALTOS MIRANDINOS",
-            ultimo_reporte: new Date(Date.now() - 29 * 3600 * 1000).toISOString(),
-            estado_semaforo: "Amarillo",
-            horas_retraso: 29,
-            actualizado_en: new Date().toISOString()
-          },
-          {
-            id_centro: "VAL_AS_SFC",
-            nombre_centro: "CDI San Francisco de Yare",
-            asic: "ASIC Yare",
-            eje_geografico: "VALLES DEL TUY",
-            ultimo_reporte: new Date().toISOString(),
-            estado_semaforo: "Verde",
-            horas_retraso: 0,
-            actualizado_en: new Date().toISOString()
-          },
-          {
-            id_centro: "BAR_AS_HIG",
-            nombre_centro: "Hospital El Quemadito",
-            asic: "ASIC Higuerote",
-            eje_geografico: "BARLOVENTO",
-            ultimo_reporte: new Date(Date.now() - 84 * 3600 * 1000).toISOString(),
-            estado_semaforo: "Rojo",
-            horas_retraso: 84,
-            actualizado_en: new Date().toISOString()
-          },
-          {
-            id_centro: "MET_AS_PET",
-            nombre_centro: "CDI Petare",
-            asic: "ASIC Petare Norte",
-            eje_geografico: "METROPOLITANO",
-            ultimo_reporte: new Date().toISOString(),
-            estado_semaforo: "Verde",
-            horas_retraso: 0,
-            actualizado_en: new Date().toISOString()
-          }
-        ];
+      // Consultas en paralelo para optimizar la carga
+      const [rawTransito, rawResumen] = await Promise.all([
+        fetchTransitoData(),
+        fetchResumenData()
+      ]);
 
-        resumenData = [
-          { asic: 'ASIC Guaremal', eje: 'ALTOS MIRANDINOS', total_centros: 15, centros_reportaron: 12, porcentaje_reporte: 80.0 },
-          { asic: 'ASIC Carrizal', eje: 'ALTOS MIRANDINOS', total_centros: 10, centros_reportaron: 8, porcentaje_reporte: 80.0 },
-          { asic: 'ASIC Yare', eje: 'VALLES DEL TUY', total_centros: 22, centros_reportaron: 18, porcentaje_reporte: 81.8 },
-          { asic: 'ASIC Higuerote', eje: 'BARLOVENTO', total_centros: 12, centros_reportaron: 6, porcentaje_reporte: 50.0 },
-          { asic: 'ASIC Petare Norte', eje: 'METROPOLITANO', total_centros: 30, centros_reportaron: 25, porcentaje_reporte: 83.3 }
-        ];
-      }
-
-      setReportes(transitoData);
-      setResumenAsicsDb(resumenData);
+      setReportes(rawTransito || []);
+      setResumenAsicsDb(rawResumen || []);
       setLastUpdate(new Date());
+      console.log(`✅ Datos cargados en vivo: ${rawTransito.length} reportes, ${rawResumen.length} registros ASIC.`);
+
     } catch (err: any) {
-      console.error('Error fatal obteniendo datos del dashboard:', err);
-      setError(err.message || 'Error al obtener datos');
+      console.error('❌ Error crítico de base de datos en producción:', err);
+      setError(err.message || 'Error de comunicación con el backend de salud.');
     } finally {
       if (!silent) setIsLoading(false);
     }
   }, [fetchTransitoData, fetchResumenData]);
 
-  // Sync function
+  // Sincronización manual remota con Google Sheets
   const syncSheets = useCallback(async () => {
     setIsSyncing(true);
     setError(null);
@@ -195,7 +121,6 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         throw new Error('La sincronización remota devolvió error.');
       }
       
-      // Delay briefly then reload
       setTimeout(async () => {
         await fetchData(true);
         setIsSyncing(false);
@@ -207,7 +132,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     }
   }, [fetchData]);
 
-  // Hook real-time changes
+  // Escucha en tiempo real (Realtime) y Polling de respaldo cada 15 segundos
   useEffect(() => {
     fetchData();
 
@@ -218,9 +143,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'transito_reportes' },
-        () => {
-          fetchData(true);
-        }
+        () => { fetchData(true); }
       )
       .subscribe();
 
@@ -228,14 +151,11 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       .channel('dashboard_db_changes_summary')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'resumen_asic' },
-        () => {
-          fetchData(true);
-        }
+        { event: '*', schema: 'public', table: 'TASIC' },
+        () => { fetchData(true); }
       )
       .subscribe();
 
-    // Polling de seguridad de 15 segundos para garantizar datos siempre actualizados
     const intervalId = setInterval(() => {
       fetchData(true);
     }, 15000);
@@ -271,7 +191,6 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     return result;
   }, [reportes, profile?.cod_eje, profile?.cod_asic]);
 
-  // Derive consolidated dashboards state
   const { asics, ejes, stats } = useMemo(() => {
     return calculateDashboardState(filteredReportes, resumenAsicsDb);
   }, [filteredReportes, resumenAsicsDb]);
@@ -294,20 +213,9 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     fetchTransitoData,
     fetchResumenData
   }), [
-    filteredReportes, 
-    asics, 
-    ejes, 
-    stats, 
-    isLoading, 
-    isSyncing, 
-    error, 
-    lastUpdate, 
-    selectedEje, 
-    selectedTab, 
-    fetchData, 
-    syncSheets,
-    fetchTransitoData,
-    fetchResumenData
+    filteredReportes, asics, ejes, stats, isLoading, isSyncing, 
+    error, lastUpdate, selectedEje, selectedTab, fetchData, syncSheets,
+    fetchTransitoData, fetchResumenData
   ]);
 
   return (

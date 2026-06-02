@@ -179,3 +179,37 @@ BEGIN
     WHERE cedula_medico = target_cedula AND (nombre_medico IS NULL OR nombre_medico = '');
 END;
 $$ LANGUAGE plpgsql;
+
+-- =============================================
+-- REFINAMIENTO DE TABLA TASIC CON ESTRUCTURA JSONB REAL
+-- =============================================
+CREATE TABLE IF NOT EXISTS public."TASIC" (
+    id VARCHAR PRIMARY KEY,             -- Código del Establecimiento (Ej: 'ES-9001')
+    nombre VARCHAR NOT NULL,
+    cod_eje TEXT REFERENCES public."TEjes"(cod_eje),
+    municipio VARCHAR,
+    parroquia VARCHAR,
+    poblacion_estimada INTEGER DEFAULT 0,
+    numero_centros INTEGER DEFAULT 0,
+    autoridades JSONB DEFAULT '{
+        "director": {"nombre": "Sin Asignar", "cedula": "", "telefono": "", "correo": ""},
+        "epidemiologia": {"nombre": "Sin Asignar", "cedula": "", "telefono": "", "correo": ""}
+    }'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Índices optimizados para Bento Grid y Semáforo
+CREATE INDEX IF NOT EXISTS idx_tasic_cod_eje ON public."TASIC"(cod_eje);
+
+-- Forzar recarga del caché de esquemas en PostgREST
+NOTIFY pgrst, 'reload schema';
+
+-- Datos Semilla Nominales de Ejes de producción para validación cruzada
+INSERT INTO public."TEjes" (cod_eje, nombre_eje, "Eje", poblacion_estimada, total_asics_oficial, total_cdis_oficial, responsable, contacto_emergencia, cumplimiento_global) VALUES
+('AMI', 'Altos Mirandinos', 'Eje Altos Mirandinos', 460469, 9, 7, 'Ericka Andrelys Medina Zapata', '+58-412-4795341', 92),
+('VTY', 'Valles del Tuy', 'Eje Valles del Tuy', 883132, 18, 16, 'Evi Mizael Padilla Hernandez', '+58-412-9952583', 78),
+('GGU', 'Guarenas - Guatire', 'Eje Guarenas - Guatire', 497893, 9, 9, 'Maria Isabel Aguirre Marquez', '+58-424-1073830', 95),
+('BAR', 'Barlovento', 'Eje Barlovento', 305313, 8, 8, 'Saudis Alexandra Herrera Ortuño', '+58-412-9111995', 84),
+('MET', 'Metropolitano', 'Eje Metropolitano', 1326302, 23, 20, 'Dra. Sofía Delgado Castro (Sinc)', 'Por definir', 70)
+ON CONFLICT (cod_eje) DO UPDATE SET responsable = EXCLUDED.responsable, contacto_emergencia = EXCLUDED.contacto_emergencia;
