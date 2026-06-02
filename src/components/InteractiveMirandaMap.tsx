@@ -221,6 +221,95 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const { profile } = useAuth();
   const [transitoReportes, setTransitoReportes] = useState<any[]>([]);
   const [hoveredCentro, setHoveredCentro] = useState<any | null>(null);
+  
+  // Administradores: Modificación e interpola de ejes y coordenadas
+  const [selectedCentroEdit, setSelectedCentroEdit] = useState<any | null>(null);
+  const [isReallocatingPin, setIsReallocatingPin] = useState<string | null>(null); // pin id_centro being moved
+  const [clinicCoordsOverrides, setClinicCoordsOverrides] = useState<Record<string, { pX: number, pY: number }>>({});
+  const [savingClinicChanges, setSavingClinicChanges] = useState(false);
+
+  const getClinicCoords = (pin: any) => {
+    const id = pin.id_centro;
+    // 1. Check custom overrides from DB first
+    if (clinicCoordsOverrides[id]) {
+      return clinicCoordsOverrides[id];
+    }
+    // 2. Check static config mappings next
+    if (CLINIC_COORDS_MAPPINGS[id]) {
+      return CLINIC_COORDS_MAPPINGS[id];
+    }
+    
+    // 3. Fallback: deterministic offset within its own registered Eje!
+    let sum = 0;
+    for (let i = 0; i < id.length; i++) {
+      sum += id.charCodeAt(i);
+    }
+    const offsetRefX = (sum % 20) / 320 - 0.03;
+    const offsetRefY = ((sum >> 2) % 20) / 320 - 0.03;
+
+    const ejeNormal = (pin.eje_geografico || '').toUpperCase().trim();
+    if (ejeNormal.includes('ALT') || id.toUpperCase().includes('ALT') || id.toUpperCase().includes('GUA_AS_GUA') || id.toUpperCase().includes('CARRIZAL') || id.toUpperCase().includes('LOS_TEQUES')) {
+      return { pX: 0.36 + offsetRefX, pY: 0.42 + offsetRefY };
+    } else if (ejeNormal.includes('VAL') || id.toUpperCase().includes('VAL') || id.toUpperCase().includes('OCU') || id.toUpperCase().includes('YARE') || id.toUpperCase().includes('CHARALLAVE')) {
+      return { pX: 0.45 + offsetRefX, pY: 0.68 + offsetRefY };
+    } else if (ejeNormal.includes('GUA') || id.toUpperCase().includes('GUA') || id.toUpperCase().includes('GG') || id.toUpperCase().includes('GUARENAS') || id.toUpperCase().includes('GUATIRE')) {
+      return { pX: 0.59 + offsetRefX, pY: 0.34 + offsetRefY };
+    } else if (ejeNormal.includes('BAR') || id.toUpperCase().includes('BAR') || id.toUpperCase().includes('MAM') || id.toUpperCase().includes('HIG') || id.toUpperCase().includes('HIGUEROTE')) {
+      return { pX: 0.77 + offsetRefX, pY: 0.46 + offsetRefY };
+    } else if (ejeNormal.includes('MET') || id.toUpperCase().includes('MET') || id.toUpperCase().includes('CHA') || id.toUpperCase().includes('PET') || id.toUpperCase().includes('PETARE')) {
+      return { pX: 0.49 + offsetRefX, pY: 0.24 + offsetRefY };
+    }
+    return { pX: 0.5 + offsetRefX * 2, pY: 0.5 + offsetRefY * 2 };
+  };
+
+  const handleUpdateClinicEje = async (idCentro: string, newEje: string) => {
+    if (!supabase) return;
+    setSavingClinicChanges(true);
+    try {
+      const { error } = await supabase
+        .from('transito_reportes')
+        .update({ eje_geografico: newEje })
+        .eq('id_centro', idCentro);
+      
+      if (error) throw error;
+      
+      // Update local state is real-time, but let's update immediately in UI state
+      setTransitoReportes(prev => prev.map(r => r.id_centro === idCentro ? { ...r, eje_geografico: newEje } : r));
+      if (selectedCentroEdit && selectedCentroEdit.id_centro === idCentro) {
+        setSelectedCentroEdit(prev => prev ? { ...prev, eje_geografico: newEje } : null);
+      }
+      if (hoveredCentro && hoveredCentro.id_centro === idCentro) {
+        setHoveredCentro(prev => prev ? { ...prev, eje_geografico: newEje } : null);
+      }
+      
+      notify('Eje Geográfico actualizado correctamente');
+    } catch (err: any) {
+      console.error('Error updating clinic Eje:', err);
+      notify(err.message || 'Error al actualizar eje', 'error');
+    } finally {
+      setSavingClinicChanges(false);
+    }
+  };
+
+  const handleResetClinicCoords = async (idCentro: string) => {
+    const updatedOverrides = { ...clinicCoordsOverrides };
+    delete updatedOverrides[idCentro];
+    setClinicCoordsOverrides(updatedOverrides);
+    notify('Ubicación predeterminada restaurada');
+    if (supabase) {
+      try {
+        await supabase
+          .from('mapa_config')
+          .upsert({
+            id: 'coords_overrides',
+            ejes_data: updatedOverrides,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'id' });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
   const [recentlyUpdatedCentros, setRecentlyUpdatedCentros] = useState<Record<string, boolean>>({});
   const [feedEvents, setFeedEvents] = useState<string[]>([
     "Hace un momento: 🏥 CDI Carrizal reportó sin novedades.",
@@ -450,6 +539,22 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
              setActiveEje(loadedEjes[0]);
           }
         }
+        
+        try {
+          console.log('Fetching coordinate overrides...');
+          const fetchCoords = supabase
+            .from('mapa_config')
+            .select('*')
+            .eq('id', 'coords_overrides')
+            .maybeSingle();
+          const coordsRes: any = await Promise.race([fetchCoords, timeoutPromise]);
+          if (coordsRes.data && coordsRes.data.ejes_data && mounted) {
+            setClinicCoordsOverrides(coordsRes.data.ejes_data);
+          }
+        } catch (coordErr) {
+          console.warn('Could not load clinic coordinate overrides:', coordErr);
+        }
+
         console.log('Fetching polygons...');
         const fetchPolys = supabase
           .from('mapa_poligonos')
@@ -652,8 +757,7 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
     await saveMapConfig(undefined, bgUrlInput);
   };
 
-  const handleSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (!isDrawingMode) return;
+  const handleSvgClick = async (e: React.MouseEvent<SVGSVGElement>) => {
     const svg = e.currentTarget;
     const pt = svg.createSVGPoint();
     pt.x = e.clientX;
@@ -664,9 +768,50 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
     const ctm = (target as any).getScreenCTM();
     if (!ctm) return;
     const svgP = pt.matrixTransform(ctm.inverse());
-    if (svgP) {
-      setCurrentPoints([...currentPoints, { x: svgP.x, y: svgP.y }]);
+    if (!svgP) return;
+
+    if (isReallocatingPin) {
+      // Reubicación de pin
+      const idCentro = isReallocatingPin;
+      const pX = svgP.x / mapDimensions.width;
+      const pY = svgP.y / mapDimensions.height;
+      
+      const updatedOverrides = {
+        ...clinicCoordsOverrides,
+        [idCentro]: { pX, pY }
+      };
+      setClinicCoordsOverrides(updatedOverrides);
+      setIsReallocatingPin(null);
+      
+      notify('Ubicación guardada en navegador');
+
+      if (supabase) {
+        try {
+          const { error } = await supabase
+            .from('mapa_config')
+            .upsert({
+              id: 'coords_overrides',
+              ejes_data: updatedOverrides,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'id' });
+          if (error) throw error;
+          
+          // Actualiza también el selectedCentroEdit para que se refresque visualmente
+          if (selectedCentroEdit && selectedCentroEdit.id_centro === idCentro) {
+            setSelectedCentroEdit(prev => prev ? { ...prev } : null);
+          }
+          
+          notify('Ubicación sincronizada en la nube');
+        } catch (dbErr: any) {
+          console.error('Error saving overrides to Supabase:', dbErr);
+          notify('Error al sincronizar con almacenamiento en la nube', 'error');
+        }
+      }
+      return;
     }
+
+    if (!isDrawingMode) return;
+    setCurrentPoints([...currentPoints, { x: svgP.x, y: svgP.y }]);
   };
 
   // Mouse & Touch gestores para Paneo (Drag) y Zoom
@@ -1176,7 +1321,7 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                   }
                   return true;
                 }).map((pin) => {
-                  const coords = getDeterministicCoords(pin.id_centro);
+                  const coords = getClinicCoords(pin);
                   const isRecentlyUpdated = recentlyUpdatedCentros[pin.id_centro];
                   
                   const markerColor = 
@@ -1191,9 +1336,14 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                     <g 
                       key={pin.id_centro} 
                       transform={`translate(${posX}, ${posY})`}
-                      className="cursor-pointer"
+                      className={`cursor-pointer transition-all duration-300 ${selectedCentroEdit?.id_centro === pin.id_centro ? 'scale-135' : 'hover:scale-110'}`}
                       onMouseEnter={() => setHoveredCentro(pin)}
                       onMouseLeave={() => setHoveredCentro(null)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSelectedCentroEdit(pin);
+                      }}
                     >
                       {/* Onda de choque (ripples) para actualizaciones recientes */}
                       {isRecentlyUpdated && (
@@ -1210,8 +1360,8 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
                       <circle 
                         r="10" 
                         fill={markerColor} 
-                        stroke="#FFFFFF" 
-                        strokeWidth="2.5" 
+                        stroke={selectedCentroEdit?.id_centro === pin.id_centro ? '#00E5FF' : '#FFFFFF'} 
+                        strokeWidth={selectedCentroEdit?.id_centro === pin.id_centro ? '3' : '2.5'} 
                         className={`transition-all duration-300 hover:scale-135 ${isRecentlyUpdated ? 'animate-bounce' : ''}`}
                         style={{ filter: `drop-shadow(0px 3px 6px rgba(0,0,0,0.45))` }}
                       />
@@ -1282,6 +1432,164 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
               )}
             </AnimatePresence>
 
+
+            {/* Panel de administración / Detalle de Establecimiento */}
+            <AnimatePresence>
+              {selectedCentroEdit && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                  className={`absolute z-[45] w-full max-w-sm bg-slate-900/98 backdrop-blur-2xl border border-white/20 p-5 rounded-[2rem] shadow-[0_50px_100px_rgba(0,0,0,0.8)] font-sans text-slate-100 flex flex-col gap-3.5
+                    ${isMobile ? 'bottom-20 left-4 right-4 max-w-[calc(100%-2rem)]' : 'bottom-5 right-5'}
+                  `}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-3.5 h-3.5 rounded-full animate-pulse shrink-0 ${
+                        selectedCentroEdit.estado_semaforo === 'Verde' ? 'bg-emerald-500' :
+                        selectedCentroEdit.estado_semaforo === 'Amarillo' ? 'bg-amber-500' :
+                        'bg-rose-500'
+                      }`} />
+                      <span className="text-[9px] font-black uppercase tracking-widest text-[#00E5FF]">
+                        Ficha de Establecimiento
+                      </span>
+                    </div>
+                    <button 
+                      onClick={() => setSelectedCentroEdit(null)}
+                      className="p-1 px-2.5 bg-white/5 hover:bg-white/15 border border-white/10 rounded-xl text-slate-400 hover:text-white transition-all text-[10px] font-bold uppercase tracking-wider cursor-pointer"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+
+                  <div>
+                     <h4 className="text-xs font-black uppercase tracking-wider text-white leading-tight">
+                        {selectedCentroEdit.nombre_centro}
+                     </h4>
+                     <p className="text-[9px] text-[#A5F3FC]/70 font-extrabold uppercase mt-0.5">
+                        DESARROLLO ASIC: {selectedCentroEdit.asic}
+                     </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5 bg-black/35 p-3.5 rounded-2xl border border-white/5 text-[9.5px] uppercase font-bold text-slate-300">
+                     <div>
+                        <span className="text-slate-500 text-[7.5px] font-black block">Eje Territorial</span>
+                        <p className="text-cyan-400 mt-0.5 truncate">{selectedCentroEdit.eje_geografico}</p>
+                     </div>
+                     <div>
+                        <span className="text-slate-500 text-[7.5px] font-black block font-sans">ID Centro</span>
+                        <p className="font-mono mt-0.5 text-slate-400 truncate">{selectedCentroEdit.id_centro}</p>
+                     </div>
+                     <div>
+                        <span className="text-slate-500 text-[7.5px] font-black block font-sans">Reporte Médico</span>
+                        <p className="mt-0.5 text-slate-200">
+                          {new Date(selectedCentroEdit.ultimo_reporte || Date.now()).toLocaleDateString('es-VE')}
+                        </p>
+                     </div>
+                     <div>
+                        <span className="text-slate-500 text-[7.5px] font-black block font-sans">Retraso Operativo</span>
+                        <p className={`mt-0.5 font-black ${selectedCentroEdit.horas_retraso > 24 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                          {selectedCentroEdit.horas_retraso} horas
+                        </p>
+                     </div>
+                  </div>
+
+                  {/* Mandatos de Administración */}
+                  {(isAdminMode || profile?.rol === 'admin') && (
+                     <div className="border-t border-white/10 pt-3.5 flex flex-col gap-3">
+                        <div className="flex items-center gap-2 text-amber-400 text-[9px] font-black uppercase tracking-wider">
+                           <Settings size={13} />
+                           <span>Modulo Administrador: Ejes y Coordenadas</span>
+                        </div>
+
+                        {/* Selección interactiva de Eje */}
+                        <div className="flex flex-col gap-1.5">
+                           <label className="text-[8px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">
+                              Mover / Reasignar a Eje Geográfico:
+                           </label>
+                           <div className="flex flex-wrap gap-1">
+                              {['ALTOS MIRANDINOS', 'VALLES DEL TUY', 'GUARENAS-GUATIRE', 'BARLOVENTO', 'METROPOLITANO'].map((ejeName) => {
+                                 const isCurrent = (selectedCentroEdit.eje_geografico || '').toUpperCase().replace('-', ' ') === ejeName.toUpperCase().replace('-', ' ');
+                                 return (
+                                    <button
+                                       key={ejeName}
+                                       disabled={savingClinicChanges}
+                                       onClick={() => handleUpdateClinicEje(selectedCentroEdit.id_centro, ejeName)}
+                                       className={`py-1.5 px-2 rounded-lg text-[7.5px] font-extrabold uppercase tracking-widest border transition-all cursor-pointer flex-1 min-w-[90px] text-center ${
+                                          isCurrent 
+                                          ? 'bg-blue-600 text-white border-blue-400 shadow-lg' 
+                                          : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/5 hover:border-white/10'
+                                       }`}
+                                    >
+                                       {ejeName}
+                                    </button>
+                                 );
+                              })}
+                           </div>
+                        </div>
+
+                        {/* Mapeador de coordenadas */}
+                        <div className="flex flex-col gap-1.5 border-t border-white/5 pt-3">
+                           <label className="text-[8px] text-slate-400 font-extrabold uppercase tracking-wider block">
+                              Coordenadas de Posicionamiento:
+                           </label>
+                           <div className="flex gap-1.5">
+                              <button
+                                 onClick={() => {
+                                    setIsReallocatingPin(selectedCentroEdit.id_centro);
+                                    notify('Haga clic en cualquier punto del mapa para colocar el marcador');
+                                 }}
+                                 className="flex-1 py-2 px-3 bg-amber-500 hover:bg-amber-600 text-amber-950 rounded-xl text-[8.5px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-amber-500/10"
+                              >
+                                 <MousePointer2 size={11} />
+                                 Reubicar en el mapa
+                              </button>
+
+                              {clinicCoordsOverrides[selectedCentroEdit.id_centro] && (
+                                 <button
+                                    onClick={() => handleResetClinicCoords(selectedCentroEdit.id_centro)}
+                                    className="p-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 border border-red-500/20 rounded-xl hover:text-white transition-all cursor-pointer"
+                                    title="Restablecer posición por defecto"
+                                 >
+                                    <Trash2 size={12} />
+                                 </button>
+                              )}
+                           </div>
+                        </div>
+                     </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {isReallocatingPin && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -40 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -40 }}
+                  className="absolute top-16 left-1/2 -translate-x-1/2 z-[48] w-11/12 max-w-sm"
+                >
+                  <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl border border-amber-400 shadow-2xl text-white">
+                     <div className="flex items-center gap-2">
+                        <div className="animate-bounce text-[#FFE082]">
+                           <MapPin size={14} />
+                        </div>
+                        <span className="text-[8.5px] font-black uppercase tracking-widest leading-none">
+                           Toque en el mapa para ubicar el marcador
+                        </span>
+                     </div>
+                     <button
+                        onClick={() => setIsReallocatingPin(null)}
+                        className="px-2 py-1 bg-black/30 hover:bg-black/50 text-[8px] font-black tracking-widest uppercase rounded-lg border border-white/10 cursor-pointer transition-all"
+                     >
+                        Cancelar
+                     </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
 
             {/* Controles flotantes para mejorar navegabilidad tactil */}
