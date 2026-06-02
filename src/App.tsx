@@ -4,6 +4,7 @@ import InformativoPage from './pages/InformativoPage';
 import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
 import NominalDashboard from './components/ui/NominalDashboard';
+import NominalFormWindow from './components/ui/NominalFormWindow';
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Clock, AlertTriangle, RefreshCw, ServerOff } from 'lucide-react';
@@ -221,6 +222,7 @@ export default function App() {
           <Route path="/sitio-informativo" element={<InformativoPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/nominal" element={<NominalDashboard />} />
+          <Route path="/nominal-form" element={<NominalFormWindow />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
         </Routes>
       </Router>
