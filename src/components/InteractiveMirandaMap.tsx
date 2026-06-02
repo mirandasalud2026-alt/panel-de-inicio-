@@ -154,7 +154,7 @@ export default function InteractiveMirandaCards({ isAdminMode = false }) {
           <h2 className="text-xl font-black uppercase tracking-widest text-slate-900 flex items-center gap-2">
             <Sliders size={20} className="text-emerald-600 animate-pulse" /> Ejes de Atencion
           </h2>
-          <p className="text-xs text-slate-500 font-medium">Sombra viva proporcional a la densidad de reportes en tiempo real.</p>
+          <p className="text-xs text-slate-500 font-medium">Reporte en tiempo real.</p>
         </div>
         {/* Badge estilizado para fondo claro */}
         <div className="px-4 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full text-[10px] font-black uppercase tracking-widest text-emerald-700 shadow-sm">
