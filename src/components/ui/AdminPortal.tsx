@@ -154,15 +154,26 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
     setRunningAction(actionId);
     agregarLog(`⚡ Solicitando ejecución: "${actionName}" (action=${actionId})...`);
     
+    // Buscar la URL del script en localStorage, variable de entorno o fallback a la nueva URL
+    const envUrl = import.meta.env?.VITE_GOOGLE_SCRIPT_URL || '';
     const webAppUrl = localStorage.getItem('miranda_apps_script_url') || 
-      'https://script.google.com/macros/s/AKfycbzsG72xt9ttRtFB-BzvVkKuVK5WyqVFI6a8S_DzFuGub1EYrDBmaPGex2kp7GQk_d8fgw/exec';
+      envUrl ||
+      'https://script.google.com/macros/s/AKfycbw-4Wvfp32rueC8ncgONSIbe0BmlXl2L4kFlnAi7IffQ9NXMhs9YfhupMw-eeRoUWS1/exec';
+
+    // Mapeo seguro de acciones antiguas/sencillas a las nuevas correspondientes del Apps Script
+    let mappedActionId = actionId;
+    if (actionId === 'sincronizar') {
+      mappedActionId = 'procesarAmbosReportes';
+    } else if (actionId === 'configurar' || actionId === 'semanal') {
+      mappedActionId = 'procesarYReportarDatosSemanales';
+    }
 
     try {
       const response = await fetch('/api/run-script', {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: actionId,
+          action: mappedActionId,
           scriptUrl: webAppUrl
         })
       });
@@ -171,12 +182,12 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
       const result = await response.json();
       const actualData = result.data || result;
       
-      if (actualData && actualData.status === 'success') {
-        agregarLog(`🟢 Sincronización exitosa: ${actualData.message}`);
-        alert(`¡Sincronización con éxito! Centros: ${actualData.data?.totalCentros || 0}, ASICs: ${actualData.data?.totalASICs || 0}`);
+      if (actualData && (actualData.status === 'success' || actualData.status === 'success' || actualData.status === 'OK' || actualData.status === 'success' || actualData.message === 'Dashboard Actualizado')) {
+        agregarLog(`🟢 Sincronización exitosa: ${actualData.message || 'Dashboard Actualizado'}`);
+        alert(`¡Sincronización con éxito! Ejecutado: ${actionName}. Mensaje: ${actualData.message || 'Dashboard Actualizado'}`);
         fetchTransitoReportes();
       } else {
-        agregarLog(`🟢 Apps Script activado exitosamente.`);
+        agregarLog(`🟢 Apps Script activado exitosamente: ${actualData.message || 'Completado'}`);
         alert(`Ejecutado con éxito: ${actionName}`);
       }
     } catch (err: any) {

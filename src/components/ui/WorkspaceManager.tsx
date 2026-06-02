@@ -23,8 +23,10 @@ interface WorkspaceManagerProps {
 
 export const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ onRegisterTriggerHandler }) => {
   const [webAppUrl, setWebAppUrl] = useState<string>(() => {
+    const envUrl = (import.meta.env && import.meta.env.VITE_GOOGLE_SCRIPT_URL) || '';
     return localStorage.getItem('miranda_apps_script_url') || 
-      'https://script.google.com/macros/s/AKfycbzsG72xt9ttRtFB-BzvVkKuVK5WyqVFI6a8S_DzFuGub1EYrDBmaPGex2kp7GQk_d8fgw/exec';
+      envUrl ||
+      'https://script.google.com/macros/s/AKfycbw-4Wvfp32rueC8ncgONSIbe0BmlXl2L4kFlnAi7IffQ9NXMhs9YfhupMw-eeRoUWS1/exec';
   });
 
   const [savingUrl, setSavingUrl] = useState(false);
@@ -101,7 +103,16 @@ export const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ onRegisterTr
   const ejecutarAccionWeb = async (actionId: string, actionName: string) => {
     if (runningAction) return;
     setRunningAction(actionId);
-    addLog(`⚡ Solicitando ejecución: "${actionName}" (action=${actionId})...`);
+    
+    // Mapeo seguro de acciones antiguas/sencillas a las nuevas correspondientes del Apps Script
+    let mappedActionId = actionId;
+    if (actionId === 'sincronizar') {
+      mappedActionId = 'procesarAmbosReportes';
+    } else if (actionId === 'configurar' || actionId === 'semanal') {
+      mappedActionId = 'procesarYReportarDatosSemanales';
+    }
+
+    addLog(`⚡ Solicitando ejecución: "${actionName}" (action=${mappedActionId})...`);
     addLog(`📡 Enviando túnel hacia Apps Script de Miranda Salud...`);
 
     try {
@@ -109,7 +120,7 @@ export const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ onRegisterTr
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: actionId,
+          action: mappedActionId,
           scriptUrl: webAppUrl
         })
       });
@@ -124,10 +135,9 @@ export const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ onRegisterTr
       addLog(`🟢 Macro ejecutada con éxito por Apps Script.`);
 
       if (actualData && typeof actualData === 'object') {
-        if (actualData.status === 'success') {
-          addLog(`🎉 [Sincronización v8.0.0 Exitosa]`);
-          addLog(`📈 Se procesaron y subieron ${actualData.data?.totalCentros || 0} centros únicos.`);
-          addLog(`🏢 Se cargaron ${actualData.data?.totalASICs || 0} ASICs a Supabase.`);
+        if (actualData.status === 'success' || actualData.status === 'OK' || actualData.status === 'success' || actualData.message === 'Dashboard Actualizado') {
+          addLog(`🎉 [Sincronización Exitosa]`);
+          addLog(`📈 Se procesó y actualizó el Dashboard de Salud.`);
           addLog(`💬 Mensaje de Apps Script: ${actualData.message || 'Completado'}`);
         } else {
           addLog(`[Apps Script] ${JSON.stringify(actualData, null, 2)}`);

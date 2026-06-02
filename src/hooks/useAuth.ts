@@ -6,6 +6,9 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(() => {
     if (typeof window !== 'undefined' && localStorage.getItem('sim_demo_admin') === 'true') {
       const role = localStorage.getItem('sim_demo_role');
+      if (role === 'nominal') {
+        return { email: 'nominal@miranda_salud.com' } as User;
+      }
       return { email: role === 'directivo' ? 'directivo@miranda.gob.ve' : 'miranda.salud2026@gmail.com' } as User;
     }
     return null;
@@ -13,6 +16,15 @@ export function useAuth() {
   const [profile, setProfile] = useState<UserProfile | null>(() => {
     if (typeof window !== 'undefined' && localStorage.getItem('sim_demo_admin') === 'true') {
       const role = localStorage.getItem('sim_demo_role');
+      if (role === 'nominal') {
+        return {
+          id: 'demo-nominal',
+          nombre: 'Usuario Nominal (Demo)',
+          email: 'nominal@miranda_salud.com',
+          rol: 'nominal',
+          estado: 'aprobado'
+        };
+      }
       if (role === 'directivo') {
         return {
           id: 'demo-directivo',
@@ -120,7 +132,16 @@ export function useAuth() {
       const codAsic = localStorage.getItem('sim_demo_cod_asic') || undefined;
       const idCentro = localStorage.getItem('sim_demo_id_centro') || undefined;
 
-      if (demoRole === 'directivo') {
+      if (demoRole === 'nominal') {
+        setUser({ email: 'nominal@miranda_salud.com' } as User);
+        setProfile({
+          id: 'demo-nominal',
+          nombre: 'Usuario Nominal (Demo)',
+          email: 'nominal@miranda_salud.com',
+          rol: 'nominal',
+          estado: 'aprobado'
+        });
+      } else if (demoRole === 'directivo') {
         setUser({ email: codEje ? 'oficina_eje@miranda.gob.ve' : codAsic ? 'oficina_asic@miranda.gob.ve' : 'directivo@miranda.gob.ve' } as User);
         setProfile({
           id: 'demo-directivo',

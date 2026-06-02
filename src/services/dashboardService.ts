@@ -190,7 +190,8 @@ export function calculateDashboardState(
 export async function triggerGoogleSheetsSync(): Promise<boolean> {
   try {
     const customScriptUrl = typeof window !== 'undefined' ? localStorage.getItem('miranda_apps_script_url') : null;
-    const scriptUrl = customScriptUrl || 'https://script.google.com/macros/s/AKfycbzsG72xt9ttRtFB-BzvVkKuVK5WyqVFI6a8S_DzFuGub1EYrDBmaPGex2kp7GQk_d8fgw/exec';
+    const envUrl = (import.meta.env && import.meta.env.VITE_GOOGLE_SCRIPT_URL) || '';
+    const scriptUrl = customScriptUrl || envUrl || 'https://script.google.com/macros/s/AKfycbw-4Wvfp32rueC8ncgONSIbe0BmlXl2L4kFlnAi7IffQ9NXMhs9YfhupMw-eeRoUWS1/exec';
 
     const response = await fetch('/api/run-script', {
       method: 'POST',
@@ -198,7 +199,7 @@ export async function triggerGoogleSheetsSync(): Promise<boolean> {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        action: 'sincronizar',
+        action: 'procesarAmbosReportes',
         scriptUrl: scriptUrl
       })
     });

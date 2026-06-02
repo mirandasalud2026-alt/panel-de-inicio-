@@ -3,6 +3,7 @@ import LandingPage from './pages/LandingPage';
 import InformativoPage from './pages/InformativoPage';
 import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
+import NominalDashboard from './components/ui/NominalDashboard';
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Clock, AlertTriangle, RefreshCw, ServerOff } from 'lucide-react';
@@ -219,6 +220,7 @@ export default function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/sitio-informativo" element={<InformativoPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/nominal" element={<NominalDashboard />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
         </Routes>
       </Router>

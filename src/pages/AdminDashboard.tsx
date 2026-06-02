@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import MinimalistDashboard from '../components/ui/MinimalistDashboard';
 import OficinaDashboard from '../components/ui/OficinaDashboard';
 import AdminPortal from '../components/ui/AdminPortal';
+import NominalDashboard from '../components/ui/NominalDashboard';
 import InteractiveMirandaMap from '../components/InteractiveMirandaMap';
 import ReporteDiarioTabular from '../components/admin/ReporteDiarioTabular';
 import { supabase } from '../lib/supabase';
@@ -134,6 +135,11 @@ export default function AdminDashboard() {
         </footer>
       </div>
     );
+  }
+
+  // Si es usuario nominal, bypass al formulario nominal
+  if (profile.rol === 'nominal') {
+    return <NominalDashboard />;
   }
 
   // Si es admin, mostrar AdminPortal

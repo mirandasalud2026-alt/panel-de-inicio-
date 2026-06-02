@@ -30,7 +30,7 @@ export const getSupabase = (): SupabaseClient | null => {
 // Singleton instance
 export const supabase = getSupabase();
 
-export type UserRole = 'admin' | 'directivo' | 'oficina';
+export type UserRole = 'admin' | 'directivo' | 'oficina' | 'nominal';
 
 export interface UserProfile {
   id: string;

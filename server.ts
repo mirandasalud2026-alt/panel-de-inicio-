@@ -131,12 +131,20 @@ async function startServer() {
       return res.status(400).json({ status: "error", message: "Falta el parámetro 'action'." });
     }
 
-    const scriptUrl = customScriptUrl || process.env.GOOGLE_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbzsG72xt9ttRtFB-BzvVkKuVK5WyqVFI6a8S_DzFuGub1EYrDBmaPGex2kp7GQk_d8fgw/exec";
+    const defaultUrl = "https://script.google.com/macros/s/AKfycbw-4Wvfp32rueC8ncgONSIbe0BmlXl2L4kFlnAi7IffQ9NXMhs9YfhupMw-eeRoUWS1/exec";
+    const scriptUrl = customScriptUrl || process.env.VITE_GOOGLE_SCRIPT_URL || process.env.GOOGLE_SCRIPT_URL || defaultUrl;
+
+    let mappedAction = action;
+    if (action === "sincronizar") {
+      mappedAction = "procesarAmbosReportes";
+    } else if (action === "configurar" || action === "semanal") {
+      mappedAction = "procesarYReportarDatosSemanales";
+    }
 
     try {
-      console.log(`[Script Proxy] Ejecutando acción: ${action} en ${scriptUrl}`);
+      console.log(`[Script Proxy] Ejecutando acción: ${mappedAction} (original: ${action}) en ${scriptUrl}`);
       const targetUrl = new URL(scriptUrl);
-      targetUrl.searchParams.set("action", action);
+      targetUrl.searchParams.set("action", mappedAction);
       targetUrl.searchParams.set("_t", Date.now().toString());
 
       const response = await fetch(targetUrl.toString(), {

@@ -25,6 +25,17 @@ export default function LoginForm() {
     
     try {
       // Bypassing for specific roles to allow testing/demo
+      if (email === 'nominal@miranda_salud.com' && password === 'nominal2026') {
+        localStorage.setItem('sim_demo_admin', 'true');
+        localStorage.setItem('sim_demo_role', 'nominal');
+        localStorage.removeItem('sim_demo_cod_eje');
+        localStorage.removeItem('sim_demo_cod_asic');
+        localStorage.removeItem('sim_demo_id_centro');
+        navigate('/admin/dashboard');
+        setLoading(false);
+        return;
+      }
+
       if (email === 'miranda.salud2026@gmail.com' && password === 'Roble.26') {
         localStorage.setItem('sim_demo_admin', 'true');
         localStorage.setItem('sim_demo_role', 'admin');

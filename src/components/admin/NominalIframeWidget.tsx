@@ -23,7 +23,7 @@ export default function NominalIframeWidget({
     const baseUrl =
       (import.meta.env && import.meta.env.VITE_GOOGLE_SCRIPT_URL) ||
       (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL) ||
-      'https://script.google.com/macros/s/AKfycbzsG72xt9ttRtFB-BzvVkKuVK5WyqVFI6a8S_DzFuGub1EYrDBmaPGex2kp7GQk_d8fgw/exec';
+      'https://script.google.com/macros/s/AKfycbw-4Wvfp32rueC8ncgONSIbe0BmlXl2L4kFlnAi7IffQ9NXMhs9YfhupMw-eeRoUWS1/exec';
 
     const hasQuery = baseUrl.includes('?');
     const separator = hasQuery ? '&' : '?';
