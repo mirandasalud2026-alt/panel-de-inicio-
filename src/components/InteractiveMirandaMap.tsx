@@ -4,40 +4,30 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { 
   Settings, 
-  ExternalLink, 
-  Edit3, 
-  Info, 
   Activity, 
   ShieldCheck, 
   Package, 
   Users, 
   Building2,
   X,
-  Link as LinkIcon,
   MousePointer2,
   Layout,
   Upload,
   RefreshCw,
-  CheckCircle2,
   Mountain,
   Palmtree,
-  BarChart,
-  HardDrive,
-  Eraser,
   Terminal,
-  Clock,
   Play,
   Loader2,
-  Newspaper,
   Save,
   Trash2,
   Database,
   AlertCircle,
-  AlertTriangle,
   ChevronUp,
   ChevronDown,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Move
 } from 'lucide-react';
 
 interface Eje {
@@ -136,7 +126,6 @@ const INITIAL_EJES: Eje[] = [
   },
 ];
 
-// Obtiene dimensiones reales de una imagen (URL o base64)
 const getImageDimensions = (src: string): Promise<{ width: number; height: number }> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -154,31 +143,6 @@ const CLINIC_COORDS_MAPPINGS: Record<string, { pX: number, pY: number }> = {
   "BAR_AS_MAM": { pX: 0.78, pY: 0.48 },
   "MET_AS_CHA": { pX: 0.50, pY: 0.25 }
 };
-
-function getDeterministicCoords(id: string) {
-  if (CLINIC_COORDS_MAPPINGS[id]) return CLINIC_COORDS_MAPPINGS[id];
-  
-  let sum = 0;
-  for (let i = 0; i < id.length; i++) {
-    sum += id.charCodeAt(i);
-  }
-  const offsetRefX = (sum % 20) / 320 - 0.03;
-  const offsetRefY = ((sum >> 2) % 20) / 320 - 0.03;
-
-  const code = id.toUpperCase();
-  if (code.includes('ALT') || code.includes('GUA_AS_GUA') || code.includes('CARRIZAL') || code.includes('LOS_TEQUES')) {
-    return { pX: 0.36 + offsetRefX, pY: 0.42 + offsetRefY };
-  } else if (code.includes('VAL') || code.includes('OCU') || code.includes('YARE') || code.includes('CHARALLAVE')) {
-    return { pX: 0.45 + offsetRefX, pY: 0.68 + offsetRefY };
-  } else if (code.includes('GUA') || code.includes('GG') || code.includes('GUARENAS') || code.includes('GUATIRE')) {
-    return { pX: 0.59 + offsetRefX, pY: 0.34 + offsetRefY };
-  } else if (code.includes('BAR') || code.includes('MAM') || code.includes('HIG') || code.includes('HIGUEROTE')) {
-    return { pX: 0.77 + offsetRefX, pY: 0.46 + offsetRefY };
-  } else if (code.includes('MET') || code.includes('CHA') || code.includes('PET') || code.includes('PETARE')) {
-    return { pX: 0.49 + offsetRefX, pY: 0.24 + offsetRefY };
-  }
-  return { pX: 0.5 + offsetRefX * 2, pY: 0.5 + offsetRefY * 2 };
-}
 
 function mapCodEjeToEjeGeografico(cod: string): string {
   const norm = cod.toLowerCase().trim();
@@ -198,52 +162,79 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [currentPoints, setCurrentPoints] = useState<{ x: number, y: number }[]>([]);
   const [customPolygons, setCustomPolygons] = useState<{ points: { x: number, y: number }[], ejeId: string, id: string }[]>([]);
-  const [editingEje, setEditingEje] = useState<Eje | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', url: '', color: '', description: '' });
   const [hoveredMunicipio, setHoveredMunicipio] = useState<string | null>(null);
   const [selectedPolygonId, setSelectedPolygonId] = useState<string | null>(null);
-  const [isConsoleMinimized, setIsConsoleMinimized] = useState(false);
-  const [isExecuting, setIsExecuting] = useState<string | null>(null);
+  const [isConsoleMinimized, setIsConsoleMinimized] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [dbStatus, setDbStatus] = useState<'testing' | 'ok' | 'error' | 'disconnected'>('ok');
-  const [lastAction, setLastAction] = useState<{ msg: string, type: 'success' | 'error' } | null>(null);
+  const [, setLastAction] = useState<{ msg: string, type: 'success' | 'error' } | null>(null);
   const [noticias, setNoticias] = useState<any[]>([]);
   const [territorialData, setTerritorialData] = useState<Record<string, any>>({});
-  const [isNewsOpen, setIsNewsOpen] = useState(false);
   const [showSqlRepair, setShowSqlRepair] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isLandscape, setIsLandscape] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mapDimensions, setMapDimensions] = useState({ width: 800, height: 500 });
 
-  // Realtime Semáforo & Feed states
   const { profile } = useAuth();
   const [transitoReportes, setTransitoReportes] = useState<any[]>([]);
   const [hoveredCentro, setHoveredCentro] = useState<any | null>(null);
   
-  // Administradores: Modificación e interpola de ejes y coordenadas
   const [selectedCentroEdit, setSelectedCentroEdit] = useState<any | null>(null);
-  const [isReallocatingPin, setIsReallocatingPin] = useState<string | null>(null); // pin id_centro being moved
+  const [isClinicAdminCollapsed, setIsClinicAdminCollapsed] = useState(true);
+  const [isReallocatingPin, setIsReallocatingPin] = useState<string | null>(null);
   const [clinicCoordsOverrides, setClinicCoordsOverrides] = useState<Record<string, { pX: number, pY: number }>>({});
   const [savingClinicChanges, setSavingClinicChanges] = useState(false);
+  const [isDragModeActive, setIsDragModeActive] = useState(false);
+  const [draggingPinId, setDraggingPinId] = useState<string | null>(null);
+  const [savingDragCoords, setSavingDragCoords] = useState(false);
+  const [recentlyUpdatedCentros, setRecentlyUpdatedCentros] = useState<Record<string, boolean>>({});
+  const [, setFeedEvents] = useState<string[]>([]);
+
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [touchStartDist, setTouchStartDist] = useState<number | null>(null);
+  const [touchStartZoom, setTouchStartZoom] = useState<number>(1);
+
+  const sqlCode = `CREATE OR REPLACE FUNCTION public.get_user_role()
+RETURNS TEXT AS $$
+BEGIN
+  RETURN (SELECT rol FROM public.usuarios 
+          WHERE id = auth.uid() LIMIT 1);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;`;
+
+  const handleSaveAllCoords = async () => {
+    if (!supabase) return;
+    setSavingDragCoords(true);
+    try {
+      const { error } = await supabase
+        .from('mapa_config')
+        .upsert({
+          id: 'coords_overrides',
+          ejes_data: clinicCoordsOverrides,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+      if (error) throw error;
+      notify('¡Ubicaciones guardadas en la nube!', 'success');
+      setIsDragModeActive(false);
+    } catch (err: any) {
+      notify(err.message || 'Error al guardar las ubicaciones', 'error');
+    } finally {
+      setSavingDragCoords(false);
+    }
+  };
 
   const getClinicCoords = (pin: any) => {
     const id = pin.id_centro;
-    // 1. Check custom overrides from DB first
-    if (clinicCoordsOverrides[id]) {
-      return clinicCoordsOverrides[id];
-    }
-    // 2. Check static config mappings next
-    if (CLINIC_COORDS_MAPPINGS[id]) {
-      return CLINIC_COORDS_MAPPINGS[id];
-    }
+    if (clinicCoordsOverrides[id]) return clinicCoordsOverrides[id];
+    if (CLINIC_COORDS_MAPPINGS[id]) return CLINIC_COORDS_MAPPINGS[id];
     
-    // 3. Fallback: deterministic offset within its own registered Eje!
     let sum = 0;
-    for (let i = 0; i < id.length; i++) {
-      sum += id.charCodeAt(i);
-    }
+    for (let i = 0; i < id.length; i++) sum += id.charCodeAt(i);
     const offsetRefX = (sum % 20) / 320 - 0.03;
     const offsetRefY = ((sum >> 2) % 20) / 320 - 0.03;
 
@@ -270,21 +261,14 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
         .from('transito_reportes')
         .update({ eje_geografico: newEje })
         .eq('id_centro', idCentro);
-      
       if (error) throw error;
       
-      // Update local state is real-time, but let's update immediately in UI state
       setTransitoReportes(prev => prev.map(r => r.id_centro === idCentro ? { ...r, eje_geografico: newEje } : r));
-      if (selectedCentroEdit && selectedCentroEdit.id_centro === idCentro) {
+      if (selectedCentroEdit?.id_centro === idCentro) {
         setSelectedCentroEdit(prev => prev ? { ...prev, eje_geografico: newEje } : null);
       }
-      if (hoveredCentro && hoveredCentro.id_centro === idCentro) {
-        setHoveredCentro(prev => prev ? { ...prev, eje_geografico: newEje } : null);
-      }
-      
       notify('Eje Geográfico actualizado correctamente');
     } catch (err: any) {
-      console.error('Error updating clinic Eje:', err);
       notify(err.message || 'Error al actualizar eje', 'error');
     } finally {
       setSavingClinicChanges(false);
@@ -310,36 +294,7 @@ export default function InteractiveMirandaMap({ isAdminMode = false }: Interacti
       }
     }
   };
-  const [recentlyUpdatedCentros, setRecentlyUpdatedCentros] = useState<Record<string, boolean>>({});
-  const [feedEvents, setFeedEvents] = useState<string[]>([
-    "Hace un momento: 🏥 CDI Carrizal reportó sin novedades.",
-    "Hace 12 min: 🏥 Ambulatorio Guaremal actualizó reporte a Semáforo Verde.",
-    "Hace 1 hora: 🏥 Ambulatorio El Pedregal resolvió consulta pendiente."
-  ]);
 
-  // Zoom & Pan states
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [touchStartDist, setTouchStartDist] = useState<number | null>(null);
-  const [touchStartZoom, setTouchStartZoom] = useState<number>(1);
-
-  const sqlCode = `CREATE OR REPLACE FUNCTION public.get_user_role()
-RETURNS TEXT AS $$
-BEGIN
-  RETURN (SELECT rol FROM public.usuarios 
-          WHERE id = auth.uid() LIMIT 1);
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
-
-ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Usuarios ven su propio perfil" ON public.usuarios;
-CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
-    FOR SELECT TO authenticated
-    USING (auth.uid() = id OR get_user_role() = 'admin');`;
-
-  // Solo detecta móvil/orientación, NO modifica viewBox
   useEffect(() => {
     const checkScreen = () => {
       setIsMobile(window.innerWidth < 768);
@@ -354,65 +309,39 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
     };
   }, []);
 
-  // Real-time listener y carga inicial de clínicas
   useEffect(() => {
     const loadReportes = async () => {
       if (!supabase) return;
-      const { data, error } = await supabase
-        .from('transito_reportes')
-        .select('*');
-      if (!error && data) {
-        setTransitoReportes(data);
-      }
+      const { data, error } = await supabase.from('transito_reportes').select('*');
+      if (!error && data) setTransitoReportes(data);
     };
     loadReportes();
 
     if (!supabase) return;
     const channel = supabase
       .channel('map_realtime_semaforo')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'transito_reportes' },
-        (payload) => {
-          console.log('Realtime Semáforo Change:', payload);
-          let updated: any = null;
-          if (payload.eventType === 'UPDATE') {
-            updated = payload.new as any;
-          } else if (payload.eventType === 'INSERT') {
-            updated = payload.new as any;
-          }
-
-          if (updated && updated.id_centro) {
-            setTransitoReportes(prev => {
-              const exists = prev.some(r => r.id_centro === updated.id_centro);
-              if (exists) {
-                return prev.map(r => r.id_centro === updated.id_centro ? { ...r, ...updated } : r);
-              } else {
-                return [updated, ...prev];
-              }
-            });
-            
-            // Destacar con animación de parpadeo
-            setRecentlyUpdatedCentros(prev => ({ ...prev, [updated.id_centro]: true }));
-            setTimeout(() => {
-              setRecentlyUpdatedCentros(prev => ({ ...prev, [updated.id_centro]: false }));
-            }, 6000);
-
-            // Añadir al feed
-            const timeStr = new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            const msg = `El centro ${updated.nombre_centro} ha actualizado su reporte diario a: Semáforo ${updated.estado_semaforo}.`;
-            setFeedEvents(prev => [msg, ...prev.slice(0, 19)]);
-          }
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transito_reportes' }, (payload) => {
+        let updated: any = null;
+        if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+          updated = payload.new as any;
         }
-      )
+        if (updated && updated.id_centro) {
+          setTransitoReportes(prev => {
+            const exists = prev.some(r => r.id_centro === updated.id_centro);
+            return exists ? prev.map(r => r.id_centro === updated.id_centro ? { ...r, ...updated } : r) : [updated, ...prev];
+          });
+          setRecentlyUpdatedCentros(prev => ({ ...prev, [updated.id_centro]: true }));
+          setTimeout(() => setRecentlyUpdatedCentros(prev => ({ ...prev, [updated.id_centro]: false })), 6000);
+          
+          const msg = `El centro ${updated.nombre_centro} actualizó a Semáforo ${updated.estado_semaforo}.`;
+          setFeedEvents(prev => [msg, ...prev.slice(0, 19)]);
+        }
+      })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // Fuerza un zoom automático y centrado en los límites de su ASIC o su Eje territorial (RBAC)
   useEffect(() => {
     if (profile?.cod_asic) {
       let pX = 0.38, pY = 0.45;
@@ -422,36 +351,10 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
       const targetX = pX * mapDimensions.width;
       const targetY = pY * mapDimensions.height;
       const newZoom = 2.8;
-      const midX = mapDimensions.width / 2;
-      const midY = mapDimensions.height / 2;
-
       setZoom(newZoom);
-      setPan({
-        x: midX - targetX * newZoom,
-        y: midY - targetY * newZoom
-      });
-    } else if (profile?.cod_eje) {
-      let pX = 0.5, pY = 0.5;
-      const normEje = profile.cod_eje.toUpperCase();
-      if (normEje === 'ALTOS_MIRANDINOS' || normEje === 'ALTOS MIRANDINOS') { pX = 0.36; pY = 0.42; }
-      else if (normEje === 'VALLES_DEL_TUY' || normEje === 'VALLES DEL TUY') { pX = 0.45; pY = 0.68; }
-      else if (normEje === 'GUARENAS_GUATIRE' || normEje === 'GUARENAS-GUATIRE' || normEje === 'GUARENAS GUATIRE') { pX = 0.59; pY = 0.34; }
-      else if (normEje === 'BARLOVENTO') { pX = 0.77; pY = 0.46; }
-      else if (normEje === 'METROPOLITANO') { pX = 0.49; pY = 0.24; }
-
-      const targetX = pX * mapDimensions.width;
-      const targetY = pY * mapDimensions.height;
-      const newZoom = 1.9;
-      const midX = mapDimensions.width / 2;
-      const midY = mapDimensions.height / 2;
-
-      setZoom(newZoom);
-      setPan({
-        x: midX - targetX * newZoom,
-        y: midY - targetY * newZoom
-      });
+      setPan({ x: (mapDimensions.width / 2) - targetX * newZoom, y: (mapDimensions.height / 2) - targetY * newZoom });
     }
-  }, [profile?.cod_asic, profile?.cod_eje, mapDimensions.width, mapDimensions.height]);
+  }, [profile?.cod_asic, mapDimensions.width, mapDimensions.height]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -464,499 +367,176 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
   };
 
   const notify = (msg: string, type: 'success' | 'error' = 'success') => {
-    console.log(`Notification [${type}]: ${msg}`);
     setLastAction({ msg, type });
-    setTimeout(() => setLastAction(null), 5000);
   };
 
   const runConnectionTest = async () => {
-    if (!supabase) {
-      setDbStatus('disconnected');
-      return false;
-    }
+    if (!supabase) { setDbStatus('disconnected'); return false; }
     setDbStatus('testing');
     try {
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Test timeout')), 5000)
-      );
-      const fetchPromise = supabase.from('mapa_config').select('id').eq('id', 'default').maybeSingle();
-      const response: any = await Promise.race([fetchPromise, timeoutPromise]);
-      if (response.error) throw response.error;
+      await supabase.from('mapa_config').select('id').eq('id', 'default').maybeSingle();
       setDbStatus('ok');
       return true;
-    } catch (err: any) {
-      console.error('Connection test failed:', err);
+    } catch {
       setDbStatus('error');
       return false;
     }
   };
 
-  // Carga inicial desde Supabase
   useEffect(() => {
     let mounted = true;
     const fetchMapData = async () => {
       setIsLoading(true);
       const hasConnection = await runConnectionTest();
-      if (!mounted) return;
-      if (!hasConnection || !supabase) {
-        setIsLoading(false);
-        return;
-      }
+      if (!mounted || !hasConnection || !supabase) { setIsLoading(false); return; }
       try {
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Map fetch timeout')), 10000)
-        );
-        console.log('Fetching map config...');
-        const fetchConfig = supabase
-          .from('mapa_config')
-          .select('*')
-          .eq('id', 'default')
-          .maybeSingle();
-        const configRes: any = await Promise.race([fetchConfig, timeoutPromise]);
-        const config = configRes.data;
-        const configError = configRes.error;
-        if (configError) throw configError;
-        if (config && mounted) {
-          setBackgroundImage(config.background_image);
-          setBgUrlInput(config.background_image || '');
-          
-          // Obtener dimensiones reales de la imagen cargada
-          if (config.background_image) {
-            try {
-              const dims = await getImageDimensions(config.background_image);
-              if (mounted) setMapDimensions({ width: dims.width, height: dims.height });
-            } catch (err) {
-              console.warn('No se pudieron obtener dimensiones de la imagen remota, usando default');
-            }
-          }
-          
-          if (config.ejes_data) {
-             const loadedEjes = config.ejes_data.map((e: any) => ({
-                ...e,
-                icon: INITIAL_EJES.find(ie => ie.id === e.id)?.icon || <Activity size={18} />
-             }));
-             setEjes(loadedEjes);
-             setActiveEje(loadedEjes[0]);
+        const configRes: any = await supabase.from('mapa_config').select('*').eq('id', 'default').maybeSingle();
+        if (configRes.data && mounted) {
+          setBackgroundImage(configRes.data.background_image);
+          setBgUrlInput(configRes.data.background_image || '');
+          if (configRes.data.background_image) {
+            const dims = await getImageDimensions(configRes.data.background_image);
+            if (mounted) setMapDimensions({ width: dims.width, height: dims.height });
           }
         }
         
-        try {
-          console.log('Fetching coordinate overrides...');
-          const fetchCoords = supabase
-            .from('mapa_config')
-            .select('*')
-            .eq('id', 'coords_overrides')
-            .maybeSingle();
-          const coordsRes: any = await Promise.race([fetchCoords, timeoutPromise]);
-          if (coordsRes.data && coordsRes.data.ejes_data && mounted) {
-            setClinicCoordsOverrides(coordsRes.data.ejes_data);
-          }
-        } catch (coordErr) {
-          console.warn('Could not load clinic coordinate overrides:', coordErr);
+        const coordsRes: any = await supabase.from('mapa_config').select('*').eq('id', 'coords_overrides').maybeSingle();
+        if (coordsRes.data?.ejes_data && mounted) setClinicCoordsOverrides(coordsRes.data.ejes_data);
+
+        const polyRes: any = await supabase.from('mapa_poligonos').select('*');
+        if (polyRes.data && mounted) {
+          setCustomPolygons(polyRes.data.map((p: any) => ({ id: p.id, ejeId: p.eje_id, points: p.points })));
         }
 
-        console.log('Fetching polygons...');
-        const fetchPolys = supabase
-          .from('mapa_poligonos')
-          .select('*');
-        const polyRes: any = await Promise.race([fetchPolys, timeoutPromise]);
-        const polygons = polyRes.data;
-        const polyError = polyRes.error;
-        if (polyError) throw polyError;
-        if (polygons && mounted) {
-          setCustomPolygons(polygons.map((p: any) => ({
-            id: p.id,
-            ejeId: p.eje_id,
-            points: p.points as { x: number, y: number }[]
-          })));
-        }
-        const fetchNews = supabase
-          .from('noticias')
-          .select('*')
-          .order('fecha', { ascending: false })
-          .limit(5);
-        const newsRes: any = await Promise.race([fetchNews, timeoutPromise]);
-        const newsData = newsRes.data;
-        if (newsData && mounted) {
-          setNoticias(newsData);
-        }
+        const newsRes: any = await supabase.from('noticias').select('*').limit(5);
+        if (newsRes.data && mounted) setNoticias(newsRes.data);
 
-        const fetchTerri = supabase
-          .from('territorial_data')
-          .select('*');
-        const terriRes: any = await Promise.race([fetchTerri, timeoutPromise]);
+        const terriRes: any = await supabase.from('territorial_data').select('*');
         if (terriRes.data && mounted) {
-           const mappedData = terriRes.data.reduce((acc: any, curr: any) => {
-              acc[curr.eje_id] = curr;
-              return acc;
-           }, {});
-           setTerritorialData(mappedData);
+          setTerritorialData(terriRes.data.reduce((acc: any, curr: any) => ({ ...acc, [curr.eje_id]: curr }), {}));
         }
-
-        if (mounted) console.log('Map data synchronized');
-      } catch (err: any) {
-        console.error('Error loading map data:', err);
-        if (err.message?.includes('recursion')) {
-          setDbStatus('error');
-          notify('Error de Seguridad RLS en Base de Datos. Contacte Admin.', 'error');
-        }
-      } finally {
-        if (mounted) {
-          setIsLoading(false);
-        }
-      }
+      } catch (err) {
+        console.error(err);
+      } finally { if (mounted) setIsLoading(false); }
     };
     fetchMapData();
     return () => { mounted = false; };
   }, []);
 
-  const saveMapConfig = async (currentEjes?: Eje[], currentBg?: string | null) => {
+  const saveMapConfig = async (currentBg?: string | null) => {
     if (!supabase || !isAdminMode) return;
     setIsSaving(true);
     try {
-      const ejesToSave = (currentEjes || ejes).map(e => ({
-        id: e.id,
-        name: e.name,
-        color: e.color,
-        url: e.url,
-        description: e.description
-      }));
-      const finalBg = currentBg !== undefined ? currentBg : backgroundImage;
-      const { error } = await supabase
-        .from('mapa_config')
-        .upsert({
-          id: 'default',
-          background_image: finalBg,
-          ejes_data: ejesToSave,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'id' });
-      if (error) throw error;
+      const ejesToSave = ejes.map(e => ({ id: e.id, name: e.name, color: e.color, url: e.url, description: e.description }));
+      await supabase.from('mapa_config').upsert({ id: 'default', background_image: currentBg !== undefined ? currentBg : backgroundImage, ejes_data: ejesToSave, updated_at: new Date().toISOString() });
       setDbStatus('ok');
-      notify('Configuración sincronizada');
-    } catch (err: any) {
-      console.error('Save error:', err);
-      setDbStatus('error');
-      notify(err.message || 'Error al guardar', 'error');
-    } finally {
-      setIsSaving(false);
-    }
+    } catch { setDbStatus('error'); } finally { setIsSaving(false); }
   };
 
-  const savePolygon = async (poly: { id: string, points: { x: number, y: number }[], ejeId: string }) => {
+  const savePolygon = async (poly: any) => {
      if (!supabase || !isAdminMode) return;
-     try {
-        const { error } = await supabase
-          .from('mapa_poligonos')
-          .upsert({
-            id: poly.id,
-            eje_id: poly.ejeId,
-            points: poly.points
-          }, { onConflict: 'id' });
-        if (error) throw error;
-        notify('Capa guardada');
-     } catch (err: any) {
-        console.error('Save poly error:', err);
-        notify('Error en capa', 'error');
-     }
+     try { await supabase.from('mapa_poligonos').upsert({ id: poly.id, eje_id: poly.ejeId, points: poly.points }); } catch {}
   };
 
   const deletePolygon = async (id: string) => {
-    console.log('Attempting to delete polygon with ID:', id);
-    if (!isAdminMode) {
-      console.warn('Delete aborted: Not in admin mode');
-      return;
-    }
-    setCustomPolygons(prev => {
-      const filtered = prev.filter(p => p.id !== id);
-      console.log(`Local state updated. Remaining polygons: ${filtered.length}`);
-      return filtered;
-    });
-    if (selectedPolygonId === id) {
-      setSelectedPolygonId(null);
-    }
-    if (supabase) {
-      try {
-        console.log('Sending delete request to Supabase...');
-        const { error } = await supabase.from('mapa_poligonos').delete().eq('id', id);
-        if (error) {
-          console.error('Supabase delete error:', error);
-          notify('Error en base de datos: ' + error.message, 'error');
-        } else {
-          console.log('Supabase delete success');
-          notify('Capa eliminada correctamente');
-        }
-      } catch (err: any) {
-        console.error('Delete exception:', err);
-        notify('Error al eliminar: ' + (err.message || 'Error desconocido'), 'error');
-      }
-    } else {
-      console.log('Supabase not available, delete was local only');
-      notify('Capa eliminada localmente');
-    }
+    if (!isAdminMode) return;
+    setCustomPolygons(prev => prev.filter(p => p.id !== id));
+    if (selectedPolygonId === id) setSelectedPolygonId(null);
+    if (supabase) await supabase.from('mapa_poligonos').delete().eq('id', id);
   };
 
   const updatePolygonEje = async (polyId: string, newEjeId: string) => {
     if (!isAdminMode || !supabase) return;
-    const updatedPolys = customPolygons.map(p => 
-      p.id === polyId ? { ...p, ejeId: newEjeId } : p
-    );
-    setCustomPolygons(updatedPolys);
-    try {
-      const { error } = await supabase
-        .from('mapa_poligonos')
-        .update({ eje_id: newEjeId })
-        .eq('id', polyId);
-      if (error) throw error;
-      notify('Vínculo actualizado');
-    } catch (err) {
-      console.error('Update poly error:', err);
-      notify('Error al actualizar', 'error');
-    }
+    setCustomPolygons(prev => prev.map(p => p.id === polyId ? { ...p, ejeId: newEjeId } : p));
+    await supabase.from('mapa_poligonos').update({ eje_id: newEjeId }).eq('id', polyId);
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 1024 * 1024 * 5) {
-        notify('Archivo muy pesado (>5MB)', 'error');
-        return;
-      }
       const reader = new FileReader();
       reader.onload = async (event) => {
         const result = event.target?.result as string;
         setBackgroundImage(result);
-        setBgUrlInput(result.startsWith('data:') ? 'Imagen Base64' : result);
-        
-        // Fijar viewBox al tamaño real de la imagen
-        try {
-          const dims = await getImageDimensions(result);
-          setMapDimensions({ width: dims.width, height: dims.height });
-        } catch (err) {
-          console.error('No se pudo obtener dimensiones de la imagen');
-        }
-        
-        await saveMapConfig(undefined, result);
+        const dims = await getImageDimensions(result);
+        setMapDimensions({ width: dims.width, height: dims.height });
+        await saveMapConfig(result);
       };
-      reader.onerror = () => notify('Error al leer el archivo', 'error');
       reader.readAsDataURL(file);
     }
   };
 
-  const handleUrlUpdate = async () => {
-    if (bgUrlInput === 'Imagen Base64' || bgUrlInput === backgroundImage) return;
-    setBackgroundImage(bgUrlInput);
-    
-    // Fijar viewBox al tamaño real de la imagen URL
-    try {
-      const dims = await getImageDimensions(bgUrlInput);
-      setMapDimensions({ width: dims.width, height: dims.height });
-    } catch (err) {
-      console.error('No se pudo obtener dimensiones de la imagen URL');
-    }
-    
-    await saveMapConfig(undefined, bgUrlInput);
+  const getMappedCoordsFromEvent = (clientX: number, clientY: number, svgElement: SVGSVGElement) => {
+    const pt = svgElement.createSVGPoint();
+    pt.x = clientX;
+    pt.y = clientY;
+    const target = svgElement.querySelector('#zoom-pan-container') || svgElement;
+    const ctm = (target as any).getScreenCTM();
+    if (!ctm) return null;
+    const svgP = pt.matrixTransform(ctm.inverse());
+    return svgP ? { pX: svgP.x / mapDimensions.width, pY: svgP.y / mapDimensions.height, x: svgP.x, y: svgP.y } : null;
   };
 
-  const handleSvgClick = async (e: React.MouseEvent<SVGSVGElement>) => {
-    const svg = e.currentTarget;
-    const pt = svg.createSVGPoint();
-    pt.x = e.clientX;
-    pt.y = e.clientY;
-    
-    // Obtener CTM del contenedor de zoom/paneo para deshacer la transformacion y dibujar en los pixeles correctos
-    const target = svg.querySelector('#zoom-pan-container') || svg;
-    const ctm = (target as any).getScreenCTM();
-    if (!ctm) return;
-    const svgP = pt.matrixTransform(ctm.inverse());
-    if (!svgP) return;
+  // Unificación de Clic: Maneja pincel, reubicación y dibujo de forma orgánica y precisa
+  const handleSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    const coords = getMappedCoordsFromEvent(e.clientX, e.clientY, e.currentTarget);
+    if (!coords) return;
 
     if (isReallocatingPin) {
-      // Reubicación de pin
       const idCentro = isReallocatingPin;
-      const pX = svgP.x / mapDimensions.width;
-      const pY = svgP.y / mapDimensions.height;
-      
-      const updatedOverrides = {
-        ...clinicCoordsOverrides,
-        [idCentro]: { pX, pY }
-      };
+      const updatedOverrides = { ...clinicCoordsOverrides, [idCentro]: { pX: coords.pX, pY: coords.pY } };
       setClinicCoordsOverrides(updatedOverrides);
       setIsReallocatingPin(null);
-      
-      notify('Ubicación guardada en navegador');
-
       if (supabase) {
-        try {
-          const { error } = await supabase
-            .from('mapa_config')
-            .upsert({
-              id: 'coords_overrides',
-              ejes_data: updatedOverrides,
-              updated_at: new Date().toISOString()
-            }, { onConflict: 'id' });
-          if (error) throw error;
-          
-          // Actualiza también el selectedCentroEdit para que se refresque visualmente
-          if (selectedCentroEdit && selectedCentroEdit.id_centro === idCentro) {
-            setSelectedCentroEdit(prev => prev ? { ...prev } : null);
-          }
-          
-          notify('Ubicación sincronizada en la nube');
-        } catch (dbErr: any) {
-          console.error('Error saving overrides to Supabase:', dbErr);
-          notify('Error al sincronizar con almacenamiento en la nube', 'error');
-        }
+        supabase.from('mapa_config').upsert({ id: 'coords_overrides', ejes_data: updatedOverrides, updated_at: new Date().toISOString() }).then(() => {
+          if (selectedCentroEdit?.id_centro === idCentro) setSelectedCentroEdit(prev => prev ? { ...prev } : null);
+          notify('Ubicación sincronizada');
+        });
       }
       return;
     }
 
-    if (!isDrawingMode) return;
-    setCurrentPoints([...currentPoints, { x: svgP.x, y: svgP.y }]);
+    if (isDrawingMode) {
+      setCurrentPoints(prev => [...prev, { x: coords.x, y: coords.y }]);
+    }
   };
 
-  // Mouse & Touch gestores para Paneo (Drag) y Zoom
   const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (isDrawingMode) return;
-    if (e.button !== 0) return; // Solo boton izquierdo
+    if (isDrawingMode || draggingPinId || e.button !== 0) return;
     setIsDragging(true);
     setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
   };
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (isDrawingMode || !isDragging) return;
-    setPan({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y
-    });
+    if (isDrawingMode) return;
+    if (draggingPinId) {
+      const coords = getMappedCoordsFromEvent(e.clientX, e.clientY, e.currentTarget);
+      if (coords) setClinicCoordsOverrides(prev => ({ ...prev, [draggingPinId]: { pX: coords.pX, pY: coords.pY } }));
+      return;
+    }
+    if (isDragging) setPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
   };
 
   const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const handleMouseLeave = () => {
+    if (draggingPinId) { setDraggingPinId(null); notify('Ajuste temporal listo. Guarde cambios.'); }
     setIsDragging(false);
   };
 
   const handleWheel = (e: React.WheelEvent<SVGSVGElement>) => {
     if (isDrawingMode) return;
-    
-    // Prevenir scrolling de la pagina principal al interactuar con el mapa
     e.preventDefault();
     const zoomFactor = 1.1;
-    let newZoom = zoom;
-    if (e.deltaY < 0) {
-      newZoom = Math.min(zoom * zoomFactor, 10);
-    } else {
-      newZoom = Math.max(zoom / zoomFactor, 0.5);
-    }
-
+    const newZoom = e.deltaY < 0 ? Math.min(zoom * zoomFactor, 10) : Math.max(zoom / zoomFactor, 0.5);
     const rect = e.currentTarget.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
-
-    const xs = (mouseX - pan.x) / zoom;
-    const ys = (mouseY - pan.y) / zoom;
-
+    setPan({ x: mouseX - ((mouseX - pan.x) / zoom) * newZoom, y: mouseY - ((mouseY - pan.y) / zoom) * newZoom });
     setZoom(newZoom);
-    setPan({
-      x: mouseX - xs * newZoom,
-      y: mouseY - ys * newZoom
-    });
-  };
-
-  const handleTouchStart = (e: React.TouchEvent<SVGSVGElement>) => {
-    if (isDrawingMode) return;
-    
-    if (e.touches.length === 1) {
-      setIsDragging(true);
-      const touch = e.touches[0];
-      setDragStart({ x: touch.clientX - pan.x, y: touch.clientY - pan.y });
-    } else if (e.touches.length === 2) {
-      setIsDragging(false);
-      const t1 = e.touches[0];
-      const t2 = e.touches[1];
-      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
-      setTouchStartDist(dist);
-      setTouchStartZoom(zoom);
-    }
-  };
-
-  const handleTouchMove = (e: React.TouchEvent<SVGSVGElement>) => {
-    if (isDrawingMode) return;
-    
-    if (e.touches.length === 1 && isDragging) {
-      const touch = e.touches[0];
-      setPan({
-        x: touch.clientX - dragStart.x,
-        y: touch.clientY - dragStart.y
-      });
-    } else if (e.touches.length === 2 && touchStartDist !== null) {
-      const t1 = e.touches[0];
-      const t2 = e.touches[1];
-      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
-      const scale = dist / touchStartDist;
-      const newZoom = Math.max(0.5, Math.min(10, touchStartZoom * scale));
-      
-      const rect = e.currentTarget.getBoundingClientRect();
-      const midX = (t1.clientX + t2.clientX) / 2 - rect.left;
-      const midY = (t1.clientY + t2.clientY) / 2 - rect.top;
-      
-      const xs = (midX - pan.x) / zoom;
-      const ys = (midY - pan.y) / zoom;
-      
-      setZoom(newZoom);
-      setPan({
-        x: midX - xs * newZoom,
-        y: midY - ys * newZoom
-      });
-    }
-  };
-
-  const handleTouchEnd = () => {
-    setIsDragging(false);
-    setTouchStartDist(null);
-  };
-
-  // Botones flotantes de zoom
-  const zoomIn = () => {
-    const newZoom = Math.min(zoom * 1.3, 10);
-    const midX = mapDimensions.width / 2;
-    const midY = mapDimensions.height / 2;
-    const xs = (midX - pan.x) / zoom;
-    const ys = (midY - pan.y) / zoom;
-    setZoom(newZoom);
-    setPan({
-      x: midX - xs * newZoom,
-      y: midY - ys * newZoom
-    });
-  };
-
-  const zoomOut = () => {
-    const newZoom = Math.max(zoom / 1.3, 0.5);
-    const midX = mapDimensions.width / 2;
-    const midY = mapDimensions.height / 2;
-    const xs = (midX - pan.x) / zoom;
-    const ys = (midY - pan.y) / zoom;
-    setZoom(newZoom);
-    setPan({
-      x: midX - xs * newZoom,
-      y: midY - ys * newZoom
-    });
-  };
-
-  const resetZoom = () => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
   };
 
   const finishPolygon = async () => {
     if (currentPoints.length < 3) return;
-    const newPolygon = {
-      id: Math.random().toString(36).substr(2, 9),
-      points: currentPoints,
-      ejeId: activeEje.id
-    };
+    const newPolygon = { id: Math.random().toString(36).substr(2, 9), points: currentPoints, ejeId: activeEje.id };
     setCustomPolygons([...customPolygons, newPolygon]);
     setCurrentPoints([]);
     setIsDrawingMode(false);
@@ -964,916 +544,194 @@ CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
     await savePolygon(newPolygon);
   };
 
-  const clearCurrentPoints = () => setCurrentPoints([]);
-
-  // ---------- JSX ----------
   return (
-    <div className="flex flex-col w-full h-full bg-[#0B1525] text-slate-200 overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)] border border-white/5 relative" style={{ maxWidth: '100vw', maxHeight: '100dvh' }}>
-      
+    <div className="flex flex-col w-full h-full bg-[#0B1525] text-slate-200 overflow-hidden relative" style={{ maxWidth: '100vw', maxHeight: '100dvh' }}>
       {isMobile && (
         <div className="absolute top-4 right-4 z-50 flex gap-2">
-          <button
-            onClick={toggleFullscreen}
-            className="p-3 bg-black/40 backdrop-blur-xl rounded-2xl border border-white/20 text-white shadow-2xl"
-          >
+          <button onClick={toggleFullscreen} className="p-3 bg-black/40 backdrop-blur-xl rounded-2xl border border-white/20 text-white shadow-2xl">
             {isFullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
           </button>
         </div>
       )}
 
-      {isMobile && !isLandscape && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 pointer-events-none sm:hidden">
-           <motion.div 
-             initial={{ opacity: 0, scale: 0.8 }}
-             animate={{ opacity: 0.6 }}
-             className="flex flex-col items-center gap-4 text-slate-500"
-           >
-              <div className="w-16 h-16 border-2 border-dashed border-slate-700 rounded-2xl flex items-center justify-center animate-bounce">
-                 <RefreshCw size={32} />
-              </div>
-              <span className="text-[10px] font-black uppercase tracking-[0.3em]">Rote para mejor vista</span>
-           </motion.div>
-        </div>
-      )}
-
       {isLoading && (
-        <div className="absolute inset-0 z-[100] bg-[#0B1525]/95 backdrop-blur-3xl flex flex-col items-center justify-center p-4 sm:p-8 text-center overflow-y-auto">
+        <div className="absolute inset-0 z-[100] bg-[#0B1525]/95 backdrop-blur-3xl flex flex-col items-center justify-center p-8 text-center">
            {!showSqlRepair ? (
              <>
                <div className="relative mb-8">
-                  <div className="w-20 h-20 border-4 border-blue-500/10 border-t-blue-500 rounded-full animate-spin"></div>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                     <Database className="text-blue-500 animate-pulse" size={24} />
-                  </div>
+                  <div className="w-20 h-20 border-4 border-blue-500/10 border-t-blue-500 rounded-full animate-spin" />
+                  <div className="absolute inset-0 flex items-center justify-center"><Database className="text-blue-500" size={24} /></div>
                </div>
-               <div className="max-w-md">
-                  <h3 className="text-lg font-black text-white uppercase tracking-[0.3em] mb-2">Miranda Salud SIG</h3>
-                  <p className="text-xs text-slate-500 font-medium leading-relaxed mb-8">
-                    Sincronizando capas geográficas y preferencias globales con la nube de salud...
-                  </p>
-                  {!supabase && (
-                    <motion.div 
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="bg-amber-500/10 border border-amber-500/20 p-6 rounded-[2rem] mb-8"
-                    >
-                      <div className="flex items-center justify-center gap-2 text-amber-500 mb-2">
-                        <AlertCircle size={16} />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Configuración Faltante</span>
-                      </div>
-                      <p className="text-[10px] text-amber-400/80 mb-2 font-medium">
-                         No se detectaron las credenciales de Supabase.
-                      </p>
-                      <div className="bg-black/20 p-3 rounded-xl text-[8px] font-mono text-slate-400 mb-2 text-left space-y-1">
-                        <div>VITE_SUPABASE_URL: {import.meta.env.VITE_SUPABASE_URL ? '✅' : '❌'}</div>
-                        <div>VITE_SUPABASE_ANON_KEY: {import.meta.env.VITE_SUPABASE_ANON_KEY ? '✅' : '❌'}</div>
-                      </div>
-                      <p className="text-[9px] text-slate-500 italic">
-                        Verifique que las variables tengan el prefijo <b>VITE_</b> en su proveedor (Vercel/AI Studio).
-                      </p>
-                    </motion.div>
-                  )}
-                  {dbStatus === 'error' && supabase && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-rose-500/10 border border-rose-500/20 p-6 rounded-[2rem] mb-8"
-                    >
-                      <div className="flex items-center justify-center gap-2 text-rose-500 mb-2">
-                        <AlertCircle size={16} />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Error de Sincronización</span>
-                      </div>
-                      <p className="text-[10px] text-rose-400/80 mb-4 font-medium uppercase tracking-tighter">
-                         Se detectó un error de RLS (Recursión Infinita) en Supabase.
-                      </p>
-                      <button 
-                        onClick={() => setShowSqlRepair(true)}
-                        className="w-full py-3 bg-rose-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-600 transition-all shadow-lg shadow-rose-900/20 mb-3"
-                      >
-                        Ver Instrucciones de Reparación
-                      </button>
-                    </motion.div>
-                  )}
-                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                      <button 
-                        onClick={() => {
-                          setIsLoading(false);
-                          notify('Modo Local (Offline) forzado', 'error');
-                        }}
-                        className="px-8 py-3 bg-white/5 border border-white/10 rounded-full text-[9px] font-black text-slate-400 hover:text-white hover:bg-white/10 uppercase transition-all tracking-widest flex items-center justify-center gap-2"
-                      >
-                        <Play size={10} /> Omitir y Usar Modo Local
-                      </button>
-                      <button 
-                        onClick={runConnectionTest}
-                        className="px-8 py-3 bg-blue-500/10 border border-blue-500/20 rounded-full text-[9px] font-black text-blue-400 hover:text-white hover:bg-blue-500/30 uppercase transition-all tracking-widest flex items-center justify-center gap-2 min-w-[140px]"
-                      >
-                        <RefreshCw size={10} className={dbStatus === 'testing' ? 'animate-spin' : ''} />
-                        Reintentar
-                      </button>
-                  </div>
+               <h3 className="text-lg font-black text-white uppercase tracking-[0.3em] mb-2">Miranda Salud SIG</h3>
+               <div className="flex gap-3 justify-center mt-4">
+                  <button onClick={() => setIsLoading(false)} className="px-6 py-2 bg-white/5 border border-white/10 rounded-full text-[10px] font-black uppercase">Modo Local</button>
+                  <button onClick={runConnectionTest} className="px-6 py-2 bg-blue-500/20 border border-blue-500/30 rounded-full text-[10px] font-black uppercase">Reintentar</button>
                </div>
              </>
            ) : (
-             <motion.div 
-               initial={{ opacity: 0, scale: 0.9 }}
-               animate={{ opacity: 1, scale: 1 }}
-               className="max-w-2xl w-full bg-[#0A111E] border border-white/10 p-6 sm:p-10 rounded-[2rem] sm:rounded-[3rem] shadow-2xl text-left max-h-[90vh] overflow-y-auto"
-             >
-                <div className="flex justify-between items-start mb-6">
-                   <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-rose-500/20 rounded-2xl flex items-center justify-center text-rose-500">
-                         <Terminal size={24} />
-                      </div>
-                      <div>
-                         <h3 className="text-xl font-black text-white uppercase tracking-tight">Reparación SQL</h3>
-                         <p className="text-xs text-slate-500 font-medium">Siga estos pasos para activar la sincronización</p>
-                      </div>
-                   </div>
-                   <button onClick={() => setShowSqlRepair(false)} className="text-slate-500 hover:text-white">
-                      <X size={24} />
-                   </button>
-                </div>
-                <div className="space-y-6">
-                   <div className="flex gap-4">
-                      <div className="w-6 h-6 shrink-0 bg-blue-500 text-white rounded-full flex items-center justify-center text-[10px] font-black">1</div>
-                      <p className="text-xs text-slate-400 leading-relaxed">
-                         Vaya a su dashboard de <span className="text-blue-400 font-black">Supabase</span> y entre a la sección <span className="text-white font-bold">SQL Editor</span>.
-                      </p>
-                   </div>
-                   <div className="flex gap-4">
-                      <div className="w-6 h-6 shrink-0 bg-blue-500 text-white rounded-full flex items-center justify-center text-[10px] font-black">2</div>
-                      <p className="text-xs text-slate-400 leading-relaxed">
-                         Copie el siguiente código y ejecútelo presionando <span className="text-white font-bold">RUN</span>.
-                      </p>
-                   </div>
-                   <div className="relative group">
-                      <pre className="w-full bg-black/40 border border-white/5 p-6 rounded-2xl text-[10px] text-blue-300 font-mono overflow-x-auto custom-scrollbar">
-                         {sqlCode}
-                      </pre>
-                      <button 
-                        onClick={() => {
-                          navigator.clipboard.writeText(sqlCode);
-                          notify('Código SQL Copiado');
-                        }}
-                        className="absolute top-4 right-4 p-2 bg-white/10 rounded-lg text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                         <Save size={14} />
-                      </button>
-                   </div>
-                   <p className="text-[10px] text-amber-500/80 bg-amber-500/5 p-4 rounded-xl border border-amber-500/10 italic">
-                      <b>Nota:</b> Esto desactivará el error "infinite recursion" al separar la lógica de roles de las políticas RLS.
-                   </p>
-                   <button 
-                     onClick={() => { setShowSqlRepair(false); runConnectionTest(); }}
-                     className="w-full py-4 bg-white text-black rounded-2xl text-xs font-black uppercase tracking-[0.2em] hover:bg-blue-400 hover:text-white transition-all shadow-xl"
-                   >
-                      Ya ejecuté el SQL, Reintentar ahora
-                   </button>
-                </div>
-             </motion.div>
+             <div className="max-w-2xl bg-[#0A111E] border border-white/10 p-8 rounded-[2rem] text-left">
+                <pre className="bg-black/40 p-4 rounded-xl text-[10px] font-mono text-blue-300 overflow-x-auto">{sqlCode}</pre>
+                <button onClick={() => { setShowSqlRepair(false); runConnectionTest(); }} className="w-full mt-4 py-3 bg-white text-black rounded-xl text-xs font-black uppercase">Listo, Reintentar</button>
+             </div>
            )}
         </div>
       )}
 
-      {/* Noticias Sidebar Omitida por solicitud de limpieza */}
+      <main className="flex-1 relative flex flex-col overflow-hidden bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#112035] to-[#0A111E]">
+        <div className="flex-1 flex flex-col items-center justify-center relative p-4">
+          <svg 
+            viewBox={`0 0 ${mapDimensions.width} ${mapDimensions.height}`}
+            preserveAspectRatio="xMidYMid meet"
+            className="w-full h-auto max-w-full transform-gpu transition-transform duration-300"
+            style={{ maxHeight: '100%', maxWidth: '100%', cursor: isDrawingMode ? 'crosshair' : (isDragging ? 'grabbing' : 'grab'), touchAction: 'none' }}
+            onClick={handleSvgClick}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onWheel={handleWheel}
+          >
+            <rect width={mapDimensions.width} height={mapDimensions.height} fill="transparent" />
+            <g id="zoom-pan-container" transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
+              {backgroundImage && <image href={backgroundImage} x="0" y="0" width={mapDimensions.width} height={mapDimensions.height} className="opacity-90 pointer-events-none" />}
 
-      {/* Toolbar Admin Omitida por solicitud */}
+              {customPolygons.map((poly) => {
+                const eje = ejes.find(e => e.id === poly.ejeId) || activeEje;
+                const isSelected = selectedPolygonId === poly.id;
+                return (
+                  <g key={poly.id} className="cursor-pointer">
+                    <polygon 
+                      points={poly.points.map(p => `${p.x},${p.y}`).join(' ')}
+                      fill={isSelected ? `${eje.color}90` : (hoveredMunicipio === poly.id ? eje.color : `${eje.color}60`)}
+                      stroke={isSelected ? '#FFFFFF' : eje.color}
+                      strokeWidth={isSelected ? "4" : "3"}
+                      onMouseEnter={() => setHoveredMunicipio(poly.id)}
+                      onMouseLeave={() => setHoveredMunicipio(null)}
+                      onClick={(e) => { e.stopPropagation(); isAdminMode ? setSelectedPolygonId(isSelected ? null : poly.id) : window.open(eje.url, '_blank'); }}
+                    />
+                    {isAdminMode && isSelected && (
+                      <foreignObject x={poly.points[0].x - 40} y={poly.points[0].y - 80} width="120" height="120" className="overflow-visible">
+                        <div className="flex flex-col items-center gap-2 bg-[#0B1525]/90 p-2 rounded-xl border border-white/20">
+                          <button onClick={(ev) => { ev.stopPropagation(); deletePolygon(poly.id); }} className="p-2 bg-rose-600 text-white rounded-full"><Trash2 size={14} /></button>
+                        </div>
+                      </foreignObject>
+                    )}
+                  </g>
+                );
+              })}
 
-      {isAdminMode && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20">
-           <p className="text-[8px] text-slate-600 font-black uppercase tracking-[0.5em] bg-black/40 px-6 py-2 rounded-full border border-white/5">
-              Consola SIG • {isDrawingMode ? 'Modo Dibujo Activo' : 'Sincronizado'}
-           </p>
-        </div>
-      )}
+              {currentPoints.length > 0 && (
+                <g>
+                  <polyline points={currentPoints.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={activeEje.color} strokeWidth="3" className="animate-pulse" />
+                  {currentPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="5" fill="white" stroke={activeEje.color} strokeWidth="2" />)}
+                </g>
+              )}
 
-      <main className="flex-1 relative flex flex-col overflow-hidden bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#112035] to-[#0A111E]" style={{ minHeight: 0 }}>
-        <div className="flex-1 flex flex-col items-center justify-center relative p-1 sm:p-4" style={{ minHeight: 0 }}>
-          <div className="absolute inset-0 flex items-center justify-center opacity-40 pointer-events-none">
-            <div className="w-[300px] h-[300px] sm:w-[600px] sm:h-[600px] md:w-[800px] md:h-[800px] bg-blue-500/10 rounded-full blur-[150px]"></div>
-          </div>
-          <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
+              {transitoReportes.filter(r => profile?.cod_asic ? (r.asic || '').toUpperCase() === profile.cod_asic.toUpperCase() : true).map((pin) => {
+                const coords = getClinicCoords(pin);
+                const markerColor = pin.estado_semaforo === 'Verde' ? '#10B981' : pin.estado_semaforo === 'Amarillo' ? '#F59E0B' : pin.estado_semaforo === 'Rojo' ? '#EF4444' : '#94A3B8';
+                return (
+                  <g 
+                    key={pin.id_centro} 
+                    transform={`translate(${coords.pX * mapDimensions.width}, ${coords.pY * mapDimensions.height})`}
+                    className="cursor-pointer transition-all duration-200"
+                    onMouseEnter={() => setHoveredCentro(pin)}
+                    onMouseLeave={() => setHoveredCentro(null)}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedCentroEdit(pin); }}
+                    onMouseDown={(e) => { if (isDragModeActive) { e.stopPropagation(); setDraggingPinId(pin.id_centro); } }}
+                  >
+                    {recentlyUpdatedCentros[pin.id_centro] && <circle r="18" fill="none" stroke="#F59E0B" strokeWidth="3" className="animate-ping" />}
+                    <circle r="10" fill={markerColor} stroke={selectedCentroEdit?.id_centro === pin.id_centro ? '#00E5FF' : '#FFFFFF'} strokeWidth="2.5" />
+                    <circle r="3.5" fill="#FFFFFF" />
+                  </g>
+                );
+              })}
+            </g>
+          </svg>
 
+          {/* Ficha Flotante del Centro */}
           <AnimatePresence>
-            {isDrawingMode && (
-              <motion.div 
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className={`absolute z-[30] bg-blue-600 px-4 sm:px-6 py-1.5 sm:py-2 rounded-full border border-blue-400 shadow-2xl pointer-events-none
-                  ${isMobile ? 'top-16 left-4 right-4 text-center' : 'top-20 left-1/2 -translate-x-1/2'}
-                `}
-              >
-                <span className="text-[8px] sm:text-[10px] font-black text-white uppercase tracking-[0.2em]">
-                  {isMobile ? 'Toque el mapa para definir puntos' : `Haga clic en el mapa para definir los puntos de la capa (${currentPoints.length})`}
-                </span>
+            {selectedCentroEdit && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="absolute bottom-5 right-5 z-[45] w-80 bg-slate-900/98 border border-white/20 p-5 rounded-3xl shadow-2xl">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-[10px] font-black text-cyan-400 uppercase">Ficha ASIC</span>
+                  <button onClick={() => setSelectedCentroEdit(null)} className="text-xs text-slate-400 hover:text-white uppercase font-bold">Cerrar</button>
+                </div>
+                <h4 className="text-sm font-black uppercase text-white">{selectedCentroEdit.nombre_centro}</h4>
+                <p className="text-[10px] text-slate-400 font-bold mb-4">{selectedCentroEdit.asic}</p>
+
+                {(isAdminMode || profile?.rol === 'admin') && (
+                  <div className="space-y-3 border-t border-white/10 pt-3">
+                    <button onClick={() => setIsClinicAdminCollapsed(!isClinicAdminCollapsed)} className="w-full py-2 px-3 bg-white/5 border border-white/10 rounded-xl text-[9px] font-black uppercase text-amber-400 flex justify-between">
+                      <span>Herramientas de Coordenadas</span>
+                      <span>{isClinicAdminCollapsed ? 'Ver' : 'Ocultar'}</span>
+                    </button>
+                    {!isClinicAdminCollapsed && (
+                      <div className="flex gap-2 pt-1">
+                        <button onClick={() => { setIsReallocatingPin(selectedCentroEdit.id_centro); notify('Haz clic en el mapa para posicionar'); }} className="flex-1 py-2 bg-amber-500 text-slate-950 font-black text-[9px] uppercase rounded-lg">Un Clic</button>
+                        <button onClick={() => { setIsDragModeActive(!isDragModeActive); }} className={`flex-1 py-2 font-black text-[9px] uppercase rounded-lg ${isDragModeActive ? 'bg-emerald-500 text-slate-950' : 'bg-indigo-600 text-white'}`}>Arrastrar</button>
+                        {clinicCoordsOverrides[selectedCentroEdit.id_centro] && (
+                          <button onClick={() => handleResetClinicCoords(selectedCentroEdit.id_centro)} className="p-2 bg-red-600/20 text-red-400 rounded-lg"><Trash2 size={12} /></button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
 
-          <div className="w-full h-full flex items-center justify-center overflow-hidden" style={{ minHeight: 0 }}>
-            {!isLandscape && isMobile && (
-              <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[35] pointer-events-none flex flex-col items-center gap-2">
-                <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/80 backdrop-blur-md rounded-full border border-amber-400/50 shadow-xl">
-                  <RefreshCw size={12} className="animate-spin text-white" />
-                  <span className="text-[8px] font-black text-white uppercase tracking-[0.2em]">Rote el teléfono para dibujar</span>
-                </div>
-              </div>
-            )}
-
-            <svg 
-              viewBox={`0 0 ${mapDimensions.width} ${mapDimensions.height}`}
-              preserveAspectRatio="xMidYMid meet"
-              className="w-full h-auto max-w-full transform-gpu transition-transform duration-500"
-              style={{ 
-                maxHeight: '100%', 
-                maxWidth: '100%',
-                cursor: isDrawingMode ? 'crosshair' : (isDragging ? 'grabbing' : 'grab'),
-                touchAction: 'none'
-              }}
-              onClick={handleSvgClick}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseLeave}
-              onWheel={handleWheel}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-              id="interactive-svg-map"
-            >
-              <rect width={mapDimensions.width} height={mapDimensions.height} fill="transparent" />
-              
-              <g id="zoom-pan-container" transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-                {backgroundImage && (
-                  <image 
-                    href={backgroundImage} 
-                    x="0" 
-                    y="0" 
-                    width={mapDimensions.width} 
-                    height={mapDimensions.height} 
-                    preserveAspectRatio="xMidYMid meet"
-                    className="opacity-90 pointer-events-none" 
-                  />
-                )}
-
-                {customPolygons.map((poly) => {
-                  const eje = ejes.find(e => e.id === poly.ejeId) || activeEje;
-                  const isSelected = selectedPolygonId === poly.id;
-                  return (
-                    <g key={poly.id} className="cursor-pointer group">
-                      <polygon 
-                        points={poly.points.map(p => `${p.x},${p.y}`).join(' ')}
-                        fill={isSelected ? `${eje.color}90` : (hoveredMunicipio === poly.id ? eje.color : `${eje.color}60`)}
-                        stroke={isSelected ? '#FFFFFF' : eje.color}
-                        strokeWidth={isSelected ? "4" : "3"}
-                        strokeOpacity={isSelected || hoveredMunicipio === poly.id ? 1 : 0.8}
-                        strokeDasharray={isSelected ? "5,5" : "none"}
-                        onMouseEnter={() => setHoveredMunicipio(poly.id)}
-                        onMouseLeave={() => setHoveredMunicipio(null)}
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
-                          if (isAdminMode) {
-                            setSelectedPolygonId(isSelected ? null : poly.id);
-                          } else {
-                            window.open(eje.url, '_blank'); 
-                          }
-                        }}
-                        className="transition-all duration-300"
-                        style={{ 
-                          filter: (isSelected || hoveredMunicipio === poly.id) 
-                             ? `drop-shadow(0 0 30px ${eje.color})` 
-                             : 'none' 
-                        }}
-                      />
-                      {isAdminMode && isSelected && (
-                        <foreignObject 
-                          x={poly.points[0].x - 40} 
-                          y={poly.points[0].y - 80} 
-                          width="100" 
-                          height="120"
-                          className="overflow-visible"
-                        >
-                          <div className="flex flex-col items-center gap-3">
-                            <div className="flex gap-1.5 p-2 bg-[#0B1525]/90 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl">
-                              {ejes.map(e => (
-                                <button
-                                  key={e.id}
-                                  onClick={(e_evt) => { e_evt.stopPropagation(); updatePolygonEje(poly.id, e.id); }}
-                                  className={`w-6 h-6 rounded-lg border-2 transition-all ${
-                                    poly.ejeId === e.id ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-40 hover:opacity-100'
-                                   }`}
-                                  style={{ backgroundColor: e.color }}
-                                  title={e.name}
-                                />
-                              ))}
-                            </div>
-                            <button 
-                              onClick={(e_evt) => { e_evt.stopPropagation(); deletePolygon(poly.id); }}
-                              className="w-12 h-12 flex items-center justify-center bg-rose-600 text-white rounded-full shadow-[0_10px_30px_rgba(225,29,72,0.4)] hover:bg-rose-500 transition-all hover:scale-110 active:scale-95 border-4 border-[#0B1525]"
-                              title="Eliminar Polígono"
-                            >
-                              <Trash2 size={20} />
-                            </button>
-                          </div>
-                        </foreignObject>
-                      )}
-                    </g>
-                  );
-                })}
-
-                {currentPoints.length > 0 && (
-                  <g>
-                    <polyline 
-                      points={currentPoints.map(p => `${p.x},${p.y}`).join(' ')}
-                      fill="none"
-                      stroke={activeEje.color}
-                      strokeWidth="3"
-                      className="animate-pulse"
-                    />
-                    {currentPoints.map((p, i) => (
-                      <circle key={i} cx={p.x} cy={p.y} r="5" fill="white" stroke={activeEje.color} strokeWidth="2" />
-                    ))}
-                  </g>
-                )}
-
-                {!backgroundImage && customPolygons.length === 0 && (
-                  <g id="mapa-placeholder" className="opacity-40 animate-pulse">
-                    <path
-                      d="M150,150 L250,120 L300,180 L280,260 L180,280 Z"
-                      fill={`${activeEje.color}60`}
-                      stroke={activeEje.color}
-                      strokeWidth="3"
-                    />
-                    <text x="180" y="215" fill="white" className="text-[12px] font-black pointer-events-none opacity-80 uppercase tracking-widest select-none shadow-black drop-shadow-md">Panel de Dibujo Activo (Suba un fondo)</text>
-                  </g>
-                )}
-
-                {/* 🏥 Pines Dinámicos e Indicadores de Semáforos Médicos (Filtrados por RBAC) */}
-                {transitoReportes.filter(r => {
-                  if (profile?.cod_asic) {
-                    return (r.asic || '').toUpperCase() === profile.cod_asic.toUpperCase();
-                  }
-                  if (profile?.cod_eje) {
-                    const mappedEje = mapCodEjeToEjeGeografico(profile.cod_eje);
-                    return (r.eje_geografico || '').toUpperCase().replace('-', ' ') === mappedEje.toUpperCase().replace('-', ' ');
-                  }
-                  return true;
-                }).map((pin) => {
-                  const coords = getClinicCoords(pin);
-                  const isRecentlyUpdated = recentlyUpdatedCentros[pin.id_centro];
-                  
-                  const markerColor = 
-                    pin.estado_semaforo === 'Verde' ? '#10B981' :
-                    pin.estado_semaforo === 'Amarillo' ? '#F59E0B' :
-                    pin.estado_semaforo === 'Rojo' ? '#EF4444' : '#94A3B8';
-
-                  const posX = coords.pX * mapDimensions.width;
-                  const posY = coords.pY * mapDimensions.height;
-
-                  return (
-                    <g 
-                      key={pin.id_centro} 
-                      transform={`translate(${posX}, ${posY})`}
-                      className={`cursor-pointer transition-all duration-300 ${selectedCentroEdit?.id_centro === pin.id_centro ? 'scale-135' : 'hover:scale-110'}`}
-                      onMouseEnter={() => setHoveredCentro(pin)}
-                      onMouseLeave={() => setHoveredCentro(null)}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setSelectedCentroEdit(pin);
-                      }}
-                    >
-                      {/* Onda de choque (ripples) para actualizaciones recientes */}
-                      {isRecentlyUpdated && (
-                        <circle 
-                          r="18"
-                          fill="none"
-                          stroke="#F59E0B"
-                          strokeWidth="3.5"
-                          className="opacity-80 animate-[ping_1.8s_infinite]"
-                        />
-                      )}
-                      
-                      {/* Glow circular de color */}
-                      <circle 
-                        r="10" 
-                        fill={markerColor} 
-                        stroke={selectedCentroEdit?.id_centro === pin.id_centro ? '#00E5FF' : '#FFFFFF'} 
-                        strokeWidth={selectedCentroEdit?.id_centro === pin.id_centro ? '3' : '2.5'} 
-                        className={`transition-all duration-300 hover:scale-135 ${isRecentlyUpdated ? 'animate-bounce' : ''}`}
-                        style={{ filter: `drop-shadow(0px 3px 6px rgba(0,0,0,0.45))` }}
-                      />
-                      
-                      {/* Centro del pin */}
-                      <circle 
-                        r="3.5" 
-                        fill="#FFFFFF" 
-                      />
-                    </g>
-                  );
-                })}
-              </g>
-            </svg>
-
-            {/* Tooltip flotante de información de establecimiento */}
-            <AnimatePresence>
-              {hoveredCentro && (
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                  className="absolute bottom-5 left-5 z-[40] max-w-sm bg-slate-900/95 backdrop-blur-xl border border-white/10 p-5 rounded-3xl shadow-2xl font-sans text-slate-100 flex flex-col gap-2.5"
-                >
-                  <div className="flex items-center justify-between gap-6">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-3.5 h-3.5 rounded-full animate-pulse shrink-0 ${
-                        hoveredCentro.estado_semaforo === 'Verde' ? 'bg-emerald-500' :
-                        hoveredCentro.estado_semaforo === 'Amarillo' ? 'bg-amber-500' :
-                        'bg-rose-500'
-                      }`} />
-                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-300">
-                        Estado Semáforo: {hoveredCentro.estado_semaforo || 'Desconocido'}
-                      </span>
-                    </div>
-                    {recentlyUpdatedCentros[hoveredCentro.id_centro] && (
-                      <span className="text-[7.5px] bg-amber-400/25 border border-amber-400/40 text-amber-400 px-2 py-0.5 rounded-full font-black uppercase tracking-wider animate-pulse">
-                        Suscripción Activa
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div>
-                    <h5 className="text-xs font-black uppercase tracking-wide text-white leading-tight">{hoveredCentro.nombre_centro}</h5>
-                    <p className="text-[9.5px] text-slate-400 font-extrabold uppercase mt-1">NÚCLEO ASIC: {hoveredCentro.asic}</p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                    <span className="text-[8px] text-blue-400 bg-blue-900/40 border border-blue-500/20 rounded-md px-2 py-0.5 font-bold uppercase tracking-wider">
-                      Eje: {hoveredCentro.eje_geografico}
-                    </span>
-                    <span className="text-[8px] text-slate-400 bg-slate-800/80 border border-slate-700/20 rounded-md px-2 py-0.5 font-bold">
-                      ID: {hoveredCentro.id_centro}
-                    </span>
-                  </div>
-
-                  <div className="border-t border-white/10 pt-3 mt-1.5 flex justify-between gap-4 text-[9px] text-slate-400 font-bold uppercase tracking-wider font-mono">
-                    <div>
-                      <p className="text-slate-500 text-[8px] font-black uppercase">Actualización</p>
-                      <p className="font-extrabold text-white mt-0.5">{new Date(hoveredCentro.ultimo_reporte || Date.now()).toLocaleDateString('es-VE')}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-slate-500 text-[8px] font-black uppercase">Horas Retraso</p>
-                      <p className={`font-black mt-0.5 ${hoveredCentro.horas_retraso > 24 ? 'text-rose-400' : 'text-emerald-400'}`}>{hoveredCentro.horas_retraso}h</p>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-
-            {/* Panel de administración / Detalle de Establecimiento */}
-            <AnimatePresence>
-              {selectedCentroEdit && (
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                  className={`absolute z-[45] w-full max-w-sm bg-slate-900/98 backdrop-blur-2xl border border-white/20 p-5 rounded-[2rem] shadow-[0_50px_100px_rgba(0,0,0,0.8)] font-sans text-slate-100 flex flex-col gap-3.5
-                    ${isMobile ? 'bottom-20 left-4 right-4 max-w-[calc(100%-2rem)]' : 'bottom-5 right-5'}
-                  `}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-3.5 h-3.5 rounded-full animate-pulse shrink-0 ${
-                        selectedCentroEdit.estado_semaforo === 'Verde' ? 'bg-emerald-500' :
-                        selectedCentroEdit.estado_semaforo === 'Amarillo' ? 'bg-amber-500' :
-                        'bg-rose-500'
-                      }`} />
-                      <span className="text-[9px] font-black uppercase tracking-widest text-[#00E5FF]">
-                        Ficha de Establecimiento
-                      </span>
-                    </div>
-                    <button 
-                      onClick={() => setSelectedCentroEdit(null)}
-                      className="p-1 px-2.5 bg-white/5 hover:bg-white/15 border border-white/10 rounded-xl text-slate-400 hover:text-white transition-all text-[10px] font-bold uppercase tracking-wider cursor-pointer"
-                    >
-                      Cerrar
-                    </button>
-                  </div>
-
-                  <div>
-                     <h4 className="text-xs font-black uppercase tracking-wider text-white leading-tight">
-                        {selectedCentroEdit.nombre_centro}
-                     </h4>
-                     <p className="text-[9px] text-[#A5F3FC]/70 font-extrabold uppercase mt-0.5">
-                        DESARROLLO ASIC: {selectedCentroEdit.asic}
-                     </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2.5 bg-black/35 p-3.5 rounded-2xl border border-white/5 text-[9.5px] uppercase font-bold text-slate-300">
-                     <div>
-                        <span className="text-slate-500 text-[7.5px] font-black block">Eje Territorial</span>
-                        <p className="text-cyan-400 mt-0.5 truncate">{selectedCentroEdit.eje_geografico}</p>
-                     </div>
-                     <div>
-                        <span className="text-slate-500 text-[7.5px] font-black block font-sans">ID Centro</span>
-                        <p className="font-mono mt-0.5 text-slate-400 truncate">{selectedCentroEdit.id_centro}</p>
-                     </div>
-                     <div>
-                        <span className="text-slate-500 text-[7.5px] font-black block font-sans">Reporte Médico</span>
-                        <p className="mt-0.5 text-slate-200">
-                          {new Date(selectedCentroEdit.ultimo_reporte || Date.now()).toLocaleDateString('es-VE')}
-                        </p>
-                     </div>
-                     <div>
-                        <span className="text-slate-500 text-[7.5px] font-black block font-sans">Retraso Operativo</span>
-                        <p className={`mt-0.5 font-black ${selectedCentroEdit.horas_retraso > 24 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                          {selectedCentroEdit.horas_retraso} horas
-                        </p>
-                     </div>
-                  </div>
-
-                  {/* Mandatos de Administración */}
-                  {(isAdminMode || profile?.rol === 'admin') && (
-                     <div className="border-t border-white/10 pt-3.5 flex flex-col gap-3">
-                        <div className="flex items-center gap-2 text-amber-400 text-[9px] font-black uppercase tracking-wider">
-                           <Settings size={13} />
-                           <span>Modulo Administrador: Ejes y Coordenadas</span>
-                        </div>
-
-                        {/* Selección interactiva de Eje */}
-                        <div className="flex flex-col gap-1.5">
-                           <label className="text-[8px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">
-                              Mover / Reasignar a Eje Geográfico:
-                           </label>
-                           <div className="flex flex-wrap gap-1">
-                              {['ALTOS MIRANDINOS', 'VALLES DEL TUY', 'GUARENAS-GUATIRE', 'BARLOVENTO', 'METROPOLITANO'].map((ejeName) => {
-                                 const isCurrent = (selectedCentroEdit.eje_geografico || '').toUpperCase().replace('-', ' ') === ejeName.toUpperCase().replace('-', ' ');
-                                 return (
-                                    <button
-                                       key={ejeName}
-                                       disabled={savingClinicChanges}
-                                       onClick={() => handleUpdateClinicEje(selectedCentroEdit.id_centro, ejeName)}
-                                       className={`py-1.5 px-2 rounded-lg text-[7.5px] font-extrabold uppercase tracking-widest border transition-all cursor-pointer flex-1 min-w-[90px] text-center ${
-                                          isCurrent 
-                                          ? 'bg-blue-600 text-white border-blue-400 shadow-lg' 
-                                          : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/5 hover:border-white/10'
-                                       }`}
-                                    >
-                                       {ejeName}
-                                    </button>
-                                 );
-                              })}
-                           </div>
-                        </div>
-
-                        {/* Mapeador de coordenadas */}
-                        <div className="flex flex-col gap-1.5 border-t border-white/5 pt-3">
-                           <label className="text-[8px] text-slate-400 font-extrabold uppercase tracking-wider block">
-                              Coordenadas de Posicionamiento:
-                           </label>
-                           <div className="flex gap-1.5">
-                              <button
-                                 onClick={() => {
-                                    setIsReallocatingPin(selectedCentroEdit.id_centro);
-                                    notify('Haga clic en cualquier punto del mapa para colocar el marcador');
-                                 }}
-                                 className="flex-1 py-2 px-3 bg-amber-500 hover:bg-amber-600 text-amber-950 rounded-xl text-[8.5px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-amber-500/10"
-                              >
-                                 <MousePointer2 size={11} />
-                                 Reubicar en el mapa
-                              </button>
-
-                              {clinicCoordsOverrides[selectedCentroEdit.id_centro] && (
-                                 <button
-                                    onClick={() => handleResetClinicCoords(selectedCentroEdit.id_centro)}
-                                    className="p-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 border border-red-500/20 rounded-xl hover:text-white transition-all cursor-pointer"
-                                    title="Restablecer posición por defecto"
-                                 >
-                                    <Trash2 size={12} />
-                                 </button>
-                              )}
-                           </div>
-                        </div>
-                     </div>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <AnimatePresence>
-              {isReallocatingPin && (
-                <motion.div 
-                  initial={{ opacity: 0, y: -40 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -40 }}
-                  className="absolute top-16 left-1/2 -translate-x-1/2 z-[48] w-11/12 max-w-sm"
-                >
-                  <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl border border-amber-400 shadow-2xl text-white">
-                     <div className="flex items-center gap-2">
-                        <div className="animate-bounce text-[#FFE082]">
-                           <MapPin size={14} />
-                        </div>
-                        <span className="text-[8.5px] font-black uppercase tracking-widest leading-none">
-                           Toque en el mapa para ubicar el marcador
-                        </span>
-                     </div>
-                     <button
-                        onClick={() => setIsReallocatingPin(null)}
-                        className="px-2 py-1 bg-black/30 hover:bg-black/50 text-[8px] font-black tracking-widest uppercase rounded-lg border border-white/10 cursor-pointer transition-all"
-                     >
-                        Cancelar
-                     </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-
-            {/* Controles flotantes para mejorar navegabilidad tactil */}
-            <div className={`absolute z-30 flex flex-col gap-2 transition-all duration-300
-              ${isMobile ? 'bottom-20 right-4' : 'bottom-24 right-6'}
-            `}>
-              <button
-                onClick={zoomIn}
-                className="w-10 h-10 flex items-center justify-center bg-black/60 hover:bg-black/80 backdrop-blur-xl rounded-xl border border-white/10 text-white hover:text-blue-400 active:scale-95 hover:scale-105 transition-all shadow-2xl"
-                title="Acercar mapa"
-              >
-                <span className="text-xl font-bold">+</span>
-              </button>
-              <button
-                onClick={zoomOut}
-                className="w-10 h-10 flex items-center justify-center bg-black/60 hover:bg-black/80 backdrop-blur-xl rounded-xl border border-white/10 text-white hover:text-blue-400 active:scale-95 hover:scale-105 transition-all shadow-2xl"
-                title="Alejar mapa"
-              >
-                <span className="text-xl font-bold">−</span>
-              </button>
-              <button
-                onClick={resetZoom}
-                className="w-10 h-10 flex items-center justify-center bg-black/60 hover:bg-black/80 backdrop-blur-xl rounded-xl border border-white/10 text-white hover:text-blue-400 active:scale-95 hover:scale-105 transition-all shadow-2xl text-[10px] font-black uppercase tracking-tighter"
-                title="Restablecer vista"
-              >
-                Reset
-              </button>
-            </div>
-          </div>
-          
+          {/* Diálogo de Arrastre Activo */}
           <AnimatePresence>
-            {hoveredMunicipio && (() => {
-              const poly = customPolygons.find(p => p.id === hoveredMunicipio);
-              const eje = poly ? (ejes.find(e => e.id === poly.ejeId) || activeEje) : activeEje;
-              const realData = territorialData[eje.id];
-              
-              return (
-                <motion.div
-                  initial={{ opacity: 0, y: 15, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className={`absolute shadow-[0_30px_60px_rgba(0,0,0,0.8)] z-50 pointer-events-none
-                    ${isMobile ? 'bottom-16 left-4 right-4' : 'top-[35%] left-[50%] -translate-x-1/2'}
-                  `}
-                >
-                  <div className="bg-[#0A111E]/95 backdrop-blur-xl border border-white/20 p-4 sm:p-5 rounded-[2rem] flex flex-col gap-2 min-w-[200px]">
-                     <div className="flex items-center gap-4">
-                        <div className="w-3.5 h-3.5 rounded-full shadow-[0_0_15px_rgba(255,255,255,0.4)] animate-pulse" style={{ backgroundColor: eje.color }}></div>
-                        <span className="text-[12px] sm:text-[14px] font-black text-white uppercase tracking-[0.25em]">{eje.name}</span>
-                     </div>
-                     
-                     <AnimatePresence>
-                       {realData && (
-                         <motion.div 
-                           initial={{ opacity: 0, height: 0 }}
-                           animate={{ opacity: 1, height: 'auto' }}
-                           className="pt-2 border-t border-white/10 mt-1"
-                         >
-                            <div className="flex justify-between items-end mb-1">
-                               <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Estado Real</span>
-                               <span className="text-[14px] font-black text-blue-400">{realData.valor_principal}%</span>
-                            </div>
-                            <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                               <motion.div 
-                                 initial={{ width: 0 }}
-                                 animate={{ width: `${realData.valor_principal}%` }}
-                                 className="h-full bg-blue-500"
-                               />
-                            </div>
-                            <p className="text-[7px] text-slate-400 uppercase tracking-tighter mt-2 mt-2 font-mono">
-                               Sincronizado: {new Date(realData.updated_at).toLocaleTimeString()}
-                            </p>
-                         </motion.div>
-                       )}
-                     </AnimatePresence>
-                  </div>
-                </motion.div>
-              );
-            })()}
+            {isDragModeActive && (
+              <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute top-6 left-1/2 -translate-x-1/2 z-[48] bg-slate-900 border border-blue-500/40 p-4 rounded-2xl flex items-center gap-4 shadow-2xl">
+                <span className="text-[10px] font-black text-white uppercase tracking-widest">Modo Arrastre Activo</span>
+                <button onClick={handleSaveAllCoords} disabled={savingDragCoords} className="px-4 py-1.5 bg-emerald-500 text-emerald-950 text-[9px] font-black uppercase rounded-lg flex items-center gap-1">
+                  {savingDragCoords ? <RefreshCw size={10} className="animate-spin" /> : <Save size={10} />} Guardar Capa
+                </button>
+                <button onClick={() => setIsDragModeActive(false)} className="text-[9px] font-bold text-slate-400 uppercase">Salir</button>
+              </motion.div>
+            )}
           </AnimatePresence>
-        </div>
-
-        <div className={`flex justify-between items-center border-t border-white/5 opacity-40
-          ${isMobile ? 'px-3 py-2 text-[7px]' : 'px-6 pt-6 text-[8px]'}
-        `}>
-          <div className="flex gap-1 sm:gap-1.5 flex-wrap">
-            {['METRO', 'ALTOS', 'TUY', 'G-G', 'BARLO'].map(m => (
-              <div key={m} className="px-1.5 py-0.5 border border-white/10 rounded-sm text-[6px] sm:text-[8px] font-black text-slate-600">{m}</div>
-            ))}
-          </div>
-          {!isMobile && (
-            <div className="flex items-center gap-4 sm:gap-6">
-              <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Capa: {activeEje.url.substring(0, 30)}...</span>
-              <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">v2.8.0_MOBILE</span>
-            </div>
-          )}
         </div>
       </main>
 
+      {/* Consola SIG Inferior */}
       {isAdminMode && (
-        <div 
-          className={`bg-[#0A111E] border-t border-white/10 shrink-0 z-[60] shadow-[0_-20px_50px_rgba(0,0,0,0.5)] transition-all duration-500 ease-in-out relative
-            ${isConsoleMinimized ? 'h-10' : 'h-auto max-h-[50vh] p-2 sm:p-4 overflow-y-auto'}
-          `}>
-            <button 
-              onClick={() => setIsConsoleMinimized(!isConsoleMinimized)}
-              className={`absolute -top-10 bg-[#0A111E] border border-white/10 border-b-0 rounded-t-xl px-3 sm:px-4 py-1.5 sm:py-2 flex items-center gap-1 sm:gap-2 text-slate-400 hover:text-white transition-all shadow-2xl
-                ${isMobile ? 'right-2' : 'right-10'}
-              `}
-            >
-              {isConsoleMinimized ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest">
-                {isConsoleMinimized ? 'Herramientas' : 'Minimizar'}
-              </span>
-            </button>
-            <div className={`flex flex-col gap-2 sm:gap-4 overflow-hidden ${isConsoleMinimized ? 'hidden' : 'flex'}`}>
-              <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-4 flex-wrap gap-2">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <Terminal size={14} className="text-blue-400" />
-                    <span className="text-[10px] font-black text-white uppercase tracking-widest">HERRAMIENTAS SIG</span>
+        <div className={`bg-[#0A111E] border-t border-white/10 shrink-0 z-[60] transition-all duration-300 relative ${isConsoleMinimized ? 'h-10' : 'p-4'}`}>
+          <button onClick={() => setIsConsoleMinimized(!isConsoleMinimized)} className="absolute -top-8 right-4 bg-[#0A111E] border border-white/10 border-b-0 rounded-t-lg px-4 py-1 flex items-center gap-2 text-slate-400 text-[9px] font-black uppercase">
+            {isConsoleMinimized ? <ChevronUp size={12} /> : <ChevronDown size={12} />} Control
+          </button>
+          {!isConsoleMinimized && (
+            <div className="flex gap-4 overflow-x-auto py-2">
+              <div className="bg-white/5 p-4 rounded-xl border border-white/5 min-w-[240px]">
+                <span className="text-[9px] font-black text-slate-400 block mb-2 uppercase">Dibujo Vectorial</span>
+                {!isDrawingMode ? (
+                  <button onClick={() => { setIsDrawingMode(true); setIsConsoleMinimized(true); }} className="w-full py-2 bg-blue-600 text-white font-black text-[10px] uppercase rounded-lg">Nuevo Polígono</button>
+                ) : (
+                  <div className="flex gap-2">
+                    <button onClick={finishPolygon} className="flex-1 py-2 bg-green-600 text-white font-black text-[10px] uppercase rounded-lg">Guardar ({currentPoints.length})</button>
+                    <button onClick={() => { setIsDrawingMode(false); setCurrentPoints([]); }} className="py-2 px-3 bg-white/10 text-slate-400 text-[10px] uppercase rounded-lg">X</button>
                   </div>
-                  <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5">
-                    <div className={`w-2 h-2 rounded-full ${dbStatus === 'ok' ? 'bg-green-500' : 'bg-rose-500'} animate-pulse`}></div>
-                    <span className="text-[8px] font-bold text-slate-400 uppercase">{dbStatus === 'ok' ? 'OK' : 'ERROR'}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button onClick={runConnectionTest} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
-                    <RefreshCw size={12} className={dbStatus === 'testing' ? 'animate-spin' : ''} />
-                  </button>
-                  <button
-                    onClick={() => saveMapConfig()}
-                    disabled={isSaving}
-                    className="py-1.5 px-6 bg-blue-600/20 border border-blue-500/30 text-blue-400 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all flex items-center gap-2"
-                  >
-                    {isSaving ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
-                    Guardar
-                  </button>
-                </div>
+                )}
               </div>
-
-              <div className="flex gap-2 sm:gap-6 overflow-x-auto pb-2 custom-scrollbar flex-nowrap">
-                <div className="flex flex-col gap-2 sm:gap-3 bg-white/5 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-white/5 min-w-[200px] sm:min-w-[280px]">
-                  <div className="flex items-center gap-2">
-                    <MousePointer2 size={12} className="text-blue-400" />
-                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Dibujo</span>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2">
-                    {!isDrawingMode ? (
-                      <div className="flex flex-col gap-2">
-                        <button 
-                          onClick={() => {
-                            setIsDrawingMode(true);
-                            setIsConsoleMinimized(true);
-                          }} 
-                          className="w-full py-4 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-500 transition-all flex items-center justify-center gap-2"
-                        >
-                          <Play size={12} /> NUEVO DIBUJO
-                        </button>
-                        {customPolygons.length > 0 && (
-                          <button 
-                            onClick={async () => {
-                              if (confirm('¿ELIMINAR TODAS LAS CAPAS?')) {
-                                setCustomPolygons([]);
-                                if (supabase) {
-                                  try {
-                                    for (const p of customPolygons) {
-                                      await supabase.from('mapa_poligonos').delete().eq('id', p.id);
-                                    }
-                                    notify('Mapa limpiado');
-                                  } catch (e) { notify('Error', 'error'); }
-                                }
-                              }
-                            }}
-                            className="w-full py-2 bg-rose-500/10 text-rose-500 rounded-xl text-[8px] font-black uppercase border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center gap-2"
-                          >
-                            <Trash2 size={10} /> BORRAR TODO
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-2">
-                        <button 
-                          onClick={finishPolygon} 
-                          className="w-full py-4 bg-green-600 text-white rounded-xl text-[10px] font-black uppercase animate-pulse flex items-center justify-center gap-2"
-                        >
-                          <Save size={12} /> GUARDAR ({currentPoints.length})
-                        </button>
-                        <div className="flex gap-2">
-                          <button onClick={clearCurrentPoints} className="flex-1 py-2 bg-white/10 text-slate-300 rounded-lg text-[8px] font-black uppercase">Limpiar</button>
-                          <button onClick={() => { setIsDrawingMode(false); clearCurrentPoints(); setIsConsoleMinimized(false); }} className="flex-1 py-2 bg-rose-500/10 text-rose-500 rounded-lg text-[8px] font-black uppercase">Cancelar</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-3 min-w-[250px] sm:min-w-[320px] bg-white/5 p-4 rounded-2xl border border-white/5">
-                  <div className="flex items-center gap-2">
-                    <Layout size={12} className="text-emerald-400" />
-                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Capas</span>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
-                      {ejes.map((eje) => (
-                        <button
-                          key={eje.id}
-                          onClick={() => setActiveEje(eje)}
-                          className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all border-2 ${
-                            activeEje.id === eje.id ? 'border-white scale-110' : 'border-transparent opacity-40 hover:opacity-100'
-                          }`}
-                          style={{ backgroundColor: eje.color }}
-                          title={eje.name}
-                        >
-                          {React.cloneElement(eje.icon as React.ReactElement, { size: 16 })}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="bg-black/40 p-2 rounded-lg border border-white/5">
-                      <span className="text-[10px] font-black text-blue-400 uppercase">{activeEje.name}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-3 w-56 sm:w-72 bg-white/5 p-4 rounded-2xl border border-white/5">
-                  <div className="flex items-center gap-2">
-                    <Database size={12} className="text-amber-400" />
-                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Fondo</span>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <div className="flex gap-2">
-                      <input 
-                        type="text"
-                        placeholder="URL Imagen"
-                        value={bgUrlInput}
-                        onChange={(e) => setBgUrlInput(e.target.value)}
-                        onBlur={handleUrlUpdate}
-                        className="flex-1 bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-[9px] font-bold text-white focus:border-blue-500/50 outline-none"
-                      />
-                      <label className="w-10 h-10 flex items-center justify-center bg-white/10 border border-white/10 rounded-lg cursor-pointer hover:bg-white/20 transition-all">
-                        <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
-                        <Upload size={14} className="text-slate-300" />
-                      </label>
-                    </div>
-                  </div>
+              <div className="bg-white/5 p-4 rounded-xl border border-white/5 min-w-[200px] flex flex-col justify-between">
+                <span className="text-[9px] font-black text-slate-400 block uppercase">Capa Activa</span>
+                <select value={activeEje.id} onChange={(e) => setActiveEje(ejes.find(ej => ej.id === e.target.value) || ejes[0])} className="bg-black/40 text-white text-[10px] p-2 rounded-lg border border-white/10 outline-none font-bold">
+                  {ejes.map(ej => <option key={ej.id} value={ej.id}>{ej.name}</option>)}
+                </select>
+              </div>
+              <div className="bg-white/5 p-4 rounded-xl border border-white/5 min-w-[240px]">
+                <span className="text-[9px] font-black text-slate-400 block mb-2 uppercase">Fondo del Mapa</span>
+                <div className="flex gap-2">
+                  <input type="text" value={bgUrlInput} onChange={(e) => setBgUrlInput(e.target.value)} onBlur={() => { setBackgroundImage(bgUrlInput); saveMapConfig(bgUrlInput); }} className="flex-1 bg-black/60 border border-white/10 rounded-lg px-2 text-[10px] text-white outline-none" />
+                  <label className="p-2 bg-white/10 rounded-lg cursor-pointer"><Upload size={14} /><input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} /></label>
                 </div>
               </div>
             </div>
-          </div>
+          )}
+        </div>
       )}
-
-      <style dangerouslySetInnerHTML={{ __html: `
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-        #interactive-svg-map {
-          cursor: ${isDrawingMode ? 'crosshair' : 'default'};
-          touch-action: ${isDrawingMode ? 'none' : 'auto'};
-        }
-        @media screen and (max-width: 768px) {
-          input, select, textarea { font-size: 16px !important; }
-        }
-      `}} />
     </div>
-  );
-}
-
-function MapPin({ size, style }: { size: number, style?: React.CSSProperties }) {
-  return (
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      width={size} 
-      height={size} 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      style={style}
-    >
-      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-      <circle cx="12" cy="10" r="3"></circle>
-    </svg>
   );
 }
