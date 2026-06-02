@@ -73,7 +73,7 @@ export default function NominalDashboard() {
   const handleLocalLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
-    if (emailInput.trim() === 'nominal@miranda_salud.com' && passwordInput === 'nominal2026') {
+    if (emailInput.trim() === 'nominal@mirandasalud.com' && passwordInput === 'nominal2026') {
       setIsAuthenticated(true);
     } else {
       setAuthError('Credenciales nominales incorrectas. Intente nuevamente.');
@@ -111,7 +111,7 @@ export default function NominalDashboard() {
         cedula: cedula.trim(),
         nombre: nombre.trim(),
         asic: selectedAsic,
-        registrado_por: "nominal@miranda_salud.com",
+        registrado_por: "nominal@mirandasalud.com",
         extra: extraField.trim()
       }
     };
@@ -187,7 +187,7 @@ export default function NominalDashboard() {
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
                     className="w-full pl-11 pr-4 py-3.5 bg-neutral-50 border border-neutral-200 focus:border-neutral-900 focus:bg-white rounded-xl text-sm transition-colors outline-none"
-                    placeholder="nominal@miranda_salud.com"
+                    placeholder="nominal@mirandasalud.com"
                     required
                   />
                 </div>
@@ -262,7 +262,7 @@ export default function NominalDashboard() {
 
           <div className="flex items-center gap-4">
             <div className="hidden md:flex flex-col items-end">
-              <span className="text-[10px] font-black text-neutral-500 tracking-wider">nominal@miranda_salud.com</span>
+              <span className="text-[10px] font-black text-neutral-500 tracking-wider">nominal@mirandasalud.com</span>
               <span className="text-[9px] font-black uppercase tracking-widest text-[#059669] bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full mt-0.5">
                 Rol: Usuario Nominal
               </span>
