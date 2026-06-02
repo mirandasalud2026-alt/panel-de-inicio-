@@ -39,50 +39,65 @@ interface Eje {
   description: string;
 }
 
+// ============================================================
+// INTERFACES Y PARÁMETROS DEL MAPA
+// ============================================================
+interface Eje {
+  id: string;
+  name: string;
+  color: string;
+  icon: React.ReactNode;
+  url: string;
+  description: string;
+}
+
 interface InteractiveMirandaMapProps {
   isAdminMode?: boolean;
 }
 
+// ============================================================
+// CONFIGURACIÓN INICIAL DE EJES (MAPEADO REDIRECCIÓN REAL)
+// ============================================================
 const INITIAL_EJES: Eje[] = [
   { 
     id: 'epidemiologico', 
     name: 'Eje Epidemiológico', 
     color: '#3B82F6',
     icon: <Activity size={18} />, 
-    url: 'https://sites.google.com/view/saludmiranda04/menu-epidemiologia',
-    description: 'URL: /menu-epidemiologia'
+    url: 'https://sites.google.com/view/saludmiranda04/eje-altos-mirandinos',
+    description: 'Enlace Matriz: Altos Mirandinos'
   },
   { 
     id: 'inmunizacion', 
     name: 'Eje de Inmunización', 
     color: '#10B981',
     icon: <ShieldCheck size={18} />, 
-    url: 'https://sites.google.com/view/saludmiranda04/config-vacunas',
-    description: 'URL: /config-vacunas'
+    url: 'https://sites.google.com/view/saludmiranda04/eje-altos-mirandinos',
+    description: 'Enlace Matriz: Altos Mirandinos'
   },
   { 
     id: 'suministros', 
     name: 'Eje de Suministros', 
     color: '#F59E0B',
     icon: <Package size={18} />, 
-    url: 'https://sites.google.com/view/saludmiranda04/inventario-medico',
-    description: 'URL: /inventario-medico'
+    url: 'https://sites.google.com/view/saludmiranda04/eje-altos-mirandinos',
+    description: 'Enlace Matriz: Altos Mirandinos'
   },
   { 
     id: 'personal', 
     name: 'Eje de Personal', 
     color: '#8B5CF6',
     icon: <Users size={18} />, 
-    url: 'https://sites.google.com/view/saludmiranda04/gestion-personal',
-    description: 'URL: /gestion-personal'
+    url: 'https://sites.google.com/view/saludmiranda04/eje-altos-mirandinos',
+    description: 'Enlace Matriz: Altos Mirandinos'
   },
   { 
     id: 'infraestructura', 
     name: 'Eje de Infraestructura', 
     color: '#EF4444',
     icon: <Building2 size={18} />, 
-    url: 'https://sites.google.com/view/saludmiranda04/estado-ambulatorios',
-    description: 'URL: /estado-ambulatorios'
+    url: 'https://sites.google.com/view/saludmiranda04/eje-altos-mirandinos',
+    description: 'Enlace Matriz: Altos Mirandinos'
   },
   { 
     id: 'altos_mirandinos', 
@@ -125,7 +140,6 @@ const INITIAL_EJES: Eje[] = [
     description: 'Eje Territorial 05'
   },
 ];
-
 const getImageDimensions = (src: string): Promise<{ width: number; height: number }> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
