@@ -34,23 +34,23 @@ export default function ObstetricaForm({ onSuccess, onCancel }: ObstetricaFormPr
   const [submitLoading, setSubmitLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Sincronización real con Supabase
+  // Estado para cargar dinámicamente los centros de Supabase
   const [centros, setCentros] = useState<string[]>([]);
   const [loadingCentros, setLoadingCentros] = useState(true);
 
   useEffect(() => {
-    async function cargarEstablecimientos() {
+    async function cargarCentros() {
       try {
         setLoadingCentros(true);
-        const datos = await nominalService.obtenerCentrosSalud();
-        setCentros(datos);
+        const lista = await nominalService.obtenerCentrosSalud();
+        setCentros(lista);
       } catch (err) {
-        console.error("Error en clínicas:", err);
-      } finaly {
+        console.error("Error cargando centros:", err);
+      } finally {
         setLoadingCentros(false);
       }
     }
-    cargarEstablecimientos();
+    cargarCentros();
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -115,7 +115,7 @@ export default function ObstetricaForm({ onSuccess, onCancel }: ObstetricaFormPr
       await nominalService.guardarObstetrica(formData);
       onSuccess();
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error guardando registro obstétrico');
+      setErrorMsg(err.message || 'Error al guardar el registro obstétrico');
     } finally {
       setSubmitLoading(false);
     }
@@ -124,11 +124,12 @@ export default function ObstetricaForm({ onSuccess, onCancel }: ObstetricaFormPr
   return (
     <form onSubmit={handleSubmit} className="space-y-5 text-slate-700 font-sans max-h-[80vh] overflow-y-auto px-1">
       {errorMsg && (
-        <div className="p-3 bg-red-50 text-red-600 rounded-xl border border-red-200 text-[10.5px] font-bold flex items-center gap-2 animate-shake">
+        <div className="p-3 bg-red-50 text-red-600 rounded-xl border border-red-200 text-[10.5px] font-bold flex items-center gap-2">
           <ShieldAlert size={14} /> {errorMsg}
         </div>
       )}
 
+      {/* UBICACIÓN */}
       <div className="bg-slate-50/70 border border-slate-100 p-3.5 rounded-2xl space-y-3">
         <h4 className="text-[10px] font-black tracking-wider text-[#0B3D5C] uppercase flex items-center gap-1.5 border-b border-slate-200 pb-1.5 mb-2">
           <Landmark size={12} /> Datos del Establecimiento y Fecha
@@ -155,20 +156,18 @@ export default function ObstetricaForm({ onSuccess, onCancel }: ObstetricaFormPr
               disabled={loadingCentros}
               value={formData.centro_salud}
               onChange={handleInputChange}
-              className={`w-full bg-white border border-slate-205 rounded-xl px-3 py-2 text-[10.5px] font-bold text-slate-700 uppercase focus:outline-none focus:border-blue-500 ${
-                loadingCentros ? 'animate-pulse bg-slate-50 text-slate-400' : ''
-              }`}
+              className={`w-full bg-white border border-slate-205 rounded-xl px-3 py-2 text-[10.5px] font-bold text-slate-700 uppercase focus:outline-none focus:border-blue-500 ${loadingCentros ? 'animate-pulse bg-slate-50' : ''}`}
             >
-              <option value="" disabled>{loadingCentros ? "Sincronizando centros..." : "Seleccione establecimiento..."}</option>
-              {centros.map((centro) => (
-                <option key={centro} value={centro}>{centro}</option>
+              <option value="" disabled>{loadingCentros ? "Sincronizando..." : "Seleccione establecimiento..."}</option>
+              {centros.map((c) => (
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </div>
         </div>
       </div>
 
-      {/* BLOQUE DATOS DE LA MADRE */}
+      {/* MADRE */}
       <div className="bg-slate-50/70 border border-slate-100 p-3.5 rounded-2xl space-y-3">
         <h4 className="text-[10px] font-black tracking-wider text-[#0B3D5C] uppercase flex items-center gap-1.5 border-b border-slate-200 pb-1.5 mb-2">
           <User size={12} /> Datos de la Madre (Paciente)
@@ -178,12 +177,12 @@ export default function ObstetricaForm({ onSuccess, onCancel }: ObstetricaFormPr
             <label className="text-[8.5px] font-black tracking-widest text-slate-400 uppercase block mb-1.5">Cédula de Identidad *</label>
             <div className="flex gap-1.5">
               <input type="text" name="cedula_madre" placeholder="V-00000000" required value={formData.cedula_madre} onChange={handleInputChange} className="w-full bg-white border border-slate-205 rounded-xl px-3 py-2 text-[10.5px] font-bold" />
-              <button type="button" onClick={manejarBuscarMadre} disabled={loadingPaciente} className="px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl transition-all flex items-center justify-center cursor-pointer">
+              <button type="button" onClick={manejarBuscarMadre} disabled={loadingPaciente} className="px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl flex items-center justify-center cursor-pointer">
                 {loadingPaciente ? <span className="w-3.5 h-3.5 rounded-full border-2 border-slate-600 border-t-transparent animate-spin"></span> : <Search size={13} />}
               </button>
             </div>
-            {pacienteEncontrado === true && <span className="text-[8.5px] text-emerald-600 font-bold flex items-center gap-1 mt-1"><Check size={10}/> Registrada en padrón</span>}
-            {pacienteEncontrado === false && <span className="text-[8.5px] text-amber-600 font-bold flex items-center gap-1 mt-1"><Sparkles size={10}/> Nueva: Se registrará al guardar</span>}
+            {pacienteEncontrado === true && <span className="text-[8.5px] text-emerald-600 font-bold flex items-center gap-1 mt-1"><Check size={10}/> Registrada</span>}
+            {pacienteEncontrado === false && <span className="text-[8.5px] text-amber-600 font-bold flex items-center gap-1 mt-1"><Sparkles size={10}/> Nueva madre</span>}
           </div>
           <div>
             <label className="text-[8.5px] font-black tracking-widest text-slate-400 uppercase block mb-1.5">Nombre(s) *</label>
@@ -206,7 +205,7 @@ export default function ObstetricaForm({ onSuccess, onCancel }: ObstetricaFormPr
         </div>
       </div>
 
-      {/* BLOQUE DATOS CLÍNICOS */}
+      {/* PARTO */}
       <div className="bg-slate-50/70 border border-slate-100 p-3.5 rounded-2xl space-y-3">
         <h4 className="text-[10px] font-black tracking-wider text-[#0B3D5C] uppercase flex items-center gap-1.5 border-b border-slate-200 pb-1.5 mb-2">
           <Baby size={12} /> Datos de la Atención Obstétrica (Parto)
@@ -237,7 +236,7 @@ export default function ObstetricaForm({ onSuccess, onCancel }: ObstetricaFormPr
         </div>
       </div>
 
-      {/* BLOQUE DATOS MÉDICO TRATANTE */}
+      {/* MÉDICO */}
       <div className="bg-slate-50/70 border border-slate-100 p-3.5 rounded-2xl space-y-3">
         <h4 className="text-[10px] font-black tracking-wider text-[#0B3D5C] uppercase flex items-center gap-1.5 border-b border-slate-200 pb-1.5 mb-2">
           <UserCog size={12} /> Datos del Médico Tratante
@@ -247,12 +246,12 @@ export default function ObstetricaForm({ onSuccess, onCancel }: ObstetricaFormPr
             <label className="text-[8.5px] font-black tracking-widest text-slate-400 uppercase block mb-1.5">Cédula del Médico *</label>
             <div className="flex gap-1.5">
               <input type="text" name="cedula_medico" placeholder="V-00000000" required value={formData.cedula_medico} onChange={handleInputChange} className="w-full bg-white border border-slate-205 rounded-xl px-3 py-2 text-[10.5px] font-bold" />
-              <button type="button" onClick={manejarBuscarMedico} disabled={loadingMedico} className="px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl transition-all flex items-center justify-center cursor-pointer">
+              <button type="button" onClick={manejarBuscarMedico} disabled={loadingMedico} className="px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl flex items-center justify-center cursor-pointer">
                 {loadingMedico ? <span className="w-3.5 h-3.5 rounded-full border-2 border-slate-600 border-t-transparent animate-spin"></span> : <Search size={13} />}
               </button>
             </div>
-            {medicoEncontrado === true && <span className="text-[8.5px] text-emerald-600 font-bold flex items-center gap-1 mt-1"><UserCheck size={10}/> Médico registrado</span>}
-            {medicoEncontrado === false && <span className="text-[8.5px] text-amber-600 font-bold flex items-center gap-1 mt-1"><Sparkles size={10}/> Nuevo: Se guardará en el catálogo</span>}
+            {medicoEncontrado === true && <span className="text-[8.5px] text-emerald-600 font-bold flex items-center gap-1 mt-1"><UserCheck size={10}/> Médico verificado</span>}
+            {medicoEncontrado === false && <span className="text-[8.5px] text-amber-600 font-bold flex items-center gap-1 mt-1"><Sparkles size={10}/> Nuevo Médico</span>}
           </div>
           <div>
             <label className="text-[8.5px] font-black tracking-widest text-slate-400 uppercase block mb-1.5">Nombre Médico *</label>

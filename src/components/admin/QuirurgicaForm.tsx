@@ -40,18 +40,18 @@ export default function QuirurgicaForm({ onSuccess, onCancel }: QuirurgicaFormPr
   const [loadingCentros, setLoadingCentros] = useState(true);
 
   useEffect(() => {
-    async function cargarEstablecimientos() {
+    async function cargarCentros() {
       try {
         setLoadingCentros(true);
-        const datos = await nominalService.obtenerCentrosSalud();
-        setCentros(datos);
+        const lista = await nominalService.obtenerCentrosSalud();
+        setCentros(lista);
       } catch (err) {
-        console.error("Error en clínicas:", err);
+        console.error("Error cargando centros:", err);
       } finally {
         setLoadingCentros(false);
       }
     }
-    cargarEstablecimientos();
+    cargarCentros();
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -80,7 +80,7 @@ export default function QuirurgicaForm({ onSuccess, onCancel }: QuirurgicaFormPr
       }
     } catch (err) {
       console.error(err);
-    } finally {
+    } filter {
       setLoadingPaciente(false);
     }
   };
@@ -126,11 +126,12 @@ export default function QuirurgicaForm({ onSuccess, onCancel }: QuirurgicaFormPr
   return (
     <form onSubmit={handleSubmit} className="space-y-5 text-slate-700 font-sans max-h-[80vh] overflow-y-auto px-1">
       {errorMsg && (
-        <div className="p-3 bg-red-50 text-red-600 rounded-xl border border-red-200 text-[10.5px] font-bold flex items-center gap-2 animate-shake">
+        <div className="p-3 bg-red-50 text-red-600 rounded-xl border border-red-200 text-[10.5px] font-bold flex items-center gap-2">
           <ShieldAlert size={14} /> {errorMsg}
         </div>
       )}
 
+      {/* ESTABLECIMIENTO */}
       <div className="bg-slate-50/70 border border-slate-100 p-3.5 rounded-2xl space-y-3">
         <h4 className="text-[10px] font-black tracking-wider text-[#0B3D5C] uppercase flex items-center gap-1.5 border-b border-slate-200 pb-1.5 mb-2">
           <Landmark size={12} /> Datos del Establecimiento y Fecha
@@ -157,11 +158,9 @@ export default function QuirurgicaForm({ onSuccess, onCancel }: QuirurgicaFormPr
               disabled={loadingCentros}
               value={formData.centro_salud}
               onChange={handleInputChange}
-              className={`w-full bg-white border border-slate-205 rounded-xl px-3 py-2 text-[10.5px] font-bold text-slate-700 uppercase focus:outline-none focus:border-blue-500 ${
-                loadingCentros ? 'animate-pulse bg-slate-50 text-slate-400' : ''
-              }`}
+              className={`w-full bg-white border border-slate-205 rounded-xl px-3 py-2 text-[10.5px] font-bold text-slate-700 uppercase focus:outline-none focus:border-blue-500 ${loadingCentros ? 'animate-pulse bg-slate-50' : ''}`}
             >
-              <option value="" disabled>{loadingCentros ? "Sincronizando centros..." : "Seleccione establecimiento..."}</option>
+              <option value="" disabled>{loadingCentros ? "Sincronizando..." : "Seleccione establecimiento..."}</option>
               {centros.map((centro) => (
                 <option key={centro} value={centro}>{centro}</option>
               ))}
@@ -170,7 +169,7 @@ export default function QuirurgicaForm({ onSuccess, onCancel }: QuirurgicaFormPr
         </div>
       </div>
 
-      {/* BLOQUE DATOS PACIENTE */}
+      {/* PACIENTE */}
       <div className="bg-slate-50/70 border border-slate-100 p-3.5 rounded-2xl space-y-3">
         <h4 className="text-[10px] font-black tracking-wider text-[#0B3D5C] uppercase flex items-center gap-1.5 border-b border-slate-200 pb-1.5 mb-2">
           <User size={12} /> Datos del Paciente Intervenido
@@ -180,12 +179,12 @@ export default function QuirurgicaForm({ onSuccess, onCancel }: QuirurgicaFormPr
             <label className="text-[8.5px] font-black tracking-widest text-slate-400 uppercase block mb-1.5">Cédula de Identidad *</label>
             <div className="flex gap-1.5">
               <input type="text" name="cedula_paciente" placeholder="V-00000000" required value={formData.cedula_paciente} onChange={handleInputChange} className="w-full bg-white border border-slate-205 rounded-xl px-3 py-2 text-[10.5px] font-bold" />
-              <button type="button" onClick={manejarBuscarPaciente} disabled={loadingPaciente} className="px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl transition-all flex items-center justify-center cursor-pointer">
+              <button type="button" onClick={manejarBuscarPaciente} disabled={loadingPaciente} className="px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl flex items-center justify-center cursor-pointer">
                 {loadingPaciente ? <span className="w-3.5 h-3.5 rounded-full border-2 border-slate-600 border-t-transparent animate-spin"></span> : <Search size={13} />}
               </button>
             </div>
-            {pacienteEncontrado === true && <span className="text-[8.5px] text-emerald-600 font-bold flex items-center gap-1 mt-1"><Check size={10}/> Registrado en padrón</span>}
-            {pacienteEncontrado === false && <span className="text-[8.5px] text-amber-600 font-bold flex items-center gap-1 mt-1"><Sparkles size={10}/> Nuevo: Se registrará al guardar</span>}
+            {pacienteEncontrado === true && <span className="text-[8.5px] text-emerald-600 font-bold flex items-center gap-1 mt-1"><Check size={10}/> Registrado</span>}
+            {pacienteEncontrado === false && <span className="text-[8.5px] text-amber-600 font-bold flex items-center gap-1 mt-1"><Sparkles size={10}/> Nuevo expediente</span>}
           </div>
           <div>
             <label className="text-[8.5px] font-black tracking-widest text-slate-400 uppercase block mb-1.5">Nombre(s) *</label>
@@ -215,7 +214,7 @@ export default function QuirurgicaForm({ onSuccess, onCancel }: QuirurgicaFormPr
         </div>
       </div>
 
-      {/* BLOQUE INTERVENCIÓN QUIRÚRGICA */}
+      {/* DETALLES CIRUGÍA */}
       <div className="bg-slate-50/70 border border-slate-100 p-3.5 rounded-2xl space-y-3">
         <h4 className="text-[10px] font-black tracking-wider text-[#0B3D5C] uppercase flex items-center gap-1.5 border-b border-slate-200 pb-1.5 mb-2">
           <Activity size={12} /> Detalles del Acto Quirúrgico
@@ -223,11 +222,11 @@ export default function QuirurgicaForm({ onSuccess, onCancel }: QuirurgicaFormPr
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-[8.5px] font-black tracking-widest text-slate-400 uppercase block mb-1.5">Especialidad Quirúrgica *</label>
-            <input type="text" name="especialidad_quirurgica" placeholder="Ej: CIRUGÍA GENERAL, TRAUMATOLOGÍA" required value={formData.especialidad_quirurgica} onChange={handleInputChange} className="w-full bg-white border border-slate-205 rounded-xl px-3 py-2 text-[10.5px] font-bold uppercase" />
+            <input type="text" name="especialidad_quirurgica" placeholder="Ej: CIRUGÍA GENERAL" required value={formData.especialidad_quirurgica} onChange={handleInputChange} className="w-full bg-white border border-slate-205 rounded-xl px-3 py-2 text-[10.5px] font-bold uppercase" />
           </div>
           <div>
-            <label className="text-[8.5px] font-black tracking-widest text-slate-400 uppercase block mb-1.5">Tipo de Intervención (Procedimiento) *</label>
-            <input type="text" name="tipo_intervencion" placeholder="Ej: COLECISTECTOMÍA, HERNIOPLASTIA" required value={formData.tipo_intervencion} onChange={handleInputChange} className="w-full bg-white border border-slate-205 rounded-xl px-3 py-2 text-[10.5px] font-bold uppercase" />
+            <label className="text-[8.5px] font-black tracking-widest text-slate-400 uppercase block mb-1.5">Tipo de Intervención *</label>
+            <input type="text" name="tipo_intervencion" placeholder="Ej: HERNIOPLASTIA" required value={formData.tipo_intervencion} onChange={handleInputChange} className="w-full bg-white border border-slate-205 rounded-xl px-3 py-2 text-[10.5px] font-bold uppercase" />
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -245,7 +244,7 @@ export default function QuirurgicaForm({ onSuccess, onCancel }: QuirurgicaFormPr
         </div>
       </div>
 
-      {/* BLOQUE DATOS MÉDICO TRATANTE */}
+      {/* MÉDICO */}
       <div className="bg-slate-50/70 border border-slate-100 p-3.5 rounded-2xl space-y-3">
         <h4 className="text-[10px] font-black tracking-wider text-[#0B3D5C] uppercase flex items-center gap-1.5 border-b border-slate-200 pb-1.5 mb-2">
           <UserCog size={12} /> Datos del Médico Cirujano
@@ -255,12 +254,12 @@ export default function QuirurgicaForm({ onSuccess, onCancel }: QuirurgicaFormPr
             <label className="text-[8.5px] font-black tracking-widest text-slate-400 uppercase block mb-1.5">Cédula del Médico *</label>
             <div className="flex gap-1.5">
               <input type="text" name="cedula_medico" placeholder="V-00000000" required value={formData.cedula_medico} onChange={handleInputChange} className="w-full bg-white border border-slate-205 rounded-xl px-3 py-2 text-[10.5px] font-bold" />
-              <button type="button" onClick={manejarBuscarMedico} disabled={loadingMedico} className="px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl transition-all flex items-center justify-center cursor-pointer">
+              <button type="button" onClick={manejarBuscarMedico} disabled={loadingMedico} className="px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl flex items-center justify-center cursor-pointer">
                 {loadingMedico ? <span className="w-3.5 h-3.5 rounded-full border-2 border-slate-600 border-t-transparent animate-spin"></span> : <Search size={13} />}
               </button>
             </div>
             {medicoEncontrado === true && <span className="text-[8.5px] text-emerald-600 font-bold flex items-center gap-1 mt-1"><UserCheck size={10}/> Médico registrado</span>}
-            {medicoEncontrado === false && <span className="text-[8.5px] text-amber-600 font-bold flex items-center gap-1 mt-1"><Sparkles size={10}/> Nuevo: Se guardará en el catálogo</span>}
+            {medicoEncontrado === false && <span className="text-[8.5px] text-amber-600 font-bold flex items-center gap-1 mt-1"><Sparkles size={10}/> Nuevo Médico</span>}
           </div>
           <div>
             <label className="text-[8.5px] font-black tracking-widest text-slate-400 uppercase block mb-1.5">Nombre Médico *</label>

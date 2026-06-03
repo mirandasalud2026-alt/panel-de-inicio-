@@ -607,7 +607,9 @@ export const nominalService = {
     }
   },
 
+  // ==========================================
   // 6. OBTENER ESTABLECIMIENTOS REALES DESDE SUPABASE
+  // ==========================================
   async obtenerCentrosSalud(): Promise<string[]> {
     if (supabase) {
       try {
@@ -617,24 +619,22 @@ export const nominalService = {
           .order('nombre_establecimiento', { ascending: true });
 
         if (!error && data) {
-          // Extraemos los strings limpios de la columna correcta
           return data.map((item: any) => item.nombre_establecimiento);
         } else if (error) {
-          console.warn('Error cargando TClinicas_populares de Supabase:', error);
+          console.warn('Error cargando TClinicas_populares, aplicando fallback:', error);
         }
       } catch (err) {
-        console.warn('Fallo de conexión al traer centros médicos:', err);
+        console.warn('Fallo de red en obtenerCentrosSalud, aplicando fallback:', err);
       }
     }
-
-    // Fallback de respaldo por si falla internet o Supabase
+    
+    // Fallback de respaldo unificado (Establecimientos por defecto)
     return [
       "CLÍNICA POPULAR PARACOTOS",
       "CDI DOCTOR JOSÉ GREGORIO HERNÁNDEZ",
       "AMBULATORIO PRADO DE MARÍA"
     ];
   }
-    // Retorno Local Storage en caso de caída de internet o ambiente de desarrollo aislado
-    return getLocalData<string[]>(L_KEY_CENTROS_SALUD, []);
-  }
-};
+}; // Fin del objeto nominalService
+
+  
