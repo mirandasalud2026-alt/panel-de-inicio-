@@ -2,6 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { nominalService } from '../../services/nominalService';
 import { Save, User, UserCheck, ShieldAlert, Check, Search, Calendar, Landmark, Activity, UserCog, Sparkles, Baby } from 'lucide-react';
 
+const obtenerNombreLegible = (centro: any): string => {
+  if (!centro) return '';
+  const nombre = typeof centro === 'object' ? (centro.nombre_establecimiento || centro.nombre || '') : String(centro);
+  const nombreUpper = nombre.toUpperCase().trim();
+
+  // Si por alguna razón empieza por "ASIC" o coincide con códigos de asic
+  if (nombreUpper.startsWith('ASIC') || nombreUpper.includes('ES-900') || nombreUpper === 'ES-9001' || nombreUpper === 'ASIC ES-9001') {
+    // Si detectamos la asic correspondiente a Paracotos, devolvemos el nombre descriptivo comercial
+    if (nombreUpper.includes('900') || nombreUpper.includes('ES-9001') || nombreUpper.includes('PARACOTOS')) {
+      return "CLÍNICA POPULAR PARACOTOS";
+    }
+    // Si es otra ASIC y queremos un formato prolijo
+    return `CDI / AMBULATORIO (${nombreUpper})`;
+  }
+
+  return nombreUpper;
+};
+
 interface ObstetricaFormProps {
   onSuccess: () => void;
   onCancel: () => void;
@@ -156,12 +174,19 @@ export default function ObstetricaForm({ onSuccess, onCancel }: ObstetricaFormPr
               disabled={loadingCentros}
               value={formData.centro_salud}
               onChange={handleInputChange}
-              className={`w-full bg-white border border-slate-205 rounded-xl px-3 py-2 text-[10.5px] font-bold text-slate-700 uppercase focus:outline-none focus:border-blue-500 ${loadingCentros ? 'animate-pulse bg-slate-50' : ''}`}
+              className={`w-full bg-white border border-slate-205 rounded-xl px-3 py-2 text-[10.5px] font-bold text-slate-900 uppercase focus:outline-none focus:border-blue-500 ${loadingCentros ? 'animate-pulse bg-slate-50' : ''}`}
             >
-              <option value="" disabled>{loadingCentros ? "Sincronizando..." : "Seleccione establecimiento..."}</option>
-              {centros.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
+              <option value="" disabled className="text-slate-900 bg-white">
+                {loadingCentros ? "SINCRONIZANDO..." : "SELECCIONE ESTABLECIMIENTO..."}
+              </option>
+              {centros.map((centro) => {
+                const nombreFormateado = obtenerNombreLegible(centro);
+                return (
+                  <option key={nombreFormateado} value={nombreFormateado} className="text-slate-900 bg-white">
+                    {nombreFormateado}
+                  </option>
+                );
+              })}
             </select>
           </div>
         </div>

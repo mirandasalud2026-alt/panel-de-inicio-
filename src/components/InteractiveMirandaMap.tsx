@@ -141,8 +141,8 @@ export default function InteractiveMirandaCards({ isAdminMode = false }) {
   };
 
   return (
-    /* Reducción extrema de padding (p-4) y h-screen para encajar perfecto en el viewport */
-    <div className="w-full h-screen bg-[#F8FAFC] p-4 text-slate-800 flex flex-col justify-start overflow-hidden select-none">
+    /* Reducción extrema de padding (p-4) y h-full con scroll vertical para encajar perfecto en el viewport */
+    <div className="w-full h-full bg-[#F8FAFC] p-4 text-slate-800 flex flex-col justify-start overflow-y-auto select-none">
       
       {/* Encabezado ultra-compactado en una sola línea fina */}
       <div className="mb-4 flex justify-between items-center border-b border-slate-200/60 pb-2">
@@ -164,10 +164,10 @@ export default function InteractiveMirandaCards({ isAdminMode = false }) {
           const fillPercent = getFillPercentage(eje.id);
 
           return (
-            /* Ajuste de h-full para obligar a las tarjetas a estirarse uniformemente llenando la pantalla */
+            /* Ajuste de min-h-[180px] en móviles y tablets para legibilidad, y h-full en pantallas grandes */
             <div 
               key={eje.id}
-              className="relative h-full w-full rounded-xl border border-slate-200 overflow-hidden bg-white group shadow-sm hover:shadow-lg flex flex-col justify-between p-4 transition-all duration-300 hover:border-emerald-500/40"
+              className="relative min-h-[185px] md:h-full w-full rounded-xl border border-slate-200 overflow-hidden bg-white group shadow-sm hover:shadow-lg flex flex-col justify-between p-4 transition-all duration-300 hover:border-emerald-500/40"
             >
               {/* Imagen de fondo viva */}
               <div 

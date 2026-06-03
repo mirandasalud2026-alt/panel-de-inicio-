@@ -608,44 +608,42 @@ export const nominalService = {
   },
 
   // =======================================================
-  // 6. OBTENER ESTABLECIMIENTOS REALES DESDE SUPABASE (PARCHEADO)
+  // 6. OBTENER ESTABLECIMIENTOS REALES DESDE SUPABASE
   // =======================================================
   async obtenerCentrosSalud(): Promise<string[]> {
-    if (supabase) {
-      try {
-        const { data, error } = await supabase
-          .from('clinicas_populares') // Tu tabla real en minúsculas
-          .select('nombre_establecimiento, asic')
-          .order('nombre_establecimiento', { ascending: true });
-
-        if (!error && data && data.length > 0) {
-          return data.map((item: any) => {
-            const nombre = item.nombre_establecimiento;
-            
-            // SI EL NOMBRE VIENE VACÍO O CON EL CÓDIGO TÉCNICO CRUZaDO (Ej: ASIC ES-900)
-            if (!nombre || nombre.startsWith('ASIC')) {
-              // Si tenemos la ASIC ES-900 y estamos en tu zona (Paracotos), forzamos el nombre real
-              if (item.asic === 'ASIC ES-900' || nombre === 'ASIC ES-900') {
-                return "CLÍNICA POPULAR PARACOTOS";
-              }
-              // Si es otra ASIC, le damos un formato limpio para que el operador no vea solo el código
-              return `CDI / AMBULATORIO (${item.asic || 'S/A'})`;
-            }
-            
-            return nombre.toUpperCase();
-          });
-        }
-        
-        if (error) console.warn('Error cargando clinicas_populares:', error);
-      } catch (err) {
-        console.warn('Fallo de red en obtenerCentrosSalud:', err);
-      }
-    }
-    
-    // Fallback local unificado (Garantiza que Paracotos siempre aparezca bien)
-    return [
+    // Catálogo real unificado de la región para asegurar la carga
+    const catalogoReal = [
       "CLÍNICA POPULAR PARACOTOS",
       "CDI DOCTOR JOSÉ GREGORIO HERNÁNDEZ",
       "AMBULATORIO PRADO DE MARÍA"
     ];
+
+    if (supabase) {
+      try {
+        // Consultamos la tabla maestra mapeando estrictamente el nombre descriptivo
+        const { data, error } = await supabase
+          .from('TClinicas_populares') 
+          .select('nombre_establecimiento')
+          .order('nombre_establecimiento', { ascending: true });
+
+        if (!error && data && data.length > 0) {
+          const listaMapeada = data.map((item: any) => item.nombre_establecimiento).filter(Boolean);
+          
+          // Si por alguna razón la base de datos devolvió códigos en vez de nombres descriptivos
+          if (listaMapeada[0]?.startsWith('ASIC')) {
+            console.warn('La tabla devolvió identificadores técnicos; aplicando catálogo nominal.');
+            return catalogoReal;
+          }
+          
+          return listaMapeada;
+        }
+        
+        if (error) console.warn('Error en TClinicas_populares, usando catálogo por defecto:', error);
+      } catch (err) {
+        console.warn('Fallo de comunicación, aplicando catálogo de respaldo:', err);
+      }
+    }
+    
+    return catalogoReal;
   }
+};
