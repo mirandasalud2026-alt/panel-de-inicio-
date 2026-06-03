@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { nominalService } from '../../services/nominalService';
 import { 
   ArrowLeft, 
   AlertCircle, 
@@ -66,6 +67,7 @@ export default function NominalFormWindow({ type: propType, userEmail: propUserE
 
   // Estados Operacionales de Sincronización
   const [isSearchingCedula, setIsSearchingCedula] = useState(false);
+  const [isSearchingMedico, setIsSearchingMedico] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -173,29 +175,65 @@ export default function NominalFormWindow({ type: propType, userEmail: propUserE
     fetchCenters();
   }, []);
 
-  // Búsqueda inteligente de paciente por Cédula (Vía Apps Script API)
+  // Búsqueda inteligente de paciente por Cédula (Vía Supabase y Google Apps Script)
   const handleBuscarCedula = async () => {
     if (!formData.cedula_paciente) return;
     setIsSearchingCedula(true);
     try {
+      // 1. Intentar buscar en Supabase primero
+      const p = await nominalService.buscarPaciente(formData.cedula_paciente);
+      if (p) {
+        setFormData(prev => ({
+          ...prev,
+          nombre_paciente: p.nombre,
+          apellido_paciente: p.apellido,
+          edad: p.edad ? p.edad.toString() : prev.edad,
+          sexo: p.sexo ? (p.sexo.toUpperCase() === 'MASCULINO' ? 'Masculino' : 'Femenino') : prev.sexo,
+          telefono_movil: p.telefono || prev.telefono_movil
+        }));
+        setIsSearchingCedula(false);
+        return;
+      }
+
+      // 2. Si no, buscar en Apps Script
       const resp = await fetch(`${GOOGLE_API_URL}?action=searchCedula&cedula=${formData.cedula_paciente}`);
       const resData = await resp.json();
       if (resData.success && resData.data) {
-        const p = resData.data;
-        const mapped = splitFullname(p.nombre_completo || p.nombre);
+        const pSheet = resData.data;
+        const mapped = splitFullname(pSheet.nombre_completo || pSheet.nombre);
         setFormData(prev => ({
           ...prev,
           nombre_paciente: mapped.nombre,
           apellido_paciente: mapped.apellido,
-          edad: p.edad || prev.edad,
-          sexo: p.sexo || prev.sexo,
-          telefono_movil: p.telefono || prev.telefono_movil
+          edad: pSheet.edad ? pSheet.edad.toString() : prev.edad,
+          sexo: pSheet.sexo ? (pSheet.sexo.toUpperCase() === 'MASCULINO' ? 'Masculino' : 'Femenino') : prev.sexo,
+          telefono_movil: pSheet.telefono || prev.telefono_movil
         }));
       }
     } catch (e) {
       console.error("Error en motor de búsqueda de cédulas:", e);
     } finally {
       setIsSearchingCedula(false);
+    }
+  };
+
+  // Búsqueda inteligente de médico por Cédula (Vía Supabase)
+  const handleBuscarMedicoCedula = async () => {
+    if (!formData.cedula_medico) return;
+    setIsSearchingMedico(true);
+    try {
+      const m = await nominalService.buscarMedico(formData.cedula_medico);
+      if (m) {
+        setFormData(prev => ({
+          ...prev,
+          nombre_medico: m.nombre,
+          apellido_medico: m.apellido
+        }));
+      }
+    } catch (e) {
+      console.error("Error en motor de búsqueda de médicos:", e);
+    } finally {
+      setIsSearchingMedico(false);
     }
   };
 
@@ -211,6 +249,29 @@ export default function NominalFormWindow({ type: propType, userEmail: propUserE
     setSyncSuccess(false);
 
     try {
+      // 1. Guardar o actualizar Paciente en Supabase/Local
+      if (formData.cedula_paciente) {
+        await nominalService.asegurarPaciente({
+          cedula: formData.cedula_paciente,
+          nombre: formData.nombre_paciente,
+          apellido: formData.apellido_paciente,
+          edad: parseInt(formData.edad) || 0,
+          sexo: (formData.sexo || 'FEMENINO').toUpperCase(),
+          telefono: formData.telefono_movil || ''
+        });
+      }
+
+      // 2. Guardar o actualizar Médico en Supabase/Local si hay datos
+      if (formData.cedula_medico) {
+        await nominalService.asegurarMedico({
+          cedula: formData.cedula_medico,
+          nombre: formData.nombre_medico,
+          apellido: formData.apellido_medico,
+          telefono: ''
+        });
+      }
+
+      // 3. Insertar / Transmitir en Sheets (Google Apps Script)
       const payload = {
         action: "insertNominal",
         tipo_formulario: type,
@@ -353,6 +414,7 @@ export default function NominalFormWindow({ type: propType, userEmail: propUserE
                     placeholder="Ej. 12345678"
                     value={formData.cedula_paciente}
                     onChange={handleInputChange}
+                    onBlur={handleBuscarCedula}
                     required
                     className="w-full bg-white border border-neutral-200 text-xs text-neutral-800 font-extrabold rounded-xl pl-3.5 pr-10 py-2 focus:outline-none"
                   />
@@ -484,13 +546,28 @@ export default function NominalFormWindow({ type: propType, userEmail: propUserE
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-[10px] uppercase font-black tracking-wider text-neutral-500 mb-1.5">Cédula Médico</label>
-                  <input
-                    type="text"
-                    name="cedula_medico"
-                    value={formData.cedula_medico}
-                    onChange={handleInputChange}
-                    className="w-full bg-white border border-neutral-200 text-xs text-neutral-800 font-extrabold rounded-xl px-3.5 py-2 focus:outline-none"
-                  />
+                  <div className="relative flex">
+                    <input
+                      type="text"
+                      name="cedula_medico"
+                      value={formData.cedula_medico}
+                      onChange={handleInputChange}
+                      onBlur={handleBuscarMedicoCedula}
+                      className="w-full bg-white border border-neutral-200 text-xs text-neutral-800 font-extrabold rounded-xl pl-3.5 pr-10 py-2 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleBuscarMedicoCedula}
+                      disabled={isSearchingMedico || !formData.cedula_medico}
+                      className="absolute right-1 top-1 bottom-1 px-2.5 bg-neutral-900 hover:bg-neutral-800 text-white rounded-lg flex items-center justify-center transition-all disabled:opacity-40 cursor-pointer"
+                    >
+                      {isSearchingMedico ? (
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                      ) : (
+                        <Search size={12} />
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase font-black tracking-wider text-neutral-500 mb-1.5">Nombre Médico</label>
