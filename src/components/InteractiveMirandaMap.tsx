@@ -63,12 +63,10 @@ export default function InteractiveMirandaCards({ isAdminMode = false }) {
   const [editBg, setEditBg] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // 1. Carga de datos apuntando a la tabla consolidada 'resumen_asic'
   useEffect(() => {
     const loadInitialData = async () => {
       if (!supabase) return;
       
-      // Consultamos la tabla que tiene la columna 'centros_reportaron' calculada por el script
       const { data: resumen } = await supabase.from('resumen_asic').select('*');
       if (resumen) setResumenAsicData(resumen);
 
@@ -80,7 +78,6 @@ export default function InteractiveMirandaCards({ isAdminMode = false }) {
 
     loadInitialData();
 
-    // Escucha en tiempo real para cuando el script central actualice los resúmenes
     const channel = supabase
       ?.channel('resumen_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'resumen_asic' }, () => {
@@ -95,11 +92,9 @@ export default function InteractiveMirandaCards({ isAdminMode = false }) {
     };
   }, []);
 
-  // 2. SUMATORIA MATEMÁTICA: Suma la columna 'centros_reportaron' de todas las filas de ese eje
   const getReportCountForEje = (ejeId: string) => {
     const filasDelEje = resumenAsicData.filter(r => {
-      const ejeReporte = (r.eje || '').toUpperCase().trim(); // El script sube el campo bajo la clave 'eje'
-
+      const ejeReporte = (r.eje || '').toUpperCase().trim();
       if (ejeId === 'altos_mirandinos')  return ejeReporte === 'ALTOS MIRANDINOS';
       if (ejeId === 'valles_del_tuy')    return ejeReporte === 'VALLES DEL TUY';
       if (ejeId === 'barlovento')        return ejeReporte === 'BARLOVENTO';
@@ -107,20 +102,16 @@ export default function InteractiveMirandaCards({ isAdminMode = false }) {
       if (ejeId === 'metropolitano')     return ejeReporte === 'METROPOLITANO';
       return false;
     });
-
-    // Sumamos todos los enteros acumulados reales en vez de contar registros
     return filasDelEje.reduce((acc, curr) => acc + (parseInt(curr.centros_reportaron) || 0), 0);
   };
 
-  // 3. Cálculo de porcentaje proporcional para la sombra verde transparente
   const getFillPercentage = (ejeId: string) => {
     const counts = ejes.map(e => getReportCountForEje(e.id));
-    const maxCount = Math.max(...counts, 1); // Evitamos división por cero
+    const maxCount = Math.max(...counts, 1);
     const currentCount = getReportCountForEje(ejeId);
     return (currentCount / maxCount) * 100;
   };
 
-  // Calcular el total global sumando todos los ejes procesados
   const getTotalGlobalReportes = () => {
     return ejes.reduce((acc, curr) => acc + getReportCountForEje(curr.id), 0);
   };
@@ -150,49 +141,51 @@ export default function InteractiveMirandaCards({ isAdminMode = false }) {
   };
 
   return (
-    <div className="w-full h-full bg-[#F8FAFC] p-6 text-slate-800 flex flex-col justify-between overflow-y-auto select-none">
+    /* Reducción extrema de padding (p-4) y h-screen para encajar perfecto en el viewport */
+    <div className="w-full h-screen bg-[#F8FAFC] p-4 text-slate-800 flex flex-col justify-start overflow-hidden select-none">
       
-      {/* Encabezado Principal */}
-      <div className="mb-6 flex justify-between items-center border-b border-slate-200 pb-4">
-        <div>
-          <h2 className="text-xl font-black uppercase tracking-widest text-slate-900 flex items-center gap-2">
-            <Sliders size={20} className="text-emerald-600 animate-pulse" /> Ejes de Atencion
+      {/* Encabezado ultra-compactado en una sola línea fina */}
+      <div className="mb-4 flex justify-between items-center border-b border-slate-200/60 pb-2">
+        <div className="flex items-center gap-2">
+          <Sliders size={16} className="text-emerald-600" />
+          <h2 className="text-xs font-black uppercase tracking-widest text-slate-900">
+            Monitoreo Regional de Ejes
           </h2>
-          <p className="text-xs text-slate-500 font-medium">Reporte en tiempo real.</p>
         </div>
-        <div className="px-4 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full text-[10px] font-black uppercase tracking-widest text-emerald-700 shadow-sm">
-          Carga Acumulada: {getTotalGlobalReportes()} Reportes Totales
+        <div className="px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-[9px] font-black uppercase tracking-widest text-emerald-700 shadow-sm">
+          Total: {getTotalGlobalReportes()} Reportes
         </div>
       </div>
 
-      {/* Rejilla de Fichas Claras y Vivas */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 flex-1 items-center">
+      {/* Las fichas suben por completo. Se eliminaron los títulos muertos y se usó flex-1 */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-3 flex-1 items-stretch pb-2">
         {ejes.map((eje) => {
           const reportCount = getReportCountForEje(eje.id);
           const fillPercent = getFillPercentage(eje.id);
 
           return (
+            /* Ajuste de h-full para obligar a las tarjetas a estirarse uniformemente llenando la pantalla */
             <div 
               key={eje.id}
-              className="relative h-64 w-full rounded-2xl border border-slate-200/80 overflow-hidden bg-white group shadow-md hover:shadow-xl flex flex-col justify-between p-4 transition-all duration-300 hover:border-emerald-500/40"
+              className="relative h-full w-full rounded-xl border border-slate-200 overflow-hidden bg-white group shadow-sm hover:shadow-lg flex flex-col justify-between p-4 transition-all duration-300 hover:border-emerald-500/40"
             >
-              {/* Imagen de fondo nítida a color con opacidad controlada */}
+              {/* Imagen de fondo viva */}
               <div 
-                className="absolute inset-0 bg-cover bg-center opacity-30 group-hover:opacity-45 transition-opacity duration-300 pointer-events-none"
+                className="absolute inset-0 bg-cover bg-center opacity-25 group-hover:opacity-40 transition-opacity duration-300 pointer-events-none"
                 style={{ backgroundImage: `url(${eje.bgImage})` }}
               />
 
-              {/* Sombra de llenado verde viva, muy transparente (15%) para el fondo blanco */}
+              {/* Sombra de carga verde muy transparente */}
               <motion.div 
-                className="absolute bottom-0 left-0 right-0 bg-emerald-500/15 border-t border-emerald-500/25 pointer-events-none"
+                className="absolute bottom-0 left-0 right-0 bg-emerald-500/10 border-t border-emerald-500/20 pointer-events-none"
                 initial={{ height: 0 }}
                 animate={{ height: `${fillPercent}%` }}
                 transition={{ type: 'spring', stiffness: 40, damping: 15 }}
               />
 
-              {/* Contenido Superior: Contador de Reportes Reales */}
+              {/* Superior: Contador */}
               <div className="relative z-10 flex justify-between items-start w-full">
-                <span className="text-[10px] font-black tracking-widest bg-emerald-600 text-white px-2.5 py-1 rounded-md shadow-sm">
+                <span className="text-[9px] font-black tracking-widest bg-emerald-600 text-white px-2.5 py-0.5 rounded-md shadow-sm">
                   {reportCount} {reportCount === 1 ? 'REPORTE' : 'REPORTES'}
                 </span>
 
@@ -203,16 +196,16 @@ export default function InteractiveMirandaCards({ isAdminMode = false }) {
                       setEditName(eje.name);
                       setEditBg(eje.bgImage);
                     }}
-                    className="p-1.5 bg-slate-100 hover:bg-slate-900 text-slate-500 hover:text-white rounded-lg transition-colors border border-slate-200 shadow-sm"
+                    className="p-1 bg-slate-100 hover:bg-slate-900 text-slate-500 hover:text-white rounded-md transition-colors border border-slate-200 shadow-sm"
                   >
-                    <Edit2 size={12} />
+                    <Edit2 size={10} />
                   </button>
                 )}
               </div>
 
-              {/* Contenido Inferior */}
-              <div className="relative z-10 w-full pt-8">
-                <h3 className="text-sm font-black uppercase text-slate-900 tracking-wide mb-3 group-hover:text-emerald-700 transition-colors">
+              {/* Inferior: Nombre y Enlace */}
+              <div className="relative z-10 w-full">
+                <h3 className="text-xs font-black uppercase text-slate-900 tracking-wide mb-2 group-hover:text-emerald-700 transition-colors">
                   {eje.name}
                 </h3>
                 
@@ -220,9 +213,9 @@ export default function InteractiveMirandaCards({ isAdminMode = false }) {
                   href={eje.url} 
                   target="_blank" 
                   rel="noreferrer"
-                  className="w-full py-2 bg-slate-50 group-hover:bg-emerald-600 hover:scale-[1.02] active:scale-[0.98] transition-all rounded-xl text-[10px] font-black uppercase tracking-widest text-center block text-slate-700 group-hover:text-white border border-slate-200 group-hover:border-transparent shadow-sm"
+                  className="w-full py-2 bg-slate-50 group-hover:bg-emerald-600 hover:scale-[1.01] active:scale-[0.99] transition-all rounded-lg text-[9px] font-black uppercase tracking-widest text-center block text-slate-700 group-hover:text-white border border-slate-200 group-hover:border-transparent shadow-sm"
                 >
-                  Ir al Formulario
+                  Ver Sala Virtual
                 </a>
               </div>
             </div>
@@ -243,49 +236,48 @@ export default function InteractiveMirandaCards({ isAdminMode = false }) {
               initial={{ scale: 0.95, y: 10 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 10 }}
-              className="bg-white border border-slate-200 p-6 rounded-3xl w-full max-w-md shadow-2xl"
+              className="bg-white border border-slate-200 p-5 rounded-2xl w-full max-w-sm shadow-2xl"
             >
-              <h3 className="text-sm font-black uppercase text-slate-900 tracking-widest mb-4 flex items-center gap-2">
-                <ImageIcon className="text-emerald-600" size={16} /> Configurar Ficha Geométrica
+              <h3 className="text-xs font-black uppercase text-slate-900 tracking-widest mb-3 flex items-center gap-2">
+                <ImageIcon className="text-emerald-600" size={14} /> Configurar Ficha
               </h3>
 
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1">Nombre del Eje</label>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 block mb-1">Nombre</label>
                   <input 
                     type="text" 
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 outline-none focus:border-emerald-500 transition-colors font-bold"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 outline-none focus:border-emerald-500 transition-colors font-bold"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1">URL Imagen de Fondo</label>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 block mb-1">Imagen URL</label>
                   <input 
                     type="text" 
                     value={editBg}
                     onChange={(e) => setEditBg(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 outline-none focus:border-emerald-500 transition-colors font-mono"
-                    placeholder="https://images.unsplash.com/..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 outline-none focus:border-emerald-500 transition-colors font-mono"
                   />
                 </div>
               </div>
 
-              <div className="flex gap-2 mt-6">
+              <div className="flex gap-2 mt-4">
                 <button 
                   onClick={() => setEditingEje(null)}
-                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors border border-slate-200"
+                  className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-[9px] font-black uppercase tracking-wider transition-colors border border-slate-200"
                 >
                   Cancelar
                 </button>
                 <button 
                   onClick={handleSaveEjeConfig}
                   disabled={isSaving}
-                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors shadow-md shadow-emerald-600/10"
+                  className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 text-white rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors shadow-md"
                 >
-                  {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />} 
-                  {isSaving ? 'Guardando...' : 'Guardar Ficha'}
+                  {isSaving ? <RefreshCw size={10} className="animate-spin" /> : <Save size={10} />} 
+                  {isSaving ? 'Guardando...' : 'Guardar'}
                 </button>
               </div>
             </motion.div>
