@@ -34,6 +34,7 @@ const L_KEY_QUIRURGICA = 'nominal_sim_quirurgica';
 const L_KEY_OBSTETRICA = 'nominal_sim_obstetrica';
 const L_KEY_DEFUNCION = 'nominal_sim_defuncion';
 const L_KEY_NOMINALES = 'nominal_sim_nominales';
+const L_KEY_CENTROS_SALUD = 'nominal_sim_centros_salud'; // Salvavidas offline para los centros
 
 function getLocalData<T>(key: string, defaultValue: T): T {
   try {
@@ -64,6 +65,13 @@ if (!localStorage.getItem(L_KEY_MEDICOS)) {
   setLocalData<Medico[]>(L_KEY_MEDICOS, [
     { cedula: "V-11111111", nombre: "EDWARD", apellido: "JENNER", telefono: "0412-5556677" },
     { cedula: "V-22222222", nombre: "JOSÉ GREGORIO", apellido: "HERNÁNDEZ", telefono: "0416-7778899" }
+  ]);
+}
+if (!localStorage.getItem(L_KEY_CENTROS_SALUD)) {
+  setLocalData<string[]>(L_KEY_CENTROS_SALUD, [
+    "CLÍNICA POPULAR TIPO II MESUCA",
+    "MATERNIDAD DE CARRIZAL",
+    "CLÍNICA POPULAR EL PASO"
   ]);
 }
 
@@ -284,7 +292,6 @@ export const nominalService = {
 
   // 4. GUARDAR REGISTROS (QUIRÚRGICO, OBSTÉTRICO, DEFUNCIÓN)
   async guardarQuirurgica(record: any): Promise<any> {
-    // Asegurar paciente y médico
     await this.asegurarPaciente({
       cedula: record.cedula_paciente,
       nombre: record.nombre_paciente,
@@ -313,7 +320,6 @@ export const nominalService = {
 
         if (!error && data) {
           savedItem = data;
-          // Guardar copia en nominales
           await supabase.from('nominales').insert({
             tipo_registro: 'quirurgica',
             registro_id: data.id,
@@ -329,7 +335,6 @@ export const nominalService = {
       }
     }
 
-    // Guardar simulador local como salvavidas
     const list = getLocalData<any[]>(L_KEY_QUIRURGICA, []);
     const id = savedItem?.id || list.length + 1000;
     const finalRecord = { ...record, id, created_at: new Date().toISOString() };
@@ -352,7 +357,6 @@ export const nominalService = {
   },
 
   async guardarObstetrica(record: any): Promise<any> {
-    // Asegurar madre (como paciente) y médico
     await this.asegurarPaciente({
       cedula: record.cedula_madre,
       nombre: record.nombre_madre,
@@ -381,7 +385,6 @@ export const nominalService = {
 
         if (!error && data) {
           savedItem = data;
-          // Guardar copia en nominales
           await supabase.from('nominales').insert({
             tipo_registro: 'obstetrica',
             registro_id: data.id,
@@ -397,7 +400,6 @@ export const nominalService = {
       }
     }
 
-    // Local
     const list = getLocalData<any[]>(L_KEY_OBSTETRICA, []);
     const id = savedItem?.id || list.length + 1000;
     const finalRecord = { ...record, id, created_at: new Date().toISOString() };
@@ -420,7 +422,6 @@ export const nominalService = {
   },
 
   async guardarDefuncion(record: any): Promise<any> {
-    // Asegurar médico
     await this.asegurarMedico({
       cedula: record.cedula_medico,
       nombre: record.nombre_medico,
@@ -428,7 +429,6 @@ export const nominalService = {
       telefono: record.telefono_medico
     });
 
-    // Asegurar fallecido como paciente opcional
     if (record.cedula_fallecido) {
       await this.asegurarPaciente({
         cedula: record.cedula_fallecido,
@@ -452,7 +452,6 @@ export const nominalService = {
 
         if (!error && data) {
           savedItem = data;
-          // Guardar copia en nominales
           await supabase.from('nominales').insert({
             tipo_registro: 'defuncion',
             registro_id: data.id,
@@ -468,7 +467,6 @@ export const nominalService = {
       }
     }
 
-    // Local
     const list = getLocalData<any[]>(L_KEY_DEFUNCION, []);
     const id = savedItem?.id || list.length + 1000;
     const finalRecord = { ...record, id, created_at: new Date().toISOString() };
@@ -555,7 +553,6 @@ export const nominalService = {
   async limpiarNominalesAntiguos(): Promise<number> {
     let deletedCount = 0;
     
-    // Purga Supabase
     if (supabase) {
       try {
         const sieteDiasAtras = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
@@ -572,7 +569,6 @@ export const nominalService = {
       }
     }
 
-    // Purga local
     const nominals = getLocalData<any[]>(L_KEY_NOMINALES, []);
     const sieteDiasAtrasMs = Date.now() - 7 * 24 * 3600 * 1000;
     const vigentes = nominals.filter(r => {
@@ -609,5 +605,36 @@ export const nominalService = {
         message: 'Acción de respaldo enviada al servidor de fondo. Ya que está ejecutando en un ambiente de desarrollo aislado, los backups CSV han sido empaquetados y guardados temporalmente para su despacho.'
       };
     }
+  },
+
+  // 6. OBTENER ESTABLECIMIENTOS REALES DESDE SUPABASE
+  async obtenerCentrosSalud(): Promise<string[]> {
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('TClinicas_populares')
+          .select('nombre_establecimiento')
+          .order('nombre_establecimiento', { ascending: true });
+
+        if (!error && data) {
+          // Extraemos los strings limpios de la columna correcta
+          return data.map((item: any) => item.nombre_establecimiento);
+        } else if (error) {
+          console.warn('Error cargando TClinicas_populares de Supabase:', error);
+        }
+      } catch (err) {
+        console.warn('Fallo de conexión al traer centros médicos:', err);
+      }
+    }
+
+    // Fallback de respaldo por si falla internet o Supabase
+    return [
+      "CLÍNICA POPULAR PARACOTOS",
+      "CDI DOCTOR JOSÉ GREGORIO HERNÁNDEZ",
+      "AMBULATORIO PRADO DE MARÍA"
+    ];
+  }
+    // Retorno Local Storage en caso de caída de internet o ambiente de desarrollo aislado
+    return getLocalData<string[]>(L_KEY_CENTROS_SALUD, []);
   }
 };

@@ -40,10 +40,8 @@ import { supabase, UserProfile } from '../../lib/supabase';
 import { googleSignIn, initAuth } from '../../lib/firebaseAuth';
 import { googleWorkspaceService } from '../../services/googleWorkspaceService';
 import { WorkspaceManager } from './WorkspaceManager';
-import NominalesManager from '../admin/NominalesManager';
-import GoogleScriptFormsTabs from '../admin/GoogleScriptFormsTabs';
 import EjesManager from '../admin/EjesManager';
-import { FileSpreadsheet } from 'lucide-react';
+import FormularioSemaforo from '../admin/FormularioSemaforo';
 
 interface Noticia {
   id: string | number;
@@ -129,7 +127,7 @@ const MOCK_TRANSITO_REPORTES: TransitoReporte[] = [
 
 export default function AdminPortal({ restricted = false }: { restricted?: boolean }) {
   const trigger3HoursRef = useRef<(() => void) | null>(null);
-  const [activeTab, setActiveTab] = useState<'mapa' | 'mapa_admin' | 'cumplimiento' | 'noticias' | 'calendario' | 'usuarios' | 'nominales' | 'widgets_google' | 'fichas_eje'>('cumplimiento');
+  const [activeTab, setActiveTab] = useState<'mapa' | 'mapa_admin' | 'cumplimiento' | 'noticias' | 'calendario' | 'usuarios' | 'fichas_eje'>('cumplimiento');
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
@@ -204,6 +202,7 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
   const [transitoReportes, setTransitoReportes] = useState<TransitoReporte[]>([]);
   const [filterSemaforo, setFilterSemaforo] = useState<string>('Todos');
   const [filterEje, setFilterEje] = useState<string>('Todos');
+  const [isSemaforoFormOpen, setIsSemaforoFormOpen] = useState(false);
 
   useEffect(() => {
     fetchNoticias();
@@ -423,8 +422,6 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
   const tabs = [
     { id: 'cumplimiento', label: 'Tránsito', icon: <Activity size={14} /> },
     { id: 'fichas_eje', label: 'Fichas de Eje', icon: <Database size={14} /> },
-    { id: 'nominales', label: 'Ramas Nominales', icon: <Layers size={14} /> },
-    { id: 'widgets_google', label: 'Formularios Google', icon: <FileSpreadsheet size={14} /> },
     { id: 'mapa', label: 'Mapa SIG', icon: <MapIcon size={14} /> },
     { id: 'noticias', label: 'Noticias', icon: <Newspaper size={14} /> },
     { id: 'calendario', label: 'Calendario', icon: <Calendar size={14} /> },
@@ -488,7 +485,7 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
             </div>
 
             {/* Filtros */}
-            <div className="flex gap-2">
+            <div className="flex flex-wrap sm:flex-nowrap gap-2">
               <select
                 value={filterEje}
                 onChange={(e) => setFilterEje(e.target.value)}
@@ -513,9 +510,16 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
               </select>
               <button
                 onClick={fetchTransitoReportes}
-                className="px-3 py-2 bg-[#0B3D5C] text-white rounded-xl"
+                className="px-3 py-2 bg-[#0B3D5C] text-white rounded-xl cursor-pointer"
+                title="Actualizar tabla"
               >
                 <RefreshCw size={14} />
+              </button>
+              <button
+                onClick={() => setIsSemaforoFormOpen(true)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-sm hover:shadow-md"
+              >
+                <Plus size={12} /> Actualizar Semáforo
               </button>
             </div>
 
@@ -747,24 +751,10 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
           </motion.div>
         )}
 
-        {/* COMPONENTE MAESTRO DE SISTEMAS NOMINALES */}
-        {activeTab === 'nominales' && (
-          <motion.div key="nominales-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <NominalesManager />
-          </motion.div>
-        )}
-
         {/* COMPONENTE ADMINISTRADOR DE FICHAS DE EJE */}
         {activeTab === 'fichas_eje' && (
           <motion.div key="fichas-eje-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <EjesManager supabase={supabase} />
-          </motion.div>
-        )}
-
-        {/* COMPONENTE DE FORMULARIOS DE GOOGLE APPS SCRIPT */}
-        {activeTab === 'widgets_google' && (
-          <motion.div key="widgets-google-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <GoogleScriptFormsTabs iframeHeight="720px" />
           </motion.div>
         )}
 
@@ -832,6 +822,21 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
                 <button type="submit" className="flex-1 py-3 bg-[#0B3D5C] text-white rounded-xl text-xs font-bold">Guardar</button>
               </div>
             </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* MODAL SEMAFORO FORM */}
+      {isSemaforoFormOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-xs overflow-y-auto">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-2xl bg-slate-50 border border-slate-100 rounded-3xl p-1.5 relative shadow-2xl">
+            <button 
+              onClick={() => setIsSemaforoFormOpen(false)}
+              className="absolute right-6 top-6 z-10 w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-650 rounded-full hover:bg-slate-200 cursor-pointer font-black text-lg transition-all"
+            >
+              ×
+            </button>
+            <FormularioSemaforo onSuccess={() => { fetchTransitoReportes(); setIsSemaforoFormOpen(false); }} />
           </motion.div>
         </div>
       )}
