@@ -607,34 +607,45 @@ export const nominalService = {
     }
   },
 
-  // ==========================================
-  // 6. OBTENER ESTABLECIMIENTOS REALES DESDE SUPABASE
-  // ==========================================
+  // =======================================================
+  // 6. OBTENER ESTABLECIMIENTOS REALES DESDE SUPABASE (PARCHEADO)
+  // =======================================================
   async obtenerCentrosSalud(): Promise<string[]> {
     if (supabase) {
       try {
         const { data, error } = await supabase
-          .from('TClinicas_populares')
-          .select('nombre_establecimiento')
+          .from('clinicas_populares') // Tu tabla real en minúsculas
+          .select('nombre_establecimiento, asic')
           .order('nombre_establecimiento', { ascending: true });
 
-        if (!error && data) {
-          return data.map((item: any) => item.nombre_establecimiento);
-        } else if (error) {
-          console.warn('Error cargando TClinicas_populares, aplicando fallback:', error);
+        if (!error && data && data.length > 0) {
+          return data.map((item: any) => {
+            const nombre = item.nombre_establecimiento;
+            
+            // SI EL NOMBRE VIENE VACÍO O CON EL CÓDIGO TÉCNICO CRUZaDO (Ej: ASIC ES-900)
+            if (!nombre || nombre.startsWith('ASIC')) {
+              // Si tenemos la ASIC ES-900 y estamos en tu zona (Paracotos), forzamos el nombre real
+              if (item.asic === 'ASIC ES-900' || nombre === 'ASIC ES-900') {
+                return "CLÍNICA POPULAR PARACOTOS";
+              }
+              // Si es otra ASIC, le damos un formato limpio para que el operador no vea solo el código
+              return `CDI / AMBULATORIO (${item.asic || 'S/A'})`;
+            }
+            
+            return nombre.toUpperCase();
+          });
         }
+        
+        if (error) console.warn('Error cargando clinicas_populares:', error);
       } catch (err) {
-        console.warn('Fallo de red en obtenerCentrosSalud, aplicando fallback:', err);
+        console.warn('Fallo de red en obtenerCentrosSalud:', err);
       }
     }
     
-    // Fallback de respaldo unificado (Establecimientos por defecto)
+    // Fallback local unificado (Garantiza que Paracotos siempre aparezca bien)
     return [
       "CLÍNICA POPULAR PARACOTOS",
       "CDI DOCTOR JOSÉ GREGORIO HERNÁNDEZ",
       "AMBULATORIO PRADO DE MARÍA"
     ];
   }
-}; // Fin del objeto nominalService
-
-  

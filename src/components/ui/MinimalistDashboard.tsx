@@ -40,9 +40,14 @@ export default function MinimalistDashboard({}: MinimalistDashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const hasActiveSearch = searchQuery.trim() !== '';
   const [openEjes, setOpenEjes] = useState<Record<string, boolean>>({
-    'ALTOS MIRANDINOS': true // Abrimos el primero por defecto para mejor experiencia visual
+    'ALTOS MIRANDINOS': true,
+    'VALLES DEL TUY': true,
+    'GUARENAS-GUATIRE': true,
+    'BARLOVENTO': true,
+    'METROPOLITANO': true
   });
   const [openAsics, setOpenAsics] = useState<Record<string, boolean>>({});
+  const [hasAutoOpened, setHasAutoOpened] = useState(false);
   const [systemTime, setSystemTime] = useState(new Date());
 
   // Reloj situacional de la sala de control
@@ -176,6 +181,20 @@ export default function MinimalistDashboard({}: MinimalistDashboardProps) {
       setOpenAsics(nextOpenAsics);
     }
   }, [searchQuery, ejesCalculados]);
+
+  // Auto-expandir todos los ASICs por defecto al cargar para visualización directiva inmediata
+  useEffect(() => {
+    if (ejesCalculados && ejesCalculados.length > 0 && !hasAutoOpened && !isLoading) {
+      const nextOpenAsics: Record<string, boolean> = {};
+      ejesCalculados.forEach(eje => {
+        eje.asics.forEach(asic => {
+          nextOpenAsics[eje.name + '_' + asic.name] = true;
+        });
+      });
+      setOpenAsics(nextOpenAsics);
+      setHasAutoOpened(true);
+    }
+  }, [ejesCalculados, hasAutoOpened, isLoading]);
 
   // Manejo fluido de expansión por clicks
   const toggleEje = (ejeName: string) => {

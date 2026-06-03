@@ -6,6 +6,7 @@ import AdminPortal from '../components/ui/AdminPortal';
 import NominalDashboard from '../components/ui/NominalDashboard';
 import InteractiveMirandaMap from '../components/InteractiveMirandaMap';
 import ReporteDiarioTabular from '../components/admin/ReporteDiarioTabular';
+import DashboardContainer from '../components/dashboard/DashboardContainer';
 import { supabase } from '../lib/supabase';
 import { LogOut, User, ShieldCheck, Clock, FileCheck, ExternalLink, LayoutDashboard, TrendingUp, AlertTriangle, LayoutGrid } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -220,10 +221,47 @@ export default function AdminDashboard() {
                 <div className="w-10 h-10 bg-[#0B3D5C] rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm">
                   {profile.nombre.charAt(0).toUpperCase()}
                 </div>
-                <div className="hidden sm:block">
+                <div className="hidden md:block">
                   <h2 className="text-lg font-bold text-gray-800 leading-none">Panel de Control Directivo</h2>
                   <p className="text-xs text-gray-400 mt-1 font-medium">Conectado como {profile.rol}</p>
                 </div>
+              </div>
+
+              {/* Central Switcher Tabs */}
+              <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200/80 max-w-sm sm:max-w-md">
+                <button
+                  onClick={() => setActiveDirectivoView('analitico')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all duration-150 cursor-pointer ${
+                    activeDirectivoView === 'analitico' 
+                      ? 'bg-white text-[#0B3D5C] shadow-xs' 
+                      : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  <TrendingUp size={11} />
+                  <span>Analítico</span>
+                </button>
+                <button
+                  onClick={() => setActiveDirectivoView('minimalista')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all duration-150 cursor-pointer ${
+                    activeDirectivoView === 'minimalista' 
+                      ? 'bg-white text-[#0B3D5C] shadow-xs' 
+                      : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  <LayoutGrid size={11} />
+                  <span>Fichas</span>
+                </button>
+                <button
+                  onClick={() => setActiveDirectivoView('mapa')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all duration-150 cursor-pointer ${
+                    activeDirectivoView === 'mapa' 
+                      ? 'bg-white text-[#0B3D5C] shadow-xs' 
+                      : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  <ExternalLink size={11} />
+                  <span>Enlaces</span>
+                </button>
               </div>
 
               <div className="flex items-center gap-3 sm:gap-6">
@@ -251,11 +289,13 @@ export default function AdminDashboard() {
           </header>
         </div>
 
-        <main className="max-w-7xl mx-auto p-6 md:p-8 w-full">
-          <MinimalistDashboard />
+        <main className="max-w-7xl mx-auto p-6 md:p-8 w-full flex-grow">
+          {activeDirectivoView === 'analitico' && <DashboardContainer />}
+          {activeDirectivoView === 'minimalista' && <MinimalistDashboard />}
+          {activeDirectivoView === 'mapa' && <InteractiveMirandaMap />}
         </main>
 
-        <footer className="mt-8 px-6 text-center opacity-30">
+        <footer className="mt-8 px-6 text-center opacity-30 mt-auto">
           <p className="text-[10px] text-[#0B3D5C] font-extrabold uppercase tracking-[0.3em]">
             Miranda Salud • Seguridad Reforzada 2026
           </p>

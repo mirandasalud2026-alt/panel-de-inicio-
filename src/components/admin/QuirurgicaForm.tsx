@@ -80,7 +80,7 @@ export default function QuirurgicaForm({ onSuccess, onCancel }: QuirurgicaFormPr
       }
     } catch (err) {
       console.error(err);
-    } filter {
+    } finally {
       setLoadingPaciente(false);
     }
   };
