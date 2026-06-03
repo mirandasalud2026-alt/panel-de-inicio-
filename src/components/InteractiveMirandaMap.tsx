@@ -215,7 +215,7 @@ export default function InteractiveMirandaCards({ isAdminMode = false }) {
                   rel="noreferrer"
                   className="w-full py-2 bg-slate-50 group-hover:bg-emerald-600 hover:scale-[1.01] active:scale-[0.99] transition-all rounded-lg text-[9px] font-black uppercase tracking-widest text-center block text-slate-700 group-hover:text-white border border-slate-200 group-hover:border-transparent shadow-sm"
                 >
-                  Ver Sala Virtual
+                  Ir al Formulario
                 </a>
               </div>
             </div>
