@@ -210,27 +210,27 @@ export const nominalService = {
       // Si la RPC falla, lo hacemos de forma manual por cliente
       try {
         // En quirurgicas (paciente)
-        await supabase.from('registros_quirurgicos')
+        await supabase.from('pregistros_quirurgicos')
           .update({ nombre_paciente: nombre, apellido_paciente: apellido, telefono_paciente: telefono, edad_paciente: edad, sexo_paciente: sexo })
           .eq('cedula_paciente', cedula);
 
         // En quirurgicas (medico)
-        await supabase.from('registros_quirurgicos')
+        await supabase.from('pregistros_quirurgicos')
           .update({ nombre_medico: nombre, apellido_medico: apellido, telefono_medico: telefono })
           .eq('cedula_medico', cedula);
 
         // En obstetricas (madre)
-        await supabase.from('registros_obstetricos')
+        await supabase.from('pregistros_obstetricos')
           .update({ nombre_madre: nombre, apellido_madre: apellido, telefono_madre: telefono, edad_madre: edad })
           .eq('cedula_madre', cedula);
 
         // En obstetricas (medico)
-        await supabase.from('registros_obstetricos')
+        await supabase.from('pregistros_obstetricos')
           .update({ nombre_medico: nombre, apellido_medico: apellido, telefono_medico: telefono })
           .eq('cedula_medico', cedula);
 
         // En defunciones (medico)
-        await supabase.from('registros_defunciones')
+        await supabase.from('pregistros_defunciones')
           .update({ nombre_medico: nombre, apellido_medico: apellido, telefono_medico: telefono })
           .eq('cedula_medico', cedula);
       } catch (err) {
@@ -313,7 +313,7 @@ export const nominalService = {
     if (supabase) {
       try {
         const { data, error } = await supabase
-          .from('registros_quirurgicos')
+          .from('pregistros_quirurgicos')
           .insert(record)
           .select()
           .single();
@@ -378,7 +378,7 @@ export const nominalService = {
     if (supabase) {
       try {
         const { data, error } = await supabase
-          .from('registros_obstetricos')
+          .from('pregistros_obstetricos')
           .insert(record)
           .select()
           .single();
@@ -445,7 +445,7 @@ export const nominalService = {
     if (supabase) {
       try {
         const { data, error } = await supabase
-          .from('registros_defunciones')
+          .from('pregistros_defunciones')
           .insert(record)
           .select()
           .single();
@@ -493,7 +493,7 @@ export const nominalService = {
     if (supabase) {
       try {
         const { data, error } = await supabase
-          .from('registros_quirurgicos')
+          .from('pregistros_quirurgicos')
           .select('*')
           .order('created_at', { ascending: false });
         if (!error && data) return data;
@@ -508,7 +508,7 @@ export const nominalService = {
     if (supabase) {
       try {
         const { data, error } = await supabase
-          .from('registros_obstetricos')
+          .from('pregistros_obstetricos')
           .select('*')
           .order('created_at', { ascending: false });
         if (!error && data) return data;
@@ -523,7 +523,7 @@ export const nominalService = {
     if (supabase) {
       try {
         const { data, error } = await supabase
-          .from('registros_defunciones')
+          .from('pregistros_defunciones')
           .select('*')
           .order('created_at', { ascending: false });
         if (!error && data) return data;

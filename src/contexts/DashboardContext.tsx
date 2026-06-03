@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { 
@@ -132,9 +132,15 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     }
   }, [fetchData]);
 
+  // Guardamos la última referencia de fetchData en un useRef para evitar re-suscripciones y bucles infinitos
+  const fetchDataRef = useRef(fetchData);
+  useEffect(() => {
+    fetchDataRef.current = fetchData;
+  }, [fetchData]);
+
   // Escucha en tiempo real (Realtime) y Polling de respaldo cada 15 segundos
   useEffect(() => {
-    fetchData();
+    fetchDataRef.current();
 
     if (!supabase) return;
 
@@ -143,7 +149,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'transito_reportes' },
-        () => { fetchData(true); }
+        () => { fetchDataRef.current(true); }
       )
       .subscribe();
 
@@ -152,12 +158,12 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'TASIC' },
-        () => { fetchData(true); }
+        () => { fetchDataRef.current(true); }
       )
       .subscribe();
 
     const intervalId = setInterval(() => {
-      fetchData(true);
+      fetchDataRef.current(true);
     }, 15000);
 
     return () => {
@@ -165,7 +171,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       supabase.removeChannel(realTimeChannel2);
       clearInterval(intervalId);
     };
-  }, [fetchData]);
+  }, []);
 
   const { profile } = useAuth();
 
