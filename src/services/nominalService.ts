@@ -81,16 +81,88 @@ export const nominalService = {
     const sanitized = cedula.toUpperCase().trim();
     if (!sanitized) return null;
 
+    const numericPart = sanitized.replace(/\D/g, '');
+    const candidates = [
+      sanitized,
+      numericPart,
+      `V-${numericPart}`,
+      `V${numericPart}`,
+      `E-${numericPart}`,
+      `E${numericPart}`
+    ].filter((value, index, self) => value && self.indexOf(value) === index);
+
     if (supabase) {
       try {
-        const { data, error } = await supabase
+        // 1. Buscar en tabla dedicada pacientes
+        const { data: pData, error: pError } = await supabase
           .from('pacientes')
           .select('*')
-          .eq('cedula', sanitized)
+          .in('cedula', candidates)
+          .limit(1)
           .maybeSingle();
         
-        if (!error && data) {
-          return data as Paciente;
+        if (!pError && pData) {
+          return pData as Paciente;
+        }
+
+        // 2. Si no, buscar en registros quirúrgicos
+        const { data: qData, error: qError } = await supabase
+          .from('pregistros_quirurgicos')
+          .select('cedula_paciente, nombre_paciente, apellido_paciente, edad_paciente, sexo_paciente, telefono_paciente')
+          .in('cedula_paciente', candidates)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (!qError && qData && qData.length > 0) {
+          const r = qData[0];
+          return {
+            cedula: r.cedula_paciente,
+            nombre: r.nombre_paciente,
+            apellido: r.apellido_paciente,
+            edad: parseInt(r.edad_paciente) || 0,
+            sexo: r.sexo_paciente || 'FEMENINO',
+            telefono: r.telefono_paciente || ''
+          };
+        }
+
+        // 3. Si no, buscar en registros obstétricos
+        const { data: oData, error: oError } = await supabase
+          .from('pregistros_obstetricos')
+          .select('cedula_madre, nombre_madre, apellido_madre, edad_madre, telefono_madre')
+          .in('cedula_madre', candidates)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (!oError && oData && oData.length > 0) {
+          const r = oData[0];
+          return {
+            cedula: r.cedula_madre,
+            nombre: r.nombre_madre,
+            apellido: r.apellido_madre,
+            edad: parseInt(r.edad_madre) || 0,
+            sexo: 'FEMENINO',
+            telefono: r.telefono_madre || ''
+          };
+        }
+
+        // 4. Si no, buscar en defunciones
+        const { data: dData, error: dError } = await supabase
+          .from('pregistros_defunciones')
+          .select('cedula_fallecido, nombre_fallecido, apellido_fallecido, edad_fallecido, sexo_fallecido')
+          .in('cedula_fallecido', candidates)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (!dError && dData && dData.length > 0) {
+          const r = dData[0];
+          return {
+            cedula: r.cedula_fallecido,
+            nombre: r.nombre_fallecido,
+            apellido: r.apellido_fallecido,
+            edad: parseInt(r.edad_fallecido) || 0,
+            sexo: r.sexo_fallecido || 'FEMENINO',
+            telefono: ''
+          };
         }
       } catch (err) {
         console.warn('Supabase find paciente error, using local fallback:', err);
@@ -99,7 +171,7 @@ export const nominalService = {
 
     // Fallback local
     const local = getLocalData<Paciente[]>(L_KEY_PACIENTES, []);
-    return local.find(p => p.cedula.toUpperCase() === sanitized) || null;
+    return local.find(p => candidates.includes(p.cedula.toUpperCase())) || null;
   },
 
   // 2. BÚSQUEDA AUTOMÁTICA DE MÉDICO
@@ -107,16 +179,82 @@ export const nominalService = {
     const sanitized = cedula.toUpperCase().trim();
     if (!sanitized) return null;
 
+    const numericPart = sanitized.replace(/\D/g, '');
+    const candidates = [
+      sanitized,
+      numericPart,
+      `V-${numericPart}`,
+      `V${numericPart}`,
+      `E-${numericPart}`,
+      `E${numericPart}`
+    ].filter((value, index, self) => value && self.indexOf(value) === index);
+
     if (supabase) {
       try {
-        const { data, error } = await supabase
+        // 1. Buscar en tabla dedicada de médicos
+        const { data: mData, error: mError } = await supabase
           .from('DATOS_DEL_MEDICO_TRATANTE')
           .select('*')
-          .eq('cedula', sanitized)
+          .in('cedula', candidates)
+          .limit(1)
           .maybeSingle();
         
-        if (!error && data) {
-          return data as Medico;
+        if (!mError && mData) {
+          return mData as Medico;
+        }
+
+        // 2. Buscar en registros quirúrgicos para autocompletar médico
+        const { data: qData, error: qError } = await supabase
+          .from('pregistros_quirurgicos')
+          .select('cedula_medico, nombre_medico, apellido_medico, telefono_medico')
+          .in('cedula_medico', candidates)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (!qError && qData && qData.length > 0) {
+          const r = qData[0];
+          return {
+            cedula: r.cedula_medico,
+            nombre: r.nombre_medico,
+            apellido: r.apellido_medico,
+            telefono: r.telefono_medico || ''
+          };
+        }
+
+        // 3. Buscar en registros obstétricos para autocompletar médico
+        const { data: oData, error: oError } = await supabase
+          .from('pregistros_obstetricos')
+          .select('cedula_medico, nombre_medico, apellido_medico, telefono_medico')
+          .in('cedula_medico', candidates)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (!oError && oData && oData.length > 0) {
+          const r = oData[0];
+          return {
+            cedula: r.cedula_medico,
+            nombre: r.nombre_medico,
+            apellido: r.apellido_medico,
+            telefono: r.telefono_medico || ''
+          };
+        }
+
+        // 4. Buscar en defunciones para autocompletar médico
+        const { data: dData, error: dError } = await supabase
+          .from('pregistros_defunciones')
+          .select('cedula_medico, nombre_medico, apellido_medico, telefono_medico')
+          .in('cedula_medico', candidates)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (!dError && dData && dData.length > 0) {
+          const r = dData[0];
+          return {
+            cedula: r.cedula_medico,
+            nombre: r.nombre_medico,
+            apellido: r.apellido_medico,
+            telefono: r.telefono_medico || ''
+          };
         }
       } catch (err) {
         console.warn('Supabase find medico error, using local fallback:', err);
@@ -125,7 +263,7 @@ export const nominalService = {
 
     // Fallback local
     const local = getLocalData<Medico[]>(L_KEY_MEDICOS, []);
-    return local.find(m => m.cedula.toUpperCase() === sanitized) || null;
+    return local.find(m => candidates.includes(m.cedula.toUpperCase())) || null;
   },
 
   // Guardar Paciente si no existe

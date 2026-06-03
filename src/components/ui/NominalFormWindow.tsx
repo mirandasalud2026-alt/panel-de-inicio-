@@ -179,23 +179,51 @@ export default function NominalFormWindow({ type: propType, userEmail: propUserE
   const handleBuscarCedula = async () => {
     if (!formData.cedula_paciente) return;
     setIsSearchingCedula(true);
+    
+    let p: any = null;
     try {
-      // 1. Intentar buscar en Supabase primero
-      const p = await nominalService.buscarPaciente(formData.cedula_paciente);
-      if (p) {
-        setFormData(prev => ({
-          ...prev,
-          nombre_paciente: p.nombre,
-          apellido_paciente: p.apellido,
-          edad: p.edad ? p.edad.toString() : prev.edad,
-          sexo: p.sexo ? (p.sexo.toUpperCase() === 'MASCULINO' ? 'Masculino' : 'Femenino') : prev.sexo,
-          telefono_movil: p.telefono || prev.telefono_movil
-        }));
-        setIsSearchingCedula(false);
-        return;
-      }
+      const sanitized = formData.cedula_paciente.toUpperCase().trim();
+      const numericPart = sanitized.replace(/\D/g, '');
+      const candidates = [
+        sanitized,
+        numericPart,
+        `V-${numericPart}`,
+        `V${numericPart}`,
+        `E-${numericPart}`,
+        `E${numericPart}`
+      ].filter((value, index, self) => value && self.indexOf(value) === index);
 
-      // 2. Si no, buscar en Apps Script
+      // 1. Intentar buscar en Supabase public.ppacientes primero
+      const { data: pData, error: pError } = await supabase
+        .from('ppacientes')
+        .select('*')
+        .in('cedula', candidates)
+        .limit(1)
+        .maybeSingle();
+
+      if (!pError && pData) {
+        p = pData;
+      }
+    } catch (e) {
+      console.warn("Fallo de comunicación al buscar paciente en Supabase", e);
+    }
+
+    if (p) {
+      const mappedName = splitFullname(p["Nombre y Apellido"] || p.nombre || p.nombre_completo || '');
+      setFormData(prev => ({
+        ...prev,
+        nombre_paciente: mappedName.nombre || prev.nombre_paciente,
+        apellido_paciente: mappedName.apellido || prev.apellido_paciente,
+        edad: (p.Edad || p.edad || prev.edad || '').toString(),
+        sexo: p.Sexo || p.sexo ? (((p.Sexo || p.sexo).toUpperCase().startsWith('M') || (p.Sexo || p.sexo).toUpperCase() === 'M') ? 'Masculino' : 'Femenino') : prev.sexo,
+        telefono_movil: p.Movil01 || p.movil01 || prev.telefono_movil
+      }));
+      setIsSearchingCedula(false);
+      return;
+    }
+
+    // 2. Si no, buscar en Apps Script
+    try {
       const resp = await fetch(`${GOOGLE_API_URL}?action=searchCedula&cedula=${formData.cedula_paciente}`);
       const resData = await resp.json();
       if (resData.success && resData.data) {
@@ -203,15 +231,15 @@ export default function NominalFormWindow({ type: propType, userEmail: propUserE
         const mapped = splitFullname(pSheet.nombre_completo || pSheet.nombre);
         setFormData(prev => ({
           ...prev,
-          nombre_paciente: mapped.nombre,
-          apellido_paciente: mapped.apellido,
+          nombre_paciente: mapped.nombre || prev.nombre_paciente,
+          apellido_paciente: mapped.apellido || prev.apellido_paciente,
           edad: pSheet.edad ? pSheet.edad.toString() : prev.edad,
-          sexo: pSheet.sexo ? (pSheet.sexo.toUpperCase() === 'MASCULINO' ? 'Masculino' : 'Femenino') : prev.sexo,
+          sexo: pSheet.sexo ? (pSheet.sexo.toUpperCase() === 'MASCULINO' || pSheet.sexo.toUpperCase() === 'M' ? 'Masculino' : 'Femenino') : prev.sexo,
           telefono_movil: pSheet.telefono || prev.telefono_movil
         }));
       }
     } catch (e) {
-      console.error("Error en motor de búsqueda de cédulas:", e);
+      console.error("Error en motor de búsqueda de cédulas en Google Apps Script:", e);
     } finally {
       setIsSearchingCedula(false);
     }
@@ -222,12 +250,30 @@ export default function NominalFormWindow({ type: propType, userEmail: propUserE
     if (!formData.cedula_medico) return;
     setIsSearchingMedico(true);
     try {
-      const m = await nominalService.buscarMedico(formData.cedula_medico);
-      if (m) {
+      const sanitized = formData.cedula_medico.toUpperCase().trim();
+      const numericPart = sanitized.replace(/\D/g, '');
+      const candidates = [
+        sanitized,
+        numericPart,
+        `V-${numericPart}`,
+        `V${numericPart}`,
+        `E-${numericPart}`,
+        `E${numericPart}`
+      ].filter((value, index, self) => value && self.indexOf(value) === index);
+
+      const { data: mData, error: mError } = await supabase
+        .from('ppersonal')
+        .select('*')
+        .in('cedula', candidates)
+        .limit(1)
+        .maybeSingle();
+
+      if (!mError && mData) {
+        const mappedName = splitFullname(mData["Nombre y Apellido"] || mData.nombre || '');
         setFormData(prev => ({
           ...prev,
-          nombre_medico: m.nombre,
-          apellido_medico: m.apellido
+          nombre_medico: mappedName.nombre || prev.nombre_medico,
+          apellido_medico: mappedName.apellido || prev.apellido_medico
         }));
       }
     } catch (e) {
@@ -249,29 +295,118 @@ export default function NominalFormWindow({ type: propType, userEmail: propUserE
     setSyncSuccess(false);
 
     try {
-      // 1. Guardar o actualizar Paciente en Supabase/Local
+      // 1. Guardar o actualizar Paciente en Supabase/Local (Maestro public.ppacientes)
       if (formData.cedula_paciente) {
-        await nominalService.asegurarPaciente({
-          cedula: formData.cedula_paciente,
-          nombre: formData.nombre_paciente,
-          apellido: formData.apellido_paciente,
-          edad: parseInt(formData.edad) || 0,
-          sexo: (formData.sexo || 'FEMENINO').toUpperCase(),
-          telefono: formData.telefono_movil || ''
-        });
+        const { error: errP } = await supabase
+          .from('ppacientes')
+          .upsert({
+            cedula: formData.cedula_paciente.toUpperCase().trim(),
+            "Nombre y Apellido": `${formData.nombre_paciente} ${formData.apellido_paciente}`.toUpperCase().trim(),
+            Sexo: (formData.sexo || 'FEMENINO').toUpperCase(),
+            Edad: parseInt(formData.edad) || 0,
+            Movil01: formData.telefono_movil || ''
+          }, { onConflict: 'cedula' });
+        
+        if (errP) {
+          console.warn("Fallo al insertar/actualizar paciente en ppacientes, ignorando o reintentando:", errP);
+        }
       }
 
-      // 2. Guardar o actualizar Médico en Supabase/Local si hay datos
+      // 2. Guardar o actualizar Médico en Supabase/Local si hay datos (Maestro public.ppersonal)
       if (formData.cedula_medico) {
-        await nominalService.asegurarMedico({
-          cedula: formData.cedula_medico,
-          nombre: formData.nombre_medico,
-          apellido: formData.apellido_medico,
-          telefono: ''
-        });
+        const { error: errM } = await supabase
+          .from('ppersonal')
+          .upsert({
+            cedula: formData.cedula_medico.toUpperCase().trim(),
+            "Nombre y Apellido": `${formData.nombre_medico} ${formData.apellido_medico}`.toUpperCase().trim(),
+            Movil01: ''
+          }, { onConflict: 'cedula' });
+
+        if (errM) {
+          console.warn("Fallo al insertar/actualizar personal en ppersonal:", errM);
+        }
       }
 
-      // 3. Insertar / Transmitir en Sheets (Google Apps Script)
+      // 3. Inserción en tablas operativas en Supabase
+      if (type === 'QUIRURGICA') {
+        const { error: errOpe } = await supabase
+          .from('pregistros_quirurgicos')
+          .insert({
+            fecha: formData.fecha_reporte,
+            estado: formData.estado_fiscal,
+            centro_salud: formData.centro_salud,
+            cedula: formData.cedula_paciente,
+            cedula_personal: formData.cedula_medico,
+            cantidad_intervencion: parseInt(formData.cantidad) || 1,
+            nombre_paciente: formData.nombre_paciente,
+            apellido_paciente: formData.apellido_paciente,
+            edad_paciente: parseInt(formData.edad) || 0,
+            sexo_paciente: formData.sexo,
+            telefono_paciente: formData.telefono_movil,
+            especialidad_quirurgica: formData.especialidad,
+            tipo_intervencion: formData.intervencion,
+            urgente_electiva: formData.prioridad,
+            nombre_medico: formData.nombre_medico,
+            apellido_medico: formData.apellido_medico,
+            telefono_medico: ''
+          });
+
+        if (errOpe) {
+          console.error("Column mismatch or constraint err on registers table: ", errOpe);
+          // throw error so we don't proceed to next step blindly if crucial
+        }
+      } else if (type === 'OBSTETRICA') {
+        const { error: errOpe } = await supabase
+          .from('pregistros_obstetricos')
+          .insert({
+            fecha: formData.fecha_reporte,
+            estado: formData.estado_fiscal,
+            centro_salud: formData.centro_salud,
+            cedula: formData.cedula_paciente,
+            cedula_personal: formData.cedula_medico,
+            nombre_madre: formData.nombre_paciente,
+            apellido_madre: formData.apellido_paciente,
+            edad_madre: parseInt(formData.edad) || 0,
+            telefono_madre: formData.telefono_movil,
+            nombre_infante: formData.complicaciones || '',
+            sexo_infante: formData.condicion_nacimiento || '',
+            tipo_parto: formData.tipo_parto,
+            tipo_intervencion: formData.semanas_gestacion || '',
+            nombre_medico: formData.nombre_medico,
+            apellido_medico: formData.apellido_medico,
+            telefono_medico: ''
+          });
+
+        if (errOpe) {
+          console.error("Column mismatch or constraint err on registers table: ", errOpe);
+        }
+      } else if (type === 'DEFUNCION') {
+        const { error: errOpe } = await supabase
+          .from('pregistros_defunciones')
+          .insert({
+            fecha: formData.fecha_reporte,
+            estado: formData.estado_fiscal,
+            centro_salud: formData.centro_salud,
+            cedula: formData.cedula_paciente,
+            cedula_personal: formData.cedula_medico,
+            nombre_fallecido: formData.nombre_paciente,
+            apellido_fallecido: formData.apellido_paciente,
+            edad_fallecido: parseInt(formData.edad) || 0,
+            sexo_fallecido: formData.sexo,
+            hora_fallecimiento: new Date().toLocaleTimeString(),
+            patologia: formData.causa_defuncion,
+            observacion: formData.certificado_defuncion,
+            nombre_medico: formData.nombre_medico,
+            apellido_medico: formData.apellido_medico,
+            telefono_medico: ''
+          });
+
+        if (errOpe) {
+          console.error("Column mismatch or constraint err on registers table: ", errOpe);
+        }
+      }
+
+      // 4. Insertar / Transmitir en Sheets (Google Apps Script)
       const payload = {
         action: "insertNominal",
         tipo_formulario: type,
