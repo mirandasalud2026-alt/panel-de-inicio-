@@ -270,6 +270,17 @@ export default function AdminDashboard() {
           </p>
         </footer>
       )}
+
+      {/* Botón de verificación de sesión */}
+      <button 
+        onClick={async () => {
+          const { data } = await supabase.auth.getSession();
+          alert('Sesión activa: ' + !!data.session + '\nEmail: ' + (data.session?.user?.email || 'ninguno'));
+        }}
+        style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 9999, background: '#0B3D5C', color: 'white', padding: '8px 16px', borderRadius: '50px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}
+      >
+        🔍 Verificar Sesión
+      </button>
     </div>
   );
 }
