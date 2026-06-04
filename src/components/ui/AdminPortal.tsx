@@ -40,7 +40,6 @@ import { supabase, UserProfile } from '../../lib/supabase';
 import { googleSignIn, initAuth } from '../../lib/firebaseAuth';
 import { googleWorkspaceService } from '../../services/googleWorkspaceService';
 import { WorkspaceManager } from './WorkspaceManager';
-import EjesManager from '../admin/EjesManager';
 import FormularioSemaforo from '../admin/FormularioSemaforo';
 
 interface Noticia {
@@ -127,7 +126,7 @@ const MOCK_TRANSITO_REPORTES: TransitoReporte[] = [
 
 export default function AdminPortal({ restricted = false }: { restricted?: boolean }) {
   const trigger3HoursRef = useRef<(() => void) | null>(null);
-  const [activeTab, setActiveTab] = useState<'mapa' | 'mapa_admin' | 'cumplimiento' | 'noticias' | 'calendario' | 'usuarios' | 'fichas_eje'>('cumplimiento');
+  const [activeTab, setActiveTab] = useState<'mapa' | 'mapa_admin' | 'cumplimiento' | 'noticias' | 'calendario' | 'usuarios'>('cumplimiento');
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
@@ -421,7 +420,6 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
 
   const tabs = [
     { id: 'cumplimiento', label: 'Tránsito', icon: <Activity size={14} /> },
-    { id: 'fichas_eje', label: 'Fichas de Eje', icon: <Database size={14} /> },
     { id: 'mapa', label: 'Mapa SIG', icon: <MapIcon size={14} /> },
     { id: 'noticias', label: 'Noticias', icon: <Newspaper size={14} /> },
     { id: 'calendario', label: 'Calendario', icon: <Calendar size={14} /> },
@@ -751,12 +749,7 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
           </motion.div>
         )}
 
-        {/* COMPONENTE ADMINISTRADOR DE FICHAS DE EJE */}
-        {activeTab === 'fichas_eje' && (
-          <motion.div key="fichas-eje-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <EjesManager supabase={supabase} />
-          </motion.div>
-        )}
+
 
       </AnimatePresence>
 
