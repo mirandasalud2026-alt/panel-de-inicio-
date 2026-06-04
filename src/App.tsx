@@ -1,7 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import InformativoPage from './pages/InformativoPage';
-import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
 import NominalDashboard from './components/ui/NominalDashboard';
 import NominalFormWindow from './components/ui/NominalFormWindow';

@@ -1,838 +1,226 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Users, 
-  UserPlus, 
-  Shield, 
   Trash2, 
-  Settings, 
-  Newspaper, 
-  Calendar,
-  Plus, 
-  Download, 
-  Play, 
-  Terminal, 
-  Clock, 
   RefreshCw,
-  Mountain,
-  Palmtree, 
-  BarChart,
-  Eraser,
-  PenBox,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
-  Map as MapIcon,
-  UserCheck,
-  UserX,
-  Database,
-  LayoutDashboard,
-  Activity,
-  TrendingUp,
-  Bell,
-  Server,
-  HardDrive,
-  Cloud,
   Layers
 } from 'lucide-react';
-import MapComponent from '../MapComponent';
 import { supabase, UserProfile } from '../../lib/supabase';
-import { googleSignIn, initAuth } from '../../lib/firebaseAuth';
-import { googleWorkspaceService } from '../../services/googleWorkspaceService';
-import { WorkspaceManager } from './WorkspaceManager';
-import FormularioSemaforo from '../admin/FormularioSemaforo';
+import NominalesManager from '../admin/NominalesManager';
 
-interface Noticia {
-  id: string | number;
-  titulo: string;
-  categoria: 'urgente' | 'informativa' | 'evento';
-  texto: string;
-  fecha: string;
-}
-
-interface TransitoReporte {
-  id_centro: string;
-  nombre_centro: string;
-  asic: string;
-  eje_geografico: string;
-  ultimo_reporte: string;
-  estado_semaforo: string;
-  horas_retraso: number;
-  actualizado_en: string;
-}
-
-const MOCK_TRANSITO_REPORTES: TransitoReporte[] = [
-  {
-    id_centro: "ALT_AS_GUA",
-    nombre_centro: "Ambulatorio Guaremal",
-    asic: "ASIC GUAREMAL",
-    eje_geografico: "ALTOS MIRANDINOS",
-    ultimo_reporte: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
-    estado_semaforo: "Verde",
-    horas_retraso: 0,
-    actualizado_en: new Date().toISOString()
-  },
-  {
-    id_centro: "ALT_AS_CAR_CDI",
-    nombre_centro: "CDI Carrizal",
-    asic: "ASIC CARRIZAL",
-    eje_geografico: "ALTOS MIRANDINOS",
-    ultimo_reporte: new Date(Date.now() - 30 * 3600 * 1000).toISOString(),
-    estado_semaforo: "Amarillo",
-    horas_retraso: 30,
-    actualizado_en: new Date().toISOString()
-  },
-  {
-    id_centro: "VAL_AS_OCU",
-    nombre_centro: "Ambulatorio Ocumare",
-    asic: "ASIC OCUMARE DEL TUY",
-    eje_geografico: "VALLES DEL TUY",
-    ultimo_reporte: new Date(Date.now() - 52 * 3600 * 1000).toISOString(),
-    estado_semaforo: "Rojo",
-    horas_retraso: 52,
-    actualizado_en: new Date().toISOString()
-  },
-  {
-    id_centro: "GUA_AS_GG",
-    nombre_centro: "Hospitalito de Guarenas",
-    asic: "ASIC GUARENAS",
-    eje_geografico: "GUARENAS-GUATIRE",
-    ultimo_reporte: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
-    estado_semaforo: "Verde",
-    horas_retraso: 0,
-    actualizado_en: new Date().toISOString()
-  },
-  {
-    id_centro: "BAR_AS_MAM",
-    nombre_centro: "CDI Mamporal",
-    asic: "ASIC MAMPORAL",
-    eje_geografico: "BARLOVENTO",
-    ultimo_reporte: new Date(Date.now() - 10 * 3600 * 1000).toISOString(),
-    estado_semaforo: "Verde",
-    horas_retraso: 0,
-    actualizado_en: new Date().toISOString()
-  },
-  {
-    id_centro: "MET_AS_CHA",
-    nombre_centro: "Ambulatorio El Pedregal",
-    asic: "ASIC CHACAO",
-    eje_geografico: "METROPOLITANO",
-    ultimo_reporte: new Date(Date.now() - 61 * 3600 * 1000).toISOString(),
-    estado_semaforo: "Rojo",
-    horas_retraso: 61,
-    actualizado_en: new Date().toISOString()
-  }
-];
-
-export default function AdminPortal({ restricted = false }: { restricted?: boolean }) {
-  const trigger3HoursRef = useRef<(() => void) | null>(null);
-  const [activeTab, setActiveTab] = useState<'mapa' | 'mapa_admin' | 'cumplimiento' | 'noticias' | 'calendario' | 'usuarios'>('cumplimiento');
+export default function AdminPortal() {
+  const [activeTab, setActiveTab] = useState<'nominales' | 'usuarios'>('nominales');
+  const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
+  const [isDbLoading, setIsDbLoading] = useState(false);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [activeTab]);
-  const [noticias, setNoticias] = useState<Noticia[]>([]);
-  const [eventos, setEventos] = useState<any[]>([]);
-  const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
-  const [editingNoticia, setEditingNoticia] = useState<Noticia | null>(null);
-  const [editingEvento, setEditingEvento] = useState<any | null>(null);
-  const [logs, setLogs] = useState<{ time: string, msg: string }[]>([]);
-  const [isDbLoading, setIsDbLoading] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [showLogs, setShowLogs] = useState(false);
-  const [runningAction, setRunningAction] = useState<string | null>(null);
-
-  const triggerSincronizacionReal = async (actionId: string, actionName: string) => {
-    if (runningAction) return;
-    setRunningAction(actionId);
-    agregarLog(`⚡ Solicitando ejecución: "${actionName}" (action=${actionId})...`);
-    
-    // Buscar la URL del script en localStorage, variable de entorno o fallback a la nueva URL
-    const envUrl = import.meta.env?.VITE_GOOGLE_SCRIPT_URL || '';
-    const webAppUrl = localStorage.getItem('miranda_apps_script_url') || 
-      envUrl ||
-      'https://script.google.com/macros/s/AKfycbw-4Wvfp32rueC8ncgONSIbe0BmlXl2L4kFlnAi7IffQ9NXMhs9YfhupMw-eeRoUWS1/exec';
-
-    // Mapeo seguro de acciones antiguas/sencillas a las nuevas correspondientes del Apps Script
-    let mappedActionId = actionId;
-    if (actionId === 'sincronizar') {
-      mappedActionId = 'procesarAmbosReportes';
-    } else if (actionId === 'configurar' || actionId === 'semanal') {
-      mappedActionId = 'procesarYReportarDatosSemanales';
-    }
-
-    try {
-      const response = await fetch('/api/run-script', {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: mappedActionId,
-          scriptUrl: webAppUrl
-        })
-      });
-
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const result = await response.json();
-      const actualData = result.data || result;
-      
-      if (actualData && (actualData.status === 'success' || actualData.status === 'success' || actualData.status === 'OK' || actualData.status === 'success' || actualData.message === 'Dashboard Actualizado')) {
-        agregarLog(`🟢 Sincronización exitosa: ${actualData.message || 'Dashboard Actualizado'}`);
-        alert(`¡Sincronización con éxito! Ejecutado: ${actionName}. Mensaje: ${actualData.message || 'Dashboard Actualizado'}`);
-        fetchTransitoReportes();
-      } else {
-        agregarLog(`🟢 Apps Script activado exitosamente: ${actualData.message || 'Completado'}`);
-        alert(`Ejecutado con éxito: ${actionName}`);
-      }
-    } catch (err: any) {
-      console.error(err);
-      agregarLog(`❌ Error en Apps Script: ${err.message}`);
-      // Fallback sutil
-      alert(`Petición enviada al Apps Script. Verifique los registros en la hoja de cálculo del Dashboard.`);
-    } finally {
-      setRunningAction(null);
-    }
-  };
-
-  // Compliance states
-  const [transitoReportes, setTransitoReportes] = useState<TransitoReporte[]>([]);
-  const [filterSemaforo, setFilterSemaforo] = useState<string>('Todos');
-  const [filterEje, setFilterEje] = useState<string>('Todos');
-  const [isSemaforoFormOpen, setIsSemaforoFormOpen] = useState(false);
 
   useEffect(() => {
-    fetchNoticias();
-    fetchEventos();
     fetchUsers();
-    fetchTransitoReportes();
-    agregarLog('Panel de Administración sincronizado.');
-
-    const unsubscribe = initAuth(
-      (u, token) => {
-        setUser(u);
-        setAccessToken(token);
-        agregarLog(`🌐 Conectado con cuenta de Google: ${u.email}`);
-      },
-      () => {
-        setUser(null);
-        setAccessToken(null);
-      }
-    );
-    return () => unsubscribe();
   }, []);
-
-  const agregarLog = (msg: string) => {
-    const time = new Date().toLocaleTimeString('es-VE');
-    setLogs(prev => [...prev.slice(-49), { time, msg }]);
-  };
-
-  const fetchNoticias = async () => {
-    if (!supabase) return;
-    try {
-      const { data, error } = await supabase
-        .from('noticias')
-        .select('*')
-        .order('fecha', { ascending: false });
-      if (!error && data) setNoticias(data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const fetchEventos = async () => {
-    if (!supabase) return;
-    try {
-      const { data, error } = await supabase
-        .from('calendario')
-        .select('*')
-        .order('fecha', { ascending: true });
-      if (!error && data) setEventos(data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
   const fetchUsers = async () => {
     if (!supabase) return;
+    setIsDbLoading(true);
     try {
-      const { data, error } = await supabase.from('usuarios').select('*');
-      if (!error && data) setSystemUsers(data);
-    } catch (err: any) {
-      console.error(err);
-    }
-  };
-
-  const fetchTransitoReportes = async () => {
-    if (!supabase) {
-      setTransitoReportes(MOCK_TRANSITO_REPORTES);
-      return;
-    }
-    try {
-      const { data, error } = await supabase
-        .from('transito_reportes')
-        .select('*')
-        .order('actualizado_en', { ascending: false });
-      if (!error && data && data.length > 0) {
-        setTransitoReportes(data);
-      } else {
-        setTransitoReportes(MOCK_TRANSITO_REPORTES);
+      const { data, error } = await supabase.from('usuarios').select('*').order('nombre', { ascending: true });
+      if (!error && data) {
+        setSystemUsers(data);
       }
-    } catch (err) {
-      setTransitoReportes(MOCK_TRANSITO_REPORTES);
+    } catch (err: any) {
+      console.error('Error fetching users:', err);
+    } finally {
+      setIsDbLoading(false);
     }
   };
 
   const handleUserStatus = async (userId: string, newStatus: string) => {
     if (!supabase) return;
     try {
-      await supabase.from('usuarios').update({ estado: newStatus }).eq('id', userId);
-      agregarLog(`👤 Usuario actualizado a ${newStatus}.`);
+      const { error } = await supabase.from('usuarios').update({ estado: newStatus }).eq('id', userId);
+      if (error) throw error;
       fetchUsers();
     } catch (err: any) {
-      agregarLog(`❌ Error: ${err.message}`);
+      alert(`Error al actualizar estado: ${err.message}`);
     }
   };
 
   const handleRoleChange = async (userId: string, newRole: string) => {
     if (!supabase) return;
     try {
-      await supabase.from('usuarios').update({ rol: newRole }).eq('id', userId);
-      agregarLog(`👤 Rol actualizado a ${newRole}.`);
+      const { error } = await supabase.from('usuarios').update({ rol: newRole }).eq('id', userId);
+      if (error) throw error;
       fetchUsers();
     } catch (err: any) {
-      agregarLog(`❌ Error: ${err.message}`);
+      alert(`Error al actualizar rol: ${err.message}`);
     }
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm('¿Eliminar este usuario?')) return;
+    if (!confirm('¿Está seguro de que desea eliminar permanentemente este usuario?')) return;
     if (!supabase) return;
     try {
-      await supabase.from('usuarios').delete().eq('id', userId);
-      agregarLog(`🗑️ Usuario eliminado.`);
+      const { error } = await supabase.from('usuarios').delete().eq('id', userId);
+      if (error) throw error;
       fetchUsers();
     } catch (err: any) {
-      agregarLog(`❌ Error: ${err.message}`);
+      alert(`Error al eliminar usuario: ${err.message}`);
     }
   };
-
-  const saveNoticia = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const noticiaData = {
-      titulo: formData.get('titulo') as string,
-      categoria: formData.get('categoria') as any,
-      texto: formData.get('texto') as string,
-      fecha: new Date().toISOString()
-    };
-
-    if (supabase) {
-      setIsDbLoading(true);
-      try {
-        if (editingNoticia) {
-          await supabase.from('noticias').update(noticiaData).eq('id', editingNoticia.id);
-        } else {
-          await supabase.from('noticias').insert(noticiaData);
-        }
-        await fetchNoticias();
-      } catch (err: any) {
-        agregarLog(`❌ Error: ${err.message}`);
-      } finally {
-        setIsDbLoading(false);
-      }
-    }
-    setIsModalOpen(false);
-    setEditingNoticia(null);
-    agregarLog(`📰 Noticia procesada.`);
-  };
-
-  const deleteNoticia = async (id: string | number) => {
-    if (!confirm('¿Eliminar esta noticia?')) return;
-    if (supabase) {
-      try {
-        await supabase.from('noticias').delete().eq('id', id);
-        await fetchNoticias();
-      } catch (err: any) {
-        agregarLog(`❌ Error: ${err.message}`);
-      }
-    }
-    agregarLog('🗑️ Noticia eliminada.');
-  };
-
-  const saveEvento = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const eventoData = {
-      titulo: formData.get('titulo') as string,
-      fecha: formData.get('fecha') as string,
-      tipo: formData.get('tipo') as string,
-      descripcion: formData.get('descripcion') as string,
-    };
-
-    if (supabase) {
-      setIsDbLoading(true);
-      try {
-        if (editingEvento) {
-          await supabase.from('calendario').update(eventoData).eq('id', editingEvento.id);
-        } else {
-          await supabase.from('calendario').insert(eventoData);
-        }
-        await fetchEventos();
-      } catch (err: any) {
-        agregarLog(`❌ Error: ${err.message}`);
-      } finally {
-        setIsDbLoading(false);
-      }
-    }
-    setIsCalendarModalOpen(false);
-    setEditingEvento(null);
-    agregarLog(`📅 Evento procesado.`);
-  };
-
-  const deleteEvento = async (id: any) => {
-    if (!confirm('¿Eliminar este evento?')) return;
-    if (supabase) {
-      try {
-        await supabase.from('calendario').delete().eq('id', id);
-        await fetchEventos();
-      } catch (err) {
-        console.error(err);
-      }
-    }
-    agregarLog('🗑️ Evento eliminado.');
-  };
-
-  // Filtrado de reportes
-  const reportesFiltrados = transitoReportes.filter(r => {
-    const matchesEje = filterEje === 'Todos' || r.eje_geografico.toUpperCase() === filterEje.toUpperCase();
-    const matchesSemaforo = filterSemaforo === 'Todos' || r.estado_semaforo.toUpperCase() === filterSemaforo.toUpperCase();
-    return matchesEje && matchesSemaforo;
-  });
-
-  const totalCentros = transitoReportes.length;
-  const cumplidosCount = transitoReportes.filter(r => r.estado_semaforo.toLowerCase() === 'verde').length;
-  const demoradosCount = transitoReportes.filter(r => r.estado_semaforo.toLowerCase() === 'amarillo').length;
-  const fueraCount = transitoReportes.filter(r => r.estado_semaforo.toLowerCase() === 'rojo').length;
-  const porcentajeCumplido = totalCentros > 0 ? Math.round((cumplidosCount / totalCentros) * 100) : 0;
 
   const tabs = [
-    { id: 'cumplimiento', label: 'Tránsito', icon: <Activity size={14} /> },
-    { id: 'mapa', label: 'Mapa SIG', icon: <MapIcon size={14} /> },
-    { id: 'noticias', label: 'Noticias', icon: <Newspaper size={14} /> },
-    { id: 'calendario', label: 'Calendario', icon: <Calendar size={14} /> },
-    { id: 'usuarios', label: 'Usuarios', icon: <Users size={14} /> },
-  ];
-
-  if (restricted) {
-    tabs.length = 2;
-  }
+    { id: 'nominales', label: 'Reportes Nominales', icon: <Layers size={14} /> },
+    { id: 'usuarios', label: 'Control de Usuarios', icon: <Users size={14} /> },
+  ] as const;
 
   return (
-    <div className="space-y-4">
-      {/* TABS COMPACTOS */}
-      <div className="flex flex-wrap gap-1.5 bg-white p-1.5 rounded-2xl shadow-sm border border-gray-100">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
-              activeTab === tab.id 
-                ? 'bg-[#0B3D5C] text-white shadow-md' 
-                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            {tab.icon} {tab.label}
-          </button>
-        ))}
+    <div className="space-y-6 font-sans">
+      {/* SECCIÓN CABECERA */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-5">
+        <div>
+          <h2 className="text-lg font-black uppercase text-slate-800 tracking-wider">
+            Portal Administrativo Central
+          </h2>
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
+            Gestión de Carga de Atenciones Nominales y Acceso del Personal
+          </p>
+        </div>
+
+        {/* TABS COMPACTOS */}
+        <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              id={`tab-btn-${tab.id}`}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                activeTab === tab.id 
+                  ? 'bg-[#0B3D5C] text-white shadow-sm' 
+                  : 'text-slate-400 hover:text-slate-650 hover:bg-slate-50'
+              }`}
+            >
+              {tab.icon} {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <AnimatePresence mode="wait">
-        {/* MAPA */}
-        {activeTab === 'mapa' && (
-          <motion.div key="mapa" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-            <div className="h-[480px] rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
-              <MapComponent />
-            </div>
+        {activeTab === 'nominales' && (
+          <motion.div 
+            key="nominales" 
+            initial={{ opacity: 0, y: 10 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            exit={{ opacity: 0, y: -10 }} 
+            className="space-y-4"
+          >
+            <NominalesManager />
           </motion.div>
         )}
 
-        {/* CUMPLIMIENTO COMPACTO */}
-        {activeTab === 'cumplimiento' && (
-          <motion.div key="cumplimiento" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-            {/* KPIs */}
-            <div className="grid grid-cols-4 gap-3">
-              <div className="bg-white p-3 rounded-xl border border-gray-100 text-center">
-                <p className="text-[9px] font-black text-gray-400 uppercase">Cumplimiento</p>
-                <p className="text-xl font-black text-[#0B3D5C]">{porcentajeCumplido}%</p>
-              </div>
-              <div className="bg-white p-3 rounded-xl border border-gray-100 text-center">
-                <p className="text-[9px] font-black text-green-500 uppercase">Verde</p>
-                <p className="text-xl font-black text-green-600">{cumplidosCount}</p>
-              </div>
-              <div className="bg-white p-3 rounded-xl border border-gray-100 text-center">
-                <p className="text-[9px] font-black text-amber-500 uppercase">Amarillo</p>
-                <p className="text-xl font-black text-amber-600">{demoradosCount}</p>
-              </div>
-              <div className="bg-white p-3 rounded-xl border border-gray-100 text-center">
-                <p className="text-[9px] font-black text-red-500 uppercase">Rojo</p>
-                <p className="text-xl font-black text-red-600">{fueraCount}</p>
-              </div>
-            </div>
-
-            {/* Filtros */}
-            <div className="flex flex-wrap sm:flex-nowrap gap-2">
-              <select
-                value={filterEje}
-                onChange={(e) => setFilterEje(e.target.value)}
-                className="flex-1 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-[10px] font-bold"
-              >
-                <option value="Todos">Todos los Ejes</option>
-                <option value="ALTOS MIRANDINOS">Altos Mirandinos</option>
-                <option value="VALLES DEL TUY">Valles del Tuy</option>
-                <option value="GUARENAS-GUATIRE">Guarenas-Guatire</option>
-                <option value="BARLOVENTO">Barlovento</option>
-                <option value="METROPOLITANO">Metropolitano</option>
-              </select>
-              <select
-                value={filterSemaforo}
-                onChange={(e) => setFilterSemaforo(e.target.value)}
-                className="flex-1 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-[10px] font-bold"
-              >
-                <option value="Todos">Todos</option>
-                <option value="Verde">Verde</option>
-                <option value="Amarillo">Amarillo</option>
-                <option value="Rojo">Rojo</option>
-              </select>
-              <button
-                onClick={fetchTransitoReportes}
-                className="px-3 py-2 bg-[#0B3D5C] text-white rounded-xl cursor-pointer"
-                title="Actualizar tabla"
-              >
-                <RefreshCw size={14} />
-              </button>
-              <button
-                onClick={() => setIsSemaforoFormOpen(true)}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-sm hover:shadow-md"
-              >
-                <Plus size={12} /> Actualizar Semáforo
-              </button>
-            </div>
-
-            {/* Tabla compacta */}
-            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-              <div className="max-h-96 overflow-y-auto">
-                <table className="w-full text-left">
-                  <thead className="sticky top-0 bg-gray-50 text-[9px] font-black text-gray-400 uppercase">
-                    <tr>
-                      <th className="px-3 py-2">Centro</th>
-                      <th className="px-3 py-2 hidden sm:table-cell">ASIC</th>
-                      <th className="px-3 py-2 text-center">Estado</th>
-                      <th className="px-3 py-2 text-right">Retraso</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {reportesFiltrados.map((r) => (
-                      <tr key={r.id_centro} className="hover:bg-gray-50">
-                        <td className="px-3 py-2">
-                          <p className="text-[10px] font-bold">{r.nombre_centro.split(' ').slice(0,2).join(' ')}</p>
-                          <p className="text-[8px] text-gray-400">{r.id_centro}</p>
-                        </td>
-                        <td className="px-3 py-2 hidden sm:table-cell">
-                          <p className="text-[9px] font-bold">{r.asic}</p>
-                          <p className="text-[8px] text-gray-400">{r.eje_geografico}</p>
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          <span className={`inline-block w-2 h-2 rounded-full ${
-                            r.estado_semaforo === 'Verde' ? 'bg-green-500' : 
-                            r.estado_semaforo === 'Amarillo' ? 'bg-amber-500' : 'bg-red-500'
-                          }`} />
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <span className={`text-[9px] font-bold ${
-                            r.horas_retraso === 0 ? 'text-green-600' : 
-                            r.horas_retraso < 48 ? 'text-amber-600' : 'text-red-600'
-                          }`}>
-                            {r.horas_retraso === 0 ? 'Al día' : `${r.horas_retraso}h`}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {reportesFiltrados.length > 0 && (
-              <p className="text-[9px] text-[#0B3D5C] font-black tracking-widest uppercase text-center mt-2 animate-pulse">
-                Desliza sobre la tabla para examinar los {reportesFiltrados.length} centros registrados
-              </p>
-            )}
-
-            {/* SECCIÓN DE SINCRONIZACIÓN DE TRÁNSITO - SÓLO BOTONES */}
-            <div className="border-t border-dashed border-gray-150 pt-6 mt-6 space-y-4">
-              <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                <div className="space-y-1 font-sans">
-                  <h4 className="text-xs font-black text-gray-800 uppercase tracking-tight flex items-center gap-1.5">
-                    <RefreshCw size={13} className="text-[#0B3D5C]" /> Sincronización Real del Tránsito Sanitario
-                  </h4>
-                  <p className="text-[10px] text-gray-400 font-semibold leading-relaxed">
-                    Ejecute de forma inmediata el barrido de los 5 libros sanitarios de Miranda o configure el trigger horario automático.
-                  </p>
-                </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => triggerSincronizacionReal('sincronizar', 'Sincronizar Todo')}
-                    disabled={runningAction !== null}
-                    className="flex items-center justify-center gap-2 px-5 py-3.5 bg-[#0B3D5C] hover:bg-[#072437] disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-xs hover:shadow-sm cursor-pointer font-sans"
-                  >
-                    {runningAction === 'sincronizar' ? (
-                      <>
-                        <RefreshCw size={12} className="animate-spin" /> Sincronizando...
-                      </>
-                    ) : (
-                      <>
-                        <Play size={12} /> Sincronizar Datos Ahora
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => triggerSincronizacionReal('configurar', 'Configurar Cron')}
-                    disabled={runningAction !== null}
-                    className="flex items-center justify-center gap-2 px-5 py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-xs hover:shadow-sm cursor-pointer font-sans"
-                  >
-                    <Clock size={12} /> Activar Piloto Automático (Cron)
-                  </button>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* NOTICIAS COMPACTO */}
-        {activeTab === 'noticias' && (
-          <motion.div key="noticias" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
-            <div className="flex justify-end">
-              <button 
-                onClick={() => { setEditingNoticia(null); setIsModalOpen(true); }}
-                className="flex items-center gap-1 px-3 py-1.5 bg-[#0B3D5C] text-white rounded-xl text-[9px] font-black"
-              >
-                <Plus size={12} /> Nueva
-              </button>
-            </div>
-
-            <div className="space-y-2 max-h-[500px] overflow-y-auto">
-              {noticias.slice(0, 10).map(noticia => (
-                <div key={noticia.id} className="bg-white p-3 rounded-xl border border-gray-100 relative">
-                  <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${
-                    noticia.categoria === 'urgente' ? 'bg-red-500' : 
-                    noticia.categoria === 'informativa' ? 'bg-blue-500' : 'bg-emerald-500'
-                  }`} />
-                  <div className="pl-3">
-                    <div className="flex justify-between items-start">
-                      <span className="text-[8px] font-black text-gray-400">{noticia.fecha}</span>
-                      <div className="flex gap-1">
-                        <button onClick={() => { setEditingNoticia(noticia); setIsModalOpen(true); }} className="p-1 text-gray-400 hover:text-blue-500">
-                          <PenBox size={10} />
-                        </button>
-                        <button onClick={() => deleteNoticia(noticia.id)} className="p-1 text-gray-400 hover:text-red-500">
-                          <Trash2 size={10} />
-                        </button>
-                      </div>
-                    </div>
-                    <p className="text-[10px] font-bold mt-1">{noticia.titulo}</p>
-                    <p className="text-[9px] text-gray-500 line-clamp-2 mt-0.5">{noticia.texto}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        {/* CALENDARIO COMPACTO */}
-        {activeTab === 'calendario' && (
-          <motion.div key="calendario" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
-            <div className="flex justify-end">
-              <button 
-                onClick={() => { setEditingEvento(null); setIsCalendarModalOpen(true); }}
-                className="flex items-center gap-1 px-3 py-1.5 bg-[#0B3D5C] text-white rounded-xl text-[9px] font-black"
-              >
-                <Plus size={12} /> Agendar
-              </button>
-            </div>
-
-            <div className="space-y-2 max-h-[500px] overflow-y-auto">
-              {eventos.slice(0, 10).map(evento => (
-                <div key={evento.id} className="bg-white p-3 rounded-xl border border-gray-100">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="text-[9px] font-black text-gray-400">{evento.fecha}</span>
-                      <p className="text-[10px] font-bold mt-0.5">{evento.titulo}</p>
-                      <p className="text-[8px] text-gray-500 mt-0.5 line-clamp-1">{evento.descripcion}</p>
-                    </div>
-                    <div className="flex gap-1">
-                      <button onClick={() => { setEditingEvento(evento); setIsCalendarModalOpen(true); }} className="p-1 text-gray-400 hover:text-blue-500">
-                        <PenBox size={10} />
-                      </button>
-                      <button onClick={() => deleteEvento(evento.id)} className="p-1 text-gray-400 hover:text-red-500">
-                        <Trash2 size={10} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        {/* USUARIOS COMPACTO */}
         {activeTab === 'usuarios' && (
-          <motion.div key="usuarios" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
-            <div className="flex justify-end">
-              <button onClick={fetchUsers} className="px-3 py-1.5 bg-gray-50 rounded-xl text-[9px] font-black">
-                <RefreshCw size={12} className={isDbLoading ? 'animate-spin' : ''} />
-              </button>
-            </div>
-
-            <div className="space-y-2 max-h-[500px] overflow-y-auto">
-              {systemUsers.map(u => (
-                <div key={u.id} className="bg-white p-3 rounded-xl border border-gray-100">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-[#0B3D5C]/10 flex items-center justify-center text-[10px] font-bold">
-                          {u.nombre.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold">{u.nombre}</p>
-                          <p className="text-[8px] text-gray-400 truncate max-w-[150px]">{u.email}</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-2 mt-2">
-                        <select 
-                          value={u.rol}
-                          onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                          className="text-[8px] font-black px-2 py-0.5 rounded-md bg-gray-100"
-                        >
-                          <option value="admin">Admin</option>
-                          <option value="directivo">Directivo</option>
-                          <option value="oficina">Operador</option>
-                        </select>
-                        <select 
-                          value={(u as any).estado || 'pendiente'}
-                          onChange={(e) => handleUserStatus(u.id, e.target.value)}
-                          className="text-[8px] font-black px-2 py-0.5 rounded-md bg-gray-100"
-                        >
-                          <option value="aprobado">Aprobado</option>
-                          <option value="pendiente">Pendiente</option>
-                          <option value="rechazado">Rechazado</option>
-                        </select>
-                        <button onClick={() => handleDeleteUser(u.id)} className="text-red-400 hover:text-red-600">
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className={`w-2 h-2 rounded-full ${
-                      (u as any).estado === 'aprobado' ? 'bg-green-500' : 
-                      (u as any).estado === 'rechazado' ? 'bg-red-500' : 'bg-amber-500'
-                    }`} />
-                  </div>
+          <motion.div 
+            key="usuarios" 
+            initial={{ opacity: 0, y: 10 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            exit={{ opacity: 0, y: -10 }} 
+            className="space-y-4"
+          >
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+                <div>
+                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Usuarios Registrados en el Sistema</h3>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Control de credenciales, roles de acceso y aprobación de cuentas</p>
                 </div>
-              ))}
+                <button 
+                  onClick={fetchUsers} 
+                  className="p-2.5 bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800 rounded-xl transition-all cursor-pointer flex items-center justify-center"
+                >
+                  <RefreshCw size={14} className={isDbLoading ? 'animate-spin' : ''} />
+                </button>
+              </div>
+
+              {systemUsers.length === 0 ? (
+                <div className="py-12 text-center text-slate-400 text-xs font-black uppercase tracking-widest">
+                  {isDbLoading ? 'Cargando directivas de usuarios...' : 'No hay usuarios registrados'}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left font-sans">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100 text-[9px] font-black text-slate-400 uppercase">
+                        <th className="px-4 py-3">Nombre / Identidad</th>
+                        <th className="px-4 py-3">Rol del Sistema</th>
+                        <th className="px-4 py-3 text-center">Estado</th>
+                        <th className="px-4 py-3 text-right">Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {systemUsers.map(u => (
+                        <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-xl bg-[#0B3D5C]/10 flex items-center justify-center text-[11px] font-black text-[#0B3D5C]">
+                                {u.nombre.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="text-[11px] font-bold text-slate-800 uppercase">{u.nombre}</p>
+                                <p className="text-[9px] text-slate-400 font-mono tracking-tight mt-0.5">{u.email}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <select 
+                              value={u.rol}
+                              onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                              className="text-[9px] font-black px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white shadow-xs focus:outline-none focus:border-[#0B3D5C]"
+                            >
+                              <option value="admin">Administrador</option>
+                              <option value="nominal">Operador Nominal</option>
+                            </select>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="inline-flex items-center gap-2">
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                u.estado === 'aprobado' ? 'bg-green-500' : 
+                                u.estado === 'rechazado' ? 'bg-red-500' : 'bg-amber-500'
+                              }`} />
+                              <select 
+                                value={u.estado || 'pendiente'}
+                                onChange={(e) => handleUserStatus(u.id, e.target.value)}
+                                className={`text-[9px] font-black px-2 py-1 rounded-md uppercase tracking-wider focus:outline-none ${
+                                  u.estado === 'aprobado' ? 'bg-green-50 text-green-700 border-green-200' :
+                                  u.estado === 'rechazado' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+                                }`}
+                              >
+                                <option value="aprobado">Aprobado</option>
+                                <option value="pendiente">Pendiente</option>
+                                <option value="rechazado">Rechazado</option>
+                              </select>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <button 
+                              onClick={() => handleDeleteUser(u.id)} 
+                              className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                              title="Eliminar usuario permanentemente"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
-
-
-
       </AnimatePresence>
-
-      {/* LOGS COMPACTOS (opcional) */}
-      {showLogs && (
-        <div className="bg-gray-900 rounded-xl p-3 mt-4">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-[8px] font-black text-gray-400 uppercase">Registro</span>
-            <button onClick={() => setShowLogs(false)} className="text-gray-500 text-[8px]">×</button>
-          </div>
-          <div className="space-y-0.5 max-h-32 overflow-y-auto">
-            {logs.map((log, i) => (
-              <p key={i} className="text-[8px] font-mono text-green-400"><span className="text-gray-500">[{log.time}]</span> {log.msg}</p>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {!showLogs && (
-        <button onClick={() => setShowLogs(true)} className="text-[8px] text-gray-400 hover:text-gray-600">
-          📋 Mostrar registro
-        </button>
-      )}
-
-      {/* MODAL NOTICIA */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-white w-full max-w-md rounded-2xl p-5">
-            <h3 className="text-sm font-bold mb-4">{editingNoticia ? 'Editar Noticia' : 'Nueva Noticia'}</h3>
-            <form onSubmit={saveNoticia} className="space-y-3">
-              <input name="titulo" required defaultValue={editingNoticia?.titulo} placeholder="Título" className="w-full p-3 bg-gray-50 rounded-xl text-sm" />
-              <select name="categoria" defaultValue={editingNoticia?.categoria || 'informativa'} className="w-full p-3 bg-gray-50 rounded-xl text-sm">
-                <option value="informativa">Informativa</option>
-                <option value="urgente">Urgente</option>
-                <option value="evento">Evento</option>
-              </select>
-              <textarea name="texto" required rows={3} defaultValue={editingNoticia?.texto} placeholder="Contenido..." className="w-full p-3 bg-gray-50 rounded-xl text-sm" />
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 bg-gray-100 rounded-xl text-xs font-bold">Cancelar</button>
-                <button type="submit" className="flex-1 py-3 bg-[#0B3D5C] text-white rounded-xl text-xs font-bold">Guardar</button>
-              </div>
-            </form>
-          </motion.div>
-        </div>
-      )}
-
-      {/* MODAL CALENDARIO */}
-      {isCalendarModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-white w-full max-w-md rounded-2xl p-5">
-            <h3 className="text-sm font-bold mb-4">{editingEvento ? 'Editar Evento' : 'Nuevo Evento'}</h3>
-            <form onSubmit={saveEvento} className="space-y-3">
-              <input name="titulo" required defaultValue={editingEvento?.titulo} placeholder="Título" className="w-full p-3 bg-gray-50 rounded-xl text-sm" />
-              <input name="fecha" type="date" required defaultValue={editingEvento?.fecha} className="w-full p-3 bg-gray-50 rounded-xl text-sm" />
-              <select name="tipo" defaultValue={editingEvento?.tipo || 'jornada'} className="w-full p-3 bg-gray-50 rounded-xl text-sm">
-                <option value="jornada">Jornada</option>
-                <option value="vacunacion">Vacunación</option>
-                <option value="reunion">Reunión</option>
-              </select>
-              <textarea name="descripcion" required rows={2} defaultValue={editingEvento?.descripcion} placeholder="Descripción" className="w-full p-3 bg-gray-50 rounded-xl text-sm" />
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setIsCalendarModalOpen(false)} className="flex-1 py-3 bg-gray-100 rounded-xl text-xs font-bold">Cancelar</button>
-                <button type="submit" className="flex-1 py-3 bg-[#0B3D5C] text-white rounded-xl text-xs font-bold">Guardar</button>
-              </div>
-            </form>
-          </motion.div>
-        </div>
-      )}
-
-      {/* MODAL SEMAFORO FORM */}
-      {isSemaforoFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-xs overflow-y-auto">
-          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-2xl bg-slate-50 border border-slate-100 rounded-3xl p-1.5 relative shadow-2xl">
-            <button 
-              onClick={() => setIsSemaforoFormOpen(false)}
-              className="absolute right-6 top-6 z-10 w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-650 rounded-full hover:bg-slate-200 cursor-pointer font-black text-lg transition-all"
-            >
-              ×
-            </button>
-            <FormularioSemaforo onSuccess={() => { fetchTransitoReportes(); setIsSemaforoFormOpen(false); }} />
-          </motion.div>
-        </div>
-      )}
     </div>
   );
 }

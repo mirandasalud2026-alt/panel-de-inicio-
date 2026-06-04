@@ -26,8 +26,8 @@ export default function LandingPage() {
   // Controls whether we are currently viewing the login panel
   const [showLogin, setShowLogin] = useState(false);
 
-  // Active role tab: 'nominal' | 'directivo' | 'admin'
-  const [activeRole, setActiveRole] = useState<'nominal' | 'directivo' | 'admin'>('nominal');
+  // Active role tab: 'nominal' | 'admin'
+  const [activeRole, setActiveRole] = useState<'nominal' | 'admin'>('nominal');
   const [email, setEmail] = useState('nominal@mirandasalud.com');
   const [password, setPassword] = useState('nominal2026');
   const [error, setError] = useState('');
@@ -39,9 +39,6 @@ export default function LandingPage() {
     if (activeRole === 'nominal') {
       setEmail('nominal@mirandasalud.com');
       setPassword('nominal2026');
-    } else if (activeRole === 'directivo') {
-      setEmail('directivo@miranda.gob.ve');
-      setPassword('Directo.26');
     } else {
       setEmail('miranda.salud2026@gmail.com');
       setPassword('Roble.26');
@@ -81,17 +78,6 @@ export default function LandingPage() {
         return;
       }
 
-      if (email === 'directivo@miranda.gob.ve' && password === 'Directo.26') {
-        localStorage.setItem('sim_demo_admin', 'true');
-        localStorage.setItem('sim_demo_role', 'directivo');
-        localStorage.removeItem('sim_demo_cod_eje');
-        localStorage.removeItem('sim_demo_cod_asic');
-        localStorage.removeItem('sim_demo_id_centro');
-        
-        window.location.href = '/admin/dashboard';
-        return;
-      }
-
       // Supabase connection
       if (!supabase) {
         throw new Error('Servicio de Base de Datos no disponible.');
@@ -119,21 +105,14 @@ export default function LandingPage() {
     nominal: {
       title: 'Ficha Nominal',
       badge: 'Carga de Datos',
-      description: 'Acceso para el personal médico territorial encargado del registro de partos, cirugías, defunciones y fichas operativas diarias.',
+      description: 'Acceso para el personal médico encargado del registro de partos, cirugías, defunciones y de atenciones nominales diarias.',
       color: 'border-blue-500 text-blue-600 bg-blue-50/50 hover:bg-blue-100/40',
       activeColor: 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/10'
-    },
-    directivo: {
-      title: 'Ficha Directiva',
-      badge: 'Coordinación SIM',
-      description: 'Acceso para Directores Estatales, Jefes de Eje y Coordinadores de ASIC para el análisis, consulta y monitoreo del semáforo de cumplimiento.',
-      color: 'border-amber-500 text-amber-600 bg-amber-50/50 hover:bg-amber-100/40',
-      activeColor: 'bg-amber-600 text-white border-amber-600 shadow-lg shadow-amber-500/10'
     },
     admin: {
       title: 'Administración',
       badge: 'Control Global',
-      description: 'Superintendencia de usuarios, gestión del catálogo de establecimientos del estado, edición de ejes territoriales y sincronización API.',
+      description: 'Panel de control de usuarios aprobados, supervisión administrativa central y depuración/auditoría de atenciones nominales registradas.',
       color: 'border-[#0B3D5C] text-[#0B3D5C] bg-[#0b3d5c]/5 hover:bg-[#0b3d5c]/10',
       activeColor: 'bg-[#0B3D5C] text-white border-[#0B3D5C] shadow-lg shadow-[#0B3D5C]/10'
     }
@@ -284,7 +263,7 @@ export default function LandingPage() {
                 </div>
 
                 {/* ROLE SELECTION TABS */}
-                <div className="grid grid-cols-3 gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-150 shrink-0">
+                <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-150 shrink-0">
                   <button
                     type="button"
                     onClick={() => setActiveRole('nominal')}
@@ -295,17 +274,6 @@ export default function LandingPage() {
                     }`}
                   >
                     Nominal
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveRole('directivo')}
-                    className={`text-[10px] font-black uppercase py-2.5 rounded-xl transition-all cursor-pointer ${
-                      activeRole === 'directivo' 
-                        ? 'bg-white text-[#0B3D5C] shadow-sm font-black' 
-                        : 'text-slate-400 hover:text-slate-600 font-bold'
-                    }`}
-                  >
-                    Directivo
                   </button>
                   <button
                     type="button"
@@ -401,9 +369,6 @@ export default function LandingPage() {
                         if (activeRole === 'nominal') {
                           localStorage.setItem('sim_demo_admin', 'true');
                           localStorage.setItem('sim_demo_role', 'nominal');
-                        } else if (activeRole === 'directivo') {
-                          localStorage.setItem('sim_demo_admin', 'true');
-                          localStorage.setItem('sim_demo_role', 'directivo');
                         } else {
                           localStorage.setItem('sim_demo_admin', 'true');
                           localStorage.setItem('sim_demo_role', 'admin');

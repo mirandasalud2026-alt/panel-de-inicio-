@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import MinimalistDashboard from '../components/ui/MinimalistDashboard';
-import OficinaDashboard from '../components/ui/OficinaDashboard';
 import AdminPortal from '../components/ui/AdminPortal';
 import NominalDashboard from '../components/ui/NominalDashboard';
-import { LogOut, User, AlertTriangle, RefreshCw, Key } from 'lucide-react';
+import { LogOut, AlertTriangle, RefreshCw } from 'lucide-react';
 
 export default function AdminDashboard() {
   const { profile, loading, signOut } = useAuth();
@@ -25,15 +23,6 @@ export default function AdminDashboard() {
       setTookTooLong(false);
     }
   }, [loading]);
-
-  const handleBypassDemo = () => {
-    localStorage.setItem('sim_demo_admin', 'true');
-    localStorage.setItem('sim_demo_role', 'admin');
-    localStorage.removeItem('sim_demo_cod_eje');
-    localStorage.removeItem('sim_demo_cod_asic');
-    localStorage.removeItem('sim_demo_id_centro');
-    window.location.reload();
-  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,22 +78,14 @@ export default function AdminDashboard() {
                 <span>¿CONEXIÓN LENTA O INESTABLE?</span>
               </div>
               <p className="text-[10px] text-amber-700/90 font-semibold leading-relaxed">
-                La comprobación con Supabase está tomando más de lo previsto. Puede reintentar, refrescar la página, o ingresar de inmediato utilizando el canal de resguardo sin dependencia de red.
+                La comprobación con Supabase está tomando más de lo previsto.
               </p>
-              <div className="flex flex-col gap-2 pt-1 font-sans">
-                <button
-                  onClick={() => window.location.reload()}
-                  className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest cursor-pointer transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <RefreshCw size={11} /> Reintentar Conexión en Vivo
-                </button>
-                <button
-                  onClick={handleBypassDemo}
-                  className="w-full py-2.5 bg-[#0B3D5C] hover:bg-[#124b6e] text-white rounded-xl text-[9px] font-black uppercase tracking-widest cursor-pointer transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <Key size={11} /> Forzar Entrada de Resguardo (Demo Admin)
-                </button>
-              </div>
+              <button
+                onClick={() => window.location.reload()}
+                className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+              >
+                <RefreshCw size={11} /> Reintentar Conexión en Vivo
+              </button>
             </div>
           )}
         </div>
@@ -233,7 +214,7 @@ export default function AdminDashboard() {
                     </span>
                   </div>
                   <span className="px-2.5 py-1 bg-blue-50 text-blue-700 text-[9px] font-black uppercase tracking-wider rounded-lg border border-blue-100">
-                    {profile.rol === 'admin' ? 'Administrador' : profile.rol === 'directivo' ? 'Ficha Directiva' : profile.rol === 'oficina' ? 'Operador Oficina' : profile.rol}
+                    {profile.rol === 'admin' ? 'Administrador' : 'Operador Nominal'}
                   </span>
                 </div>
 
@@ -256,8 +237,6 @@ export default function AdminDashboard() {
         {/* Dynamic child workspace rendering */}
         <div className={profile.rol === 'nominal' ? "" : "p-4 max-w-[1600px] w-full mx-auto"}>
           {profile.rol === 'admin' && <AdminPortal />}
-          {profile.rol === 'directivo' && <MinimalistDashboard />}
-          {profile.rol === 'oficina' && <OficinaDashboard />}
           {profile.rol === 'nominal' && <NominalDashboard />}
         </div>
       </div>
@@ -270,8 +249,6 @@ export default function AdminDashboard() {
           </p>
         </footer>
       )}
-
-
     </div>
   );
 }

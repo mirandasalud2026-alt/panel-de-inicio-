@@ -80,8 +80,8 @@ export function useAuth() {
         const role = localStorage.getItem('sim_demo_role');
         const simulatedProfile: UserProfile = {
           id: 'demo-user-id',
-          nombre: role === 'admin' ? 'Administrador General' : role === 'directivo' ? 'Ficha Directiva SIM' : role === 'nominal' ? 'Ficha Nominal SIM' : 'Operador de Oficina',
-          email: role === 'admin' ? 'miranda.salud2026@gmail.com' : role === 'directivo' ? 'directivo@miranda.gob.ve' : role === 'nominal' ? 'nominal@mirandasalud.com' : 'oficina_centro@miranda.gob.ve',
+          nombre: role === 'admin' ? 'Administrador General' : 'Cargador Nominal Territorial',
+          email: role === 'admin' ? 'miranda.salud2026@gmail.com' : 'nominal@mirandasalud.com',
           rol: (role || 'admin') as any,
           estado: 'aprobado',
           id_centro: localStorage.getItem('sim_demo_id_centro'),

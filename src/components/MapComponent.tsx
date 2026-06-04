@@ -57,23 +57,10 @@ const INITIAL_TERRITORIALES: EjeTerritorial[] = [
 
 export default function InteractiveMirandaCards({ isAdminMode = false }) {
   const [ejes, setEjes] = useState<EjeTerritorial[]>(INITIAL_TERRITORIALES);
-  const [stats, setStats] = useState<Record<string, number>>({});
   const [editingEje, setEditingEje] = useState<EjeTerritorial | null>(null);
   const [editName, setEditName] = useState('');
   const [editBg, setEditBg] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-
-  const fetchTotales = async () => {
-    if (!supabase) return;
-    const { data } = await supabase.rpc('get_resumen_totales');
-    if (data) {
-      const mappedStats = data.reduce((acc: any, curr: any) => {
-        acc[curr.eje_nombre.toUpperCase().trim()] = curr.total_reportes;
-        return acc;
-      }, {});
-      setStats(mappedStats);
-    }
-  };
 
   useEffect(() => {
     const loadConfig = async () => {
@@ -82,24 +69,7 @@ export default function InteractiveMirandaCards({ isAdminMode = false }) {
     };
 
     loadConfig();
-    fetchTotales();
-
-    const channel = supabase.channel('realtime_resumen')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'resumen_asic' }, fetchTotales)
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
   }, []);
-
-  const getReportCountForEje = (ejeName: string) => stats[ejeName.toUpperCase().trim()] || 0;
-  
-  const getTotalGlobalReportes = () => (Object.values(stats) as number[]).reduce((acc: number, curr: number) => acc + curr, 0);
-  
-  const getFillPercentage = (ejeName: string) => {
-    const values = Object.values(stats) as number[];
-    const max = Math.max(...values, 1);
-    return (getReportCountForEje(ejeName) / max) * 100;
-  };
 
   const handleSaveEjeConfig = async () => {
     if (!editingEje || !supabase) return;
@@ -119,19 +89,15 @@ export default function InteractiveMirandaCards({ isAdminMode = false }) {
           <Sliders size={16} className="text-emerald-600" />
           <h2 className="text-xs font-black uppercase tracking-widest text-slate-900">Monitoreo Regional</h2>
         </div>
-        <div className="px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-[9px] font-black uppercase text-emerald-700">
-          Total: {getTotalGlobalReportes()} Reportes
-        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-3 flex-1">
         {ejes.map((eje) => (
-          <div key={eje.id} className="relative min-h-[185px] w-full rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col justify-between p-4 transition-all hover:border-emerald-500/40">
+          <div key={eje.id} className="relative min-h-[160px] w-full rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col justify-between p-4 transition-all hover:border-emerald-500/40">
             <div className="absolute inset-0 bg-cover bg-center opacity-25 pointer-events-none" style={{ backgroundImage: `url(${eje.bgImage})` }} />
-            <motion.div className="absolute bottom-0 left-0 right-0 bg-emerald-500/10" initial={{ height: 0 }} animate={{ height: `${getFillPercentage(eje.name)}%` }} />
             
             <div className="relative z-10 flex justify-between items-start">
-              <span className="text-[9px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded-md">{getReportCountForEje(eje.name)} REPORTES</span>
+              <span className="text-[9px] font-black tracking-widest text-slate-400 uppercase">{eje.description || 'EJE TERRITORIAL'}</span>
               {isAdminMode && (
                 <button onClick={() => { setEditingEje(eje); setEditName(eje.name); setEditBg(eje.bgImage); }} className="p-1 bg-slate-100 rounded-md"><Edit2 size={10} /></button>
               )}
