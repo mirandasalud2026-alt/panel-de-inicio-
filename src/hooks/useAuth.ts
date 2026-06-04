@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
 
+// Interfaz definida para tu tabla 'usuarios'
 export interface UserProfile {
   id: string;
   nombre: string;
@@ -16,30 +17,42 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   async function cargarPerfil(authUser: User) {
-    // A. MODO DEMO
-    if (typeof window !== 'undefined' && localStorage.getItem('sim_demo_admin') === 'true') {
-      const role = localStorage.getItem('sim_demo_role') || 'nominal';
-      return {
-        id: 'demo-id',
-        nombre: 'Usuario Demo',
-        email: authUser.email || 'demo@mirandasalud.com',
-        rol: role,
-        estado: 'aprobado'
-      } as UserProfile;
-    }
-
-    // B. MODO REAL: Consultamos tu tabla 'usuarios'
     try {
-      const { data, error } = await supabase
+      // 1. Intentar buscar el perfil existente
+      let { data: profileData, error: fetchError } = await supabase
         .from('usuarios')
         .select('*')
         .eq('id', authUser.id)
         .maybeSingle();
 
-      if (error) throw error;
-      return data as UserProfile;
-    } catch (e) {
-      console.error("Error al cargar perfil:", e);
+      if (fetchError) throw fetchError;
+
+      // 2. SI NO EXISTE: Crear el perfil automáticamente
+      if (!profileData) {
+        console.log("Perfil no encontrado, creando perfil para:", authUser.email);
+        
+        const { data: newProfile, error: insertError } = await supabase
+          .from('usuarios')
+          .insert([{
+            id: authUser.id,
+            nombre: 'Usuario Nuevo',
+            email: authUser.email,
+            rol: 'oficina', // Rol por defecto
+            estado: 'pendiente'
+          }])
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error("Error al crear perfil automático:", insertError);
+          return null;
+        }
+        return newProfile as UserProfile;
+      }
+
+      return profileData as UserProfile;
+    } catch (err) {
+      console.error("Error en el flujo de perfil:", err);
       return null;
     }
   }
@@ -47,8 +60,10 @@ export function useAuth() {
   useEffect(() => {
     let mounted = true;
 
-    async function init() {
+    async function initAuth() {
+      setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
+      
       if (session?.user) {
         const p = await cargarPerfil(session.user);
         if (mounted) {
@@ -59,8 +74,9 @@ export function useAuth() {
       if (mounted) setLoading(false);
     }
 
-    init();
+    initAuth();
 
+    // Escuchar cambios en la sesión (Login/Logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         cargarPerfil(session.user).then(p => {
@@ -75,7 +91,10 @@ export function useAuth() {
       }
     });
 
-    return () => { mounted = false; subscription.unsubscribe(); };
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return { user, profile, loading };
