@@ -52,6 +52,9 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const [selectedEje, setSelectedEje] = useState<string>('TODO');
   const [selectedTab, setSelectedTab] = useState<string>('semaforo');
 
+  // Ref to track last fetch timestamp and avoid rapid firing or loops
+  const lastFetchTimeRef = useRef<number>(0);
+
   // Consulta directa a transito_reportes
   const fetchTransitoData = useCallback(async (): Promise<TransitoReporte[]> => {
     if (!supabase) {
@@ -83,6 +86,15 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 
   // Función de carga unificada sin fallbacks de simulación local
   const fetchData = useCallback(async (silent = false) => {
+    const now = Date.now();
+    // Cooldown check: if it is a silent background call, enforce a 10s cooldown.
+    // If it is an interactive call (silent = false), allow it of course.
+    if (silent && (now - lastFetchTimeRef.current < 10000)) {
+      console.log(`⚠️ [DashboardContext] Sincronización en segundo plano omitida por control de bucle infinito (cooldown activo).`);
+      return;
+    }
+    lastFetchTimeRef.current = now;
+
     if (!silent) setIsLoading(true);
     setError(null);
     try {
@@ -149,18 +161,28 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'transito_reportes' },
-        () => { fetchDataRef.current(true); }
+        (payload) => {
+          console.log('🔔 Realtime: Cambio detectado en transito_reportes:', payload);
+          fetchDataRef.current(true);
+        }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 Realtime: Estado suscripción transito_reportes:', status);
+      });
 
     const realTimeChannel2 = supabase
       .channel('dashboard_db_changes_summary')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'TASIC' },
-        () => { fetchDataRef.current(true); }
+        (payload) => {
+          console.log('🔔 Realtime: Cambio detectado en TASIC:', payload);
+          fetchDataRef.current(true);
+        }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 Realtime: Estado suscripción TASIC:', status);
+      });
 
     const intervalId = setInterval(() => {
       fetchDataRef.current(true);

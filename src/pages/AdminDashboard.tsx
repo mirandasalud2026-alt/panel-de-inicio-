@@ -4,7 +4,7 @@ import MinimalistDashboard from '../components/ui/MinimalistDashboard';
 import OficinaDashboard from '../components/ui/OficinaDashboard';
 import AdminPortal from '../components/ui/AdminPortal';
 import NominalDashboard from '../components/ui/NominalDashboard';
-import InteractiveMirandaMap from '../components/InteractiveMirandaMap';
+import MapComponent from '../components/MapComponent';
 import ReporteDiarioTabular from '../components/admin/ReporteDiarioTabular';
 import DashboardContainer from '../components/dashboard/DashboardContainer';
 import { supabase } from '../lib/supabase';
@@ -292,7 +292,7 @@ export default function AdminDashboard() {
         <main className="max-w-7xl mx-auto p-6 md:p-8 w-full flex-grow">
           {activeDirectivoView === 'analitico' && <DashboardContainer />}
           {activeDirectivoView === 'minimalista' && <MinimalistDashboard />}
-          {activeDirectivoView === 'mapa' && <InteractiveMirandaMap />}
+          {activeDirectivoView === 'mapa' && <MapComponent />}
         </main>
 
         <footer className="mt-8 px-6 text-center opacity-30 mt-auto">

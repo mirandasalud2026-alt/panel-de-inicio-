@@ -353,7 +353,7 @@ export default function NominalFormWindow({ type: propType, userEmail: propUserE
 
         if (errOpe) {
           console.error("Column mismatch or constraint err on registers table: ", errOpe);
-          // throw error so we don't proceed to next step blindly if crucial
+          throw new Error(`Fallo al guardar en Supabase (Quirúrgicas): ${errOpe.message || JSON.stringify(errOpe)}`);
         }
       } else if (type === 'OBSTETRICA') {
         const { error: errOpe } = await supabase
@@ -379,6 +379,7 @@ export default function NominalFormWindow({ type: propType, userEmail: propUserE
 
         if (errOpe) {
           console.error("Column mismatch or constraint err on registers table: ", errOpe);
+          throw new Error(`Fallo al guardar en Supabase (Obstetricia): ${errOpe.message || JSON.stringify(errOpe)}`);
         }
       } else if (type === 'DEFUNCION') {
         const { error: errOpe } = await supabase
@@ -403,10 +404,11 @@ export default function NominalFormWindow({ type: propType, userEmail: propUserE
 
         if (errOpe) {
           console.error("Column mismatch or constraint err on registers table: ", errOpe);
+          throw new Error(`Fallo al guardar en Supabase (Defunciones): ${errOpe.message || JSON.stringify(errOpe)}`);
         }
       }
 
-      // 4. Insertar / Transmitir en Sheets (Google Apps Script)
+      // 4. Insertar / Transmitir en Sheets (Google Apps Script) con TIMEOUT de seguridad de 3.5 segundos
       const payload = {
         action: "insertNominal",
         tipo_formulario: type,
@@ -414,12 +416,23 @@ export default function NominalFormWindow({ type: propType, userEmail: propUserE
         ...formData
       };
 
-      const response = await fetch(GOOGLE_API_URL, {
+      const sendToSheetsPromise = fetch(GOOGLE_API_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
+
+      const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve("timeout"), 3500));
+
+      try {
+        const result = await Promise.race([sendToSheetsPromise, timeoutPromise]);
+        if (result === "timeout") {
+          console.warn("⚠️ Advertencia: La sincronización en segundo plano con Google Sheets superó el límite de tiempo de 3.5s. El registro local persistente en Supabase se completó exitosamente.");
+        }
+      } catch (sheetErr) {
+        console.warn("⚠️ Advertencia: Error en pasarela Google Sheets:", sheetErr);
+      }
 
       setSyncSuccess(true);
       setTimeout(() => {

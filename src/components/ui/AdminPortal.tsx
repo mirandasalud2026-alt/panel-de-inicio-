@@ -35,7 +35,7 @@ import {
   Cloud,
   Layers
 } from 'lucide-react';
-import InteractiveMirandaMap from '../InteractiveMirandaMap';
+import MapComponent from '../MapComponent';
 import { supabase, UserProfile } from '../../lib/supabase';
 import { googleSignIn, initAuth } from '../../lib/firebaseAuth';
 import { googleWorkspaceService } from '../../services/googleWorkspaceService';
@@ -456,7 +456,7 @@ export default function AdminPortal({ restricted = false }: { restricted?: boole
         {activeTab === 'mapa' && (
           <motion.div key="mapa" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
             <div className="h-[480px] rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
-              <InteractiveMirandaMap isAdminMode={true} />
+              <MapComponent />
             </div>
           </motion.div>
         )}

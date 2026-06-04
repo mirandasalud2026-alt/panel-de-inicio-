@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Share2 } from 'lucide-react';
-import InteractiveMirandaMap from '../components/InteractiveMirandaMap';
+import MapComponent from '../components/MapComponent';
 
 export default function InformativoPage() {
   const navigate = useNavigate();
@@ -52,10 +52,10 @@ export default function InformativoPage() {
       {/* Main ajustado: Sin títulos muertos, padding minimizado (p-3) y flex para estirar el mapa */}
       <main className="flex-1 p-3 max-w-[1600px] w-full mx-auto flex flex-col justify-start overflow-hidden">
         
-        {/* MAPA INTERACTIVO Y FICHAS (Ocupa el 100% del espacio útil) */}
-        <section className="w-full flex-1 bg-white rounded-2xl p-3 shadow-md border border-gray-100 overflow-hidden min-h-0 flex flex-col">
-           <InteractiveMirandaMap />
-        </section>
+         {/* MAPA INTERACTIVO Y FICHAS (Ocupa el 100% del espacio útil) */}
+         <section className="w-full flex-1 bg-white rounded-2xl p-3 shadow-md border border-gray-100 overflow-hidden min-h-0 flex flex-col">
+            <MapComponent />
+         </section>
 
       </main>
 
