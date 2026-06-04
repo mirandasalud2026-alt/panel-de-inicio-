@@ -93,10 +93,10 @@ export default function InteractiveMirandaCards({ isAdminMode = false }) {
 
   const getReportCountForEje = (ejeName: string) => stats[ejeName.toUpperCase().trim()] || 0;
   
-  const getTotalGlobalReportes = () => Object.values(stats).reduce((acc, curr) => acc + curr, 0);
-
+  const getTotalGlobalReportes = () => (Object.values(stats) as number[]).reduce((acc: number, curr: number) => acc + curr, 0);
+  
   const getFillPercentage = (ejeName: string) => {
-    const values = Object.values(stats);
+    const values = Object.values(stats) as number[];
     const max = Math.max(...values, 1);
     return (getReportCountForEje(ejeName) / max) * 100;
   };

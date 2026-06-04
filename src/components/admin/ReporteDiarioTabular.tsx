@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../hooks/useAuth';
 import { 
   FileSpreadsheet, 
   Users, 
@@ -32,11 +33,21 @@ const GRUPOS_EDAD = [
 ];
 
 export default function ReporteDiarioTabular({ idCentro, onSuccess }: ReporteDiarioTabularProps) {
+  const { profile } = useAuth();
   const [tipoFormulario, setTipoFormulario] = useState<'RDC' | 'REC'>('RDC');
   const [fecha, setFecha] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [selectedCentroId, setSelectedCentroId] = useState<string>(idCentro || '');
+  const [selectedCentroId, setSelectedCentroId] = useState<string>(idCentro || profile?.id_centro || '');
   const [centros, setCentros] = useState<{ id_centro: string; nombre_centro: string; asic?: string }[]>([]);
   
+  // Sincronizar el id_centro cuando cambie el perfil o la prop idCentro
+  useEffect(() => {
+    if (idCentro) {
+      setSelectedCentroId(idCentro);
+    } else if (profile?.id_centro) {
+      setSelectedCentroId(profile.id_centro);
+    }
+  }, [idCentro, profile?.id_centro]);
+
   // Valores estructurados por grupo de edad
   const [valores, setValores] = useState<Record<string, { masculino: string; femenino: string }>>(
     GRUPOS_EDAD.reduce((acc, g) => ({ ...acc, [g.id]: { masculino: '', femenino: '' } }), {})
@@ -132,8 +143,18 @@ export default function ReporteDiarioTabular({ idCentro, onSuccess }: ReporteDia
           .insert(rowsToInsert);
 
         if (error) {
-          console.warn('Error insertando en reportes_diarios, creando tabla local de respaldo...', error);
-          // Si la tabla no existe o falla por esquema, guardamos en localStorage para persistencia
+          console.warn('Error insertando en reportes_diarios', error);
+          
+          // Identificar si es un error de RLS (Permisos insuficientes)
+          const isRlsError = error.message?.toLowerCase().includes('row-level security') || 
+                             error.code === '42501' || 
+                             error.message?.toLowerCase().includes('permission');
+
+          if (isRlsError) {
+            throw new Error(`⚠️ Violación de Políticas RLS: No tienes permisos autorizados en Supabase para registrar reportes para un centro de salud ajeno a tu jurisdicción asignada (${selectedCentroId}).`);
+          }
+
+          // Para otros errores (como tabla inexistente en demo), guardamos en localStorage para persistencia y simulamos éxito
           const localKey = 'local_bulk_reportes_diarios';
           const localExistentes = JSON.parse(localStorage.getItem(localKey) || '[]');
           localStorage.setItem(localKey, JSON.stringify([...localExistentes, ...rowsToInsert]));
@@ -264,15 +285,22 @@ export default function ReporteDiarioTabular({ idCentro, onSuccess }: ReporteDia
 
           {/* Establecimiento de Salud */}
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-[#0B3D5C] uppercase tracking-widest block">Centromédico de Salud *</label>
+            <div className="flex justify-between items-center mb-1">
+              <label className="text-[10px] font-black text-[#0B3D5C] uppercase tracking-widest block">Centromédico de Salud *</label>
+              {(!!idCentro || !!profile?.id_centro) && (
+                <span className="text-[8px] font-extrabold bg-[#0B3D5C]/15 text-[#0B3D5C] uppercase px-2 py-0.5 rounded-md tracking-wider">
+                  🔒 Jurisdicción Asignada
+                </span>
+              )}
+            </div>
             <div className="relative">
               <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <select
                 name="id_centro"
                 value={selectedCentroId}
                 onChange={(e) => setSelectedCentroId(e.target.value)}
-                disabled={!!idCentro}
-                className="w-full pl-10 pr-4 py-3 bg-white border border-slate-250 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0B3D5C]/15 disabled:bg-slate-100 disabled:text-slate-500 cursor-pointer"
+                disabled={!!idCentro || !!profile?.id_centro}
+                className="w-full pl-10 pr-4 py-3 bg-white border border-slate-250 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0B3D5C]/15 disabled:bg-slate-50 disabled:text-slate-600 disabled:border-slate-200 cursor-pointer"
               >
                 {loadingCentros ? (
                   <option>Cargando centros...</option>

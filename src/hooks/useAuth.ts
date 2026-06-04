@@ -1,14 +1,18 @@
-import { useState, useEffect } from 'react';
+// hooks/useAuth.ts - Versión CORREGIDA
+import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
 
-// Interfaz definida para tu tabla 'usuarios'
 export interface UserProfile {
   id: string;
   nombre: string;
   email: string;
   rol: 'admin' | 'directivo' | 'oficina' | 'nominal';
-  estado: 'aprobado' | 'pendiente' | 'bloqueado';
+  estado: 'aprobado' | 'pendiente' | 'rechazado';
+  id_centro?: string | null;
+  cod_eje?: string | null;
+  nombre_centro?: string | null;
+  asic_centro?: string | null;
 }
 
 export function useAuth() {
@@ -16,80 +20,106 @@ export function useAuth() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function cargarPerfil(authUser: User) {
+  const fetchProfile = async (userId: string) => {
     try {
-      // 1. Intentar buscar el perfil existente
-      let { data: profileData, error: fetchError } = await supabase
+      console.log('Fetching profile for user ID:', userId);
+      
+      const { data, error } = await supabase
         .from('usuarios')
         .select('*')
-        .eq('id', authUser.id)
+        .eq('id', userId)
         .maybeSingle();
 
-      if (fetchError) throw fetchError;
-
-      // 2. SI NO EXISTE: Crear el perfil automáticamente
-      if (!profileData) {
-        console.log("Perfil no encontrado, creando perfil para:", authUser.email);
-        
-        const { data: newProfile, error: insertError } = await supabase
-          .from('usuarios')
-          .insert([{
-            id: authUser.id,
-            nombre: 'Usuario Nuevo',
-            email: authUser.email,
-            rol: 'oficina', // Rol por defecto
-            estado: 'pendiente'
-          }])
-          .select()
-          .single();
-
-        if (insertError) {
-          console.error("Error al crear perfil automático:", insertError);
-          return null;
-        }
-        return newProfile as UserProfile;
+      if (error) {
+        console.error('Error fetching profile:', error);
+        return null;
       }
 
-      return profileData as UserProfile;
+      if (data) {
+        console.log('Profile found:', data);
+        const userProfile = { ...data } as UserProfile;
+        
+        // Cargar datos adicionales del centro si está vinculado
+        if (data.id_centro) {
+          try {
+            const { data: centroData } = await supabase
+              .from('transito_reportes')
+              .select('nombre_centro, asic')
+              .eq('id_centro', data.id_centro)
+              .maybeSingle();
+            
+            if (centroData) {
+              userProfile.nombre_centro = centroData.nombre_centro;
+              userProfile.asic_centro = centroData.asic;
+            }
+          } catch (centroErr) {
+            console.error('Error fetching associated center details:', centroErr);
+          }
+        }
+        
+        return userProfile;
+      }
+      
+      console.log('No profile found for user:', userId);
+      return null;
     } catch (err) {
-      console.error("Error en el flujo de perfil:", err);
+      console.error('Unexpected error in fetchProfile:', err);
       return null;
     }
-  }
+  };
 
   useEffect(() => {
     let mounted = true;
 
-    async function initAuth() {
+    const initializeAuth = async () => {
       setLoading(true);
+      
+      // 1. Obtener la sesión actual
       const { data: { session } } = await supabase.auth.getSession();
       
+      if (!mounted) return;
+      
       if (session?.user) {
-        const p = await cargarPerfil(session.user);
+        setUser(session.user);
+        const userProfile = await fetchProfile(session.user.id);
         if (mounted) {
-          setUser(session.user);
-          setProfile(p);
+          setProfile(userProfile);
         }
-      }
-      if (mounted) setLoading(false);
-    }
-
-    initAuth();
-
-    // Escuchar cambios en la sesión (Login/Logout)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        cargarPerfil(session.user).then(p => {
-          if (mounted) {
-            setUser(session.user);
-            setProfile(p);
-          }
-        });
       } else {
         setUser(null);
         setProfile(null);
       }
-    });
+      
+      if (mounted) {
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    // 2. Escuchar cambios en la autenticación
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state change:', event, session?.user?.id);
+        
+        if (!mounted) return;
+        
+        if (session?.user) {
+          setUser(session.user);
+          const userProfile = await fetchProfile(session.user.id);
+          if (mounted) {
+            setProfile(userProfile);
+          }
+        } else {
+          setUser(null);
+          setProfile(null);
+        }
+        
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    );
 
     return () => {
       mounted = false;
@@ -97,5 +127,11 @@ export function useAuth() {
     };
   }, []);
 
-  return { user, profile, loading };
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setProfile(null);
+  };
+
+  return { user, profile, loading, signOut };
 }
