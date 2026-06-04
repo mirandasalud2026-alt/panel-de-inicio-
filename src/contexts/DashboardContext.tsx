@@ -357,9 +357,32 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     }
   }, [fetchData]);
 
-  // Carga inicial
+  // Carga inicial optimizada esperando la restauración de la sesión de Supabase
   useEffect(() => {
-    fetchData();
+    const init = async () => {
+      if (!supabase) {
+        await fetchData();
+        return;
+      }
+      
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        console.log('✅ Sesión restaurada:', data.session.user.email);
+        await fetchData();
+      } else {
+        console.log('⏳ No hay sesión, esperando...');
+        // Escuchar cambio de autenticación
+        const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+          if (session) {
+            console.log('✅ Sesión detectada en cambio de estado:', session.user.email);
+            await fetchData();
+            listener?.subscription.unsubscribe();
+          }
+        });
+      }
+    };
+    
+    init();
   }, [fetchData]);
 
   // Suscripción para refresco automático (solo si supabase está disponible)

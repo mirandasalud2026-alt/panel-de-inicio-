@@ -271,40 +271,59 @@ export default function AdminDashboard() {
         </footer>
       )}
 
-      {/* Botón de verificación de sesión */}
-      <button 
-        onClick={async () => {
-          const { data } = await supabase.auth.getSession();
-          alert('Sesión activa: ' + !!data.session + '\nEmail: ' + (data.session?.user?.email || 'ninguno'));
-        }}
-        style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 9999, background: '#0B3D5C', color: 'white', padding: '8px 16px', borderRadius: '50px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}
-      >
-        🔍 Verificar Sesión
-      </button>
-      <button 
-  onClick={async () => {
-    const { data } = await supabase.auth.getSession();
-    alert('Sesión: ' + (data.session ? 'ACTIVA - ' + data.session.user.email : 'INACTIVA'));
-    console.log('Session data:', data.session);
-  }}
-  style={{
-    position: 'fixed',
-    bottom: 20,
-    right: 20,
-    zIndex: 9999,
-    background: '#0B3D5C',
-    color: 'white',
-    padding: '10px 20px',
-    borderRadius: '50px',
-    fontSize: '12px',
-    fontWeight: 'bold',
-    cursor: 'pointer',
-    border: 'none',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.2)'
-  }}
->
-  🔍 Verificar Sesión
-</button>
+      {/* Botón de verificación de sesión y forzar recarga */}
+      <div style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 9999, display: 'flex', gap: '8px' }}>
+        <button 
+          onClick={async () => {
+            const { data } = await supabase.auth.getSession();
+            if (data.session) {
+              console.log('Sesión activa, recargando datos...');
+              window.location.reload();
+            } else {
+              alert('No hay sesión activa. Debes iniciar sesión.');
+            }
+          }}
+          style={{
+            background: '#008751',
+            color: 'white',
+            padding: '10px 16px',
+            borderRadius: '50px',
+            fontSize: '11px',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            border: 'none',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+        >
+          🔄 Forzar Re-Cargar
+        </button>
+        <button 
+          onClick={async () => {
+            const { data } = await supabase.auth.getSession();
+            alert('Sesión: ' + (data.session ? 'ACTIVA - ' + data.session.user.email : 'INACTIVA'));
+            console.log('Session data:', data.session);
+          }}
+          style={{
+            background: '#0B3D5C',
+            color: 'white',
+            padding: '10px 16px',
+            borderRadius: '50px',
+            fontSize: '11px',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            border: 'none',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+        >
+          🔍 Verificar Sesión
+        </button>
+      </div>
     </div>
   );
 }
