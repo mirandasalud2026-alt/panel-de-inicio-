@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import MinimalistDashboard from '../components/ui/MinimalistDashboard';
 import OficinaDashboard from '../components/ui/OficinaDashboard';
 import AdminPortal from '../components/ui/AdminPortal';
 import NominalDashboard from '../components/ui/NominalDashboard';
-import { LogOut, User } from 'lucide-react';
+import { LogOut, User, AlertTriangle, RefreshCw, Key } from 'lucide-react';
 
 export default function AdminDashboard() {
   const { profile, loading, signOut } = useAuth();
@@ -13,6 +13,27 @@ export default function AdminDashboard() {
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [tookTooLong, setTookTooLong] = useState(false);
+
+  useEffect(() => {
+    if (loading) {
+      const timer = setTimeout(() => {
+        setTookTooLong(true);
+      }, 4500);
+      return () => clearTimeout(timer);
+    } else {
+      setTookTooLong(false);
+    }
+  }, [loading]);
+
+  const handleBypassDemo = () => {
+    localStorage.setItem('sim_demo_admin', 'true');
+    localStorage.setItem('sim_demo_role', 'admin');
+    localStorage.removeItem('sim_demo_cod_eje');
+    localStorage.removeItem('sim_demo_cod_asic');
+    localStorage.removeItem('sim_demo_id_centro');
+    window.location.reload();
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,10 +61,52 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0B3D5C] mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando...</p>
+      <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-6">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-slate-200/80 shadow-xl text-center space-y-6">
+          <div className="relative mx-auto w-16 h-16">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-100 border-t-[#0B3D5C]" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-xl">🏥</span>
+            </div>
+          </div>
+          
+          <div className="space-y-1.5">
+            <h4 className="text-[10px] font-black tracking-[0.25em] text-slate-400 uppercase">
+              SALA SITUACIONAL SIM
+            </h4>
+            <h3 className="text-lg font-black text-[#0B3D5C] uppercase tracking-tight">
+              Verificando Credenciales de Red
+            </h3>
+            <p className="text-xs text-slate-500 font-medium leading-relaxed">
+              Autenticando sesión y descargando perfil territorial de salud...
+            </p>
+          </div>
+
+          {tookTooLong && (
+            <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 space-y-3.5 mt-2">
+              <div className="flex items-center gap-2 text-amber-800 text-xs font-black justify-center">
+                <AlertTriangle size={14} className="shrink-0 text-amber-650" />
+                <span>¿CONEXIÓN LENTA O INESTABLE?</span>
+              </div>
+              <p className="text-[10px] text-amber-700/90 font-semibold leading-relaxed">
+                La comprobación con Supabase está tomando más de lo previsto. Puede reintentar, refrescar la página, o ingresar de inmediato utilizando el canal de resguardo sin dependencia de red.
+              </p>
+              <div className="flex flex-col gap-2 pt-1 font-sans">
+                <button
+                  onClick={() => window.location.reload()}
+                  className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <RefreshCw size={11} /> Reintentar Conexión en Vivo
+                </button>
+                <button
+                  onClick={handleBypassDemo}
+                  className="w-full py-2.5 bg-[#0B3D5C] hover:bg-[#124b6e] text-white rounded-xl text-[9px] font-black uppercase tracking-widest cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <Key size={11} /> Forzar Entrada de Resguardo (Demo Admin)
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

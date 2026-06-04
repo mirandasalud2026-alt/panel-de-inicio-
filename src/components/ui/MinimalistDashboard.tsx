@@ -17,7 +17,9 @@ import {
   LayoutGrid,
   TrendingUp,
   MapIcon,
-  Users
+  Users,
+  AlertTriangle,
+  Key
 } from 'lucide-react';
 
 interface MinimalistDashboardProps {
@@ -34,8 +36,43 @@ export default function MinimalistDashboard({}: MinimalistDashboardProps) {
     isSyncing, 
     stats, 
     lastUpdate, 
-    syncSheets 
+    syncSheets,
+    error,
+    fetchData
   } = useDashboardData();
+
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [tookTooLong, setTookTooLong] = useState(false);
+
+  useEffect(() => {
+    if (isLoading && reportes.length === 0) {
+      const timer = setTimeout(() => {
+        setTookTooLong(true);
+      }, 5000);
+      return () => clearTimeout(timer);
+    } else {
+      setTookTooLong(false);
+    }
+  }, [isLoading, reportes.length]);
+
+  const handleRetryData = async () => {
+    setIsRetrying(true);
+    try {
+      if (fetchData) {
+        await fetchData();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
+  const handleBypassDemoData = () => {
+    localStorage.setItem('sim_demo_admin', 'true');
+    localStorage.setItem('sim_demo_role', 'directivo');
+    window.location.reload();
+  };
 
   const [searchQuery, setSearchQuery] = useState('');
   const hasActiveSearch = searchQuery.trim() !== '';
@@ -221,22 +258,90 @@ export default function MinimalistDashboard({}: MinimalistDashboardProps) {
     });
   };
 
-  // Spinner de carga inicial de Supabase
+  // Si falló la conexión inicial de datos reales y no tenemos nada en caché o precargado
+  if (error && reportes.length === 0) {
+    return (
+      <div className="bg-white min-h-[60vh] flex flex-col justify-center items-center p-8 rounded-[2.5rem] border border-red-150 shadow-lg text-center max-w-2xl mx-auto space-y-6">
+        <div className="w-16 h-16 bg-red-50 border border-red-100 rounded-2xl flex items-center justify-center text-red-500 shadow-inner">
+          <AlertTriangle size={28} />
+        </div>
+        
+        <div className="space-y-2">
+          <h4 className="text-[10px] font-black text-red-600 uppercase tracking-[0.25em]">
+            ERROR DE CONEXIÓN DE BASE DE DATOS
+          </h4>
+          <h3 className="text-xl font-black text-[#0B3D5C] uppercase tracking-tight">
+            Fallo de Sincronización Territorial
+          </h3>
+          <p className="text-xs text-slate-500 font-semibold leading-relaxed max-w-md mx-auto">
+            El sistema de monitoreo en tiempo real no pudo conectarse con la base de datos central de Miranda Salud ({error}).
+          </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
+          <button
+            onClick={handleRetryData}
+            disabled={isRetrying}
+            className="flex-1 py-3 bg-[#0B3D5C] hover:bg-[#124b6e] text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-md cursor-pointer transition-all flex items-center justify-center gap-1.5 disabled:opacity-55"
+          >
+            <RefreshCw size={13} className={isRetrying ? "animate-spin" : ""} />
+            {isRetrying ? "REINTENTANDO..." : "REINTENTAR CONEXIÓN"}
+          </button>
+          
+          <button
+            onClick={handleBypassDemoData}
+            className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase tracking-widest rounded-2xl shadow-sm border border-slate-200 cursor-pointer transition-all flex items-center justify-center gap-1.5"
+          >
+            <Key size={13} />
+            Mantenimiento Offline
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Spinner de carga inicial de Supabase con detector reactivo de lentitud
   if (isLoading && reportes.length === 0) {
     return (
-      <div className="bg-slate-50 min-h-[60vh] flex flex-col justify-center items-center p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-        <div className="relative mb-6">
+      <div className="bg-slate-50 min-h-[60vh] flex flex-col justify-center items-center p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
+        <div className="relative">
           <div className="animate-spin rounded-full h-14 w-14 border-4 border-slate-100 border-t-[#0B3D5C]" />
           <div className="absolute inset-0 flex items-center justify-center">
             <Activity className="text-[#0B3D5C]/35 animate-pulse" size={18} />
           </div>
         </div>
-        <h4 className="text-[11px] font-black text-[#0B3D5C] uppercase tracking-[0.25em] mb-1">
-          Cargando Monitoreo de Semáforo
-        </h4>
-        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-          Sincronizando Fichas Territoriales...
-        </p>
+        <div className="text-center">
+          <h4 className="text-[11px] font-black text-[#0B3D5C] uppercase tracking-[0.25em] mb-1">
+            Cargando Monitoreo de Semáforo
+          </h4>
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+            {tookTooLong ? "La conexión está tardando más de lo usual..." : "Sincronizando Fichas Territoriales..."}
+          </p>
+        </div>
+
+        {tookTooLong && (
+          <div className="max-w-md bg-white p-5 rounded-3xl border border-slate-200 shadow-xl space-y-4 text-center mt-3 animate-fadeIn">
+            <p className="text-[10px] text-slate-500 font-semibold leading-relaxed">
+              La conexión de red es demasiado lenta o inestable para descargar el semáforo estatal. Puede forzar un reintento manual o usar el modo offline de resguardo.
+            </p>
+            <div className="flex gap-2 justify-center font-sans">
+              <button
+                onClick={handleRetryData}
+                disabled={isRetrying}
+                className="px-4 py-2 bg-[#0B3D5C] hover:bg-[#124b6e] text-white text-[9px] font-black uppercase tracking-wider rounded-xl cursor-pointer transition-all flex items-center gap-1.5"
+              >
+                <RefreshCw size={11} className={isRetrying ? "animate-spin" : ""} />
+                Reintentar
+              </button>
+              <button
+                onClick={handleBypassDemoData}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[9px] font-black uppercase tracking-wider rounded-xl cursor-pointer transition-all border border-slate-200"
+              >
+                Modo Offline
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

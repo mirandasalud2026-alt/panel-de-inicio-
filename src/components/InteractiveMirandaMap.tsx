@@ -6,7 +6,13 @@ import {
   RefreshCw,
   Image as ImageIcon,
   Edit2,
-  Sliders
+  Sliders,
+  TrendingUp,
+  Calendar,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  XCircle
 } from 'lucide-react';
 
 interface EjeTerritorial {
@@ -15,6 +21,17 @@ interface EjeTerritorial {
   url: string;
   bgImage: string;
   description: string;
+}
+
+interface ReporteSemanalEje {
+  eje_geografico: string;
+  semana: string;
+  total_reportes_semana: number;
+  reportes_verdes: number;
+  reportes_amarillos: number;
+  reportes_rojos: number;
+  total_horas_retraso: number;
+  promedio_retraso: number;
 }
 
 const INITIAL_TERRITORIALES: EjeTerritorial[] = [
@@ -55,34 +72,62 @@ const INITIAL_TERRITORIALES: EjeTerritorial[] = [
   },
 ];
 
+const getEjeNombreDB = (ejeId: string): string => {
+  const map: Record<string, string> = {
+    'altos_mirandinos': 'ALTOS MIRANDINOS',
+    'valles_del_tuy': 'VALLES DEL TUY',
+    'barlovento': 'BARLOVENTO',
+    'guarenas_guatire': 'GUARENAS-GUATIRE',
+    'metropolitano': 'METROPOLITANO'
+  };
+  return map[ejeId] || '';
+};
+
 export default function InteractiveMirandaCards({ isAdminMode = false }) {
   const [ejes, setEjes] = useState<EjeTerritorial[]>(INITIAL_TERRITORIALES);
-  const [resumenAsicData, setResumenAsicData] = useState<any[]>([]);
+  const [reportesSemanales, setReportesSemanales] = useState<ReporteSemanalEje[]>([]);
   const [editingEje, setEditingEje] = useState<EjeTerritorial | null>(null);
   const [editName, setEditName] = useState('');
   const [editBg, setEditBg] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const loadInitialData = async () => {
+    const loadData = async () => {
       if (!supabase) return;
+      setIsLoading(true);
       
-      const { data: resumen } = await supabase.from('resumen_asic').select('*');
-      if (resumen) setResumenAsicData(resumen);
+      try {
+        const { data: semanales } = await supabase
+          .from('v_reportes_semanales_eje')
+          .select('*')
+          .order('semana', { ascending: false });
+        
+        if (semanales) setReportesSemanales(semanales);
 
-      const { data: config } = await supabase.from('mapa_config').select('*').eq('id', 'fichas_territoriales').maybeSingle();
-      if (config?.ejes_data) {
-        setEjes(config.ejes_data);
+        const { data: config } = await supabase
+          .from('mapa_config')
+          .select('*')
+          .eq('id', 'fichas_territoriales')
+          .maybeSingle();
+          
+        if (config?.ejes_data) {
+          setEjes(config.ejes_data);
+        }
+      } catch (err) {
+        console.error('Error loading data:', err);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    loadInitialData();
+    loadData();
 
     const channel = supabase
-      ?.channel('resumen_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'resumen_asic' }, () => {
-        supabase.from('resumen_asic').select('*').then(({ data }) => {
-          if (data) setResumenAsicData(data);
+      ?.channel('reportes_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transito_reportes' }, () => {
+        supabase.from('v_reportes_semanales_eje').select('*').order('semana', { ascending: false }).then(({ data }) => {
+          if (data) setReportesSemanales(data);
         });
       })
       .subscribe();
@@ -92,28 +137,44 @@ export default function InteractiveMirandaCards({ isAdminMode = false }) {
     };
   }, []);
 
-  const getReportCountForEje = (ejeId: string) => {
-    const filasDelEje = resumenAsicData.filter(r => {
-      const ejeReporte = (r.eje || '').toUpperCase().trim();
-      if (ejeId === 'altos_mirandinos')  return ejeReporte === 'ALTOS MIRANDINOS';
-      if (ejeId === 'valles_del_tuy')    return ejeReporte === 'VALLES DEL TUY';
-      if (ejeId === 'barlovento')        return ejeReporte === 'BARLOVENTO';
-      if (ejeId === 'guarenas_guatire')  return ejeReporte === 'GUARENAS-GUATIRE' || ejeReporte === 'GUARENAS_GUATIRE';
-      if (ejeId === 'metropolitano')     return ejeReporte === 'METROPOLITANO';
-      return false;
-    });
-    return filasDelEje.reduce((acc, curr) => acc + (parseInt(curr.centros_reportaron) || 0), 0);
+  const getReportesSemanaEje = (ejeId: string): ReporteSemanalEje[] => {
+    const ejeNombre = getEjeNombreDB(ejeId);
+    return reportesSemanales.filter(r => r.eje_geografico === ejeNombre);
   };
 
-  const getFillPercentage = (ejeId: string) => {
-    const counts = ejes.map(e => getReportCountForEje(e.id));
-    const maxCount = Math.max(...counts, 1);
-    const currentCount = getReportCountForEje(ejeId);
-    return (currentCount / maxCount) * 100;
+  const getUltimaSemanaTotal = (ejeId: string): number => {
+    const reportes = getReportesSemanaEje(ejeId);
+    if (reportes.length === 0) return 0;
+    const ultimo = reportes.sort((a, b) => new Date(b.semana).getTime() - new Date(a.semana).getTime())[0];
+    return ultimo?.total_reportes_semana || 0;
+  };
+
+  const getTendencia = (ejeId: string): { valor: number; positiva: boolean } => {
+    const reportes = getReportesSemanaEje(ejeId);
+    if (reportes.length < 2) return { valor: 0, positiva: true };
+    
+    const ordenados = reportes.sort((a, b) => new Date(b.semana).getTime() - new Date(a.semana).getTime());
+    const actual = ordenados[0]?.total_reportes_semana || 0;
+    const anterior = ordenados[1]?.total_reportes_semana || 0;
+    
+    if (anterior === 0) return { valor: 0, positiva: true };
+    const cambio = ((actual - anterior) / anterior) * 100;
+    return { valor: Math.abs(Math.round(cambio)), positiva: cambio >= 0 };
   };
 
   const getTotalGlobalReportes = () => {
-    return ejes.reduce((acc, curr) => acc + getReportCountForEje(curr.id), 0);
+    return ejes.reduce((acc, curr) => acc + getUltimaSemanaTotal(curr.id), 0);
+  };
+
+  const getFillPercentage = (ejeId: string) => {
+    const counts = ejes.map(e => getUltimaSemanaTotal(e.id));
+    const maxCount = Math.max(...counts, 1);
+    const currentCount = getUltimaSemanaTotal(ejeId);
+    return (currentCount / maxCount) * 100;
+  };
+
+  const getTendenciaColor = (positiva: boolean) => {
+    return positiva ? 'text-emerald-600' : 'text-rose-600';
   };
 
   const handleSaveEjeConfig = async () => {
@@ -140,11 +201,20 @@ export default function InteractiveMirandaCards({ isAdminMode = false }) {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="w-full h-full flex items-center justify-center p-8">
+        <div className="flex flex-col items-center gap-3">
+          <RefreshCw className="animate-spin text-emerald-600" size={24} />
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cargando reportes semanales...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    /* Reducción extrema de padding (p-4) y h-full con scroll vertical para encajar perfecto en el viewport */
     <div className="w-full h-full bg-[#F8FAFC] p-4 text-slate-800 flex flex-col justify-start overflow-y-auto select-none">
       
-      {/* Encabezado ultra-compactado en una sola línea fina */}
       <div className="mb-4 flex justify-between items-center border-b border-slate-200/60 pb-2">
         <div className="flex items-center gap-2">
           <Sliders size={16} className="text-emerald-600" />
@@ -152,30 +222,32 @@ export default function InteractiveMirandaCards({ isAdminMode = false }) {
             Monitoreo Regional de Ejes
           </h2>
         </div>
-        <div className="px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-[9px] font-black uppercase tracking-widest text-emerald-700 shadow-sm">
-          Total: {getTotalGlobalReportes()} Reportes
+        <div className="flex gap-2">
+          <div className="px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-[9px] font-black uppercase tracking-widest text-emerald-700 shadow-sm flex items-center gap-1">
+            <Calendar size={10} />
+            Total Semanal: {getTotalGlobalReportes()} Reportes
+          </div>
         </div>
       </div>
 
-      {/* Las fichas suben por completo. Se eliminaron los títulos muertos y se usó flex-1 */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-3 flex-1 items-stretch pb-2">
         {ejes.map((eje) => {
-          const reportCount = getReportCountForEje(eje.id);
+          const reportCount = getUltimaSemanaTotal(eje.id);
           const fillPercent = getFillPercentage(eje.id);
+          const tendencia = getTendencia(eje.id);
+          const reportesEje = getReportesSemanaEje(eje.id);
+          const ultimoReporte = reportesEje[0];
 
           return (
-            /* Ajuste de min-h-[180px] en móviles y tablets para legibilidad, y h-full en pantallas grandes */
             <div 
               key={eje.id}
-              className="relative min-h-[185px] md:h-full w-full rounded-xl border border-slate-200 overflow-hidden bg-white group shadow-sm hover:shadow-lg flex flex-col justify-between p-4 transition-all duration-300 hover:border-emerald-500/40"
+              className="relative min-h-[220px] md:h-full w-full rounded-xl border border-slate-200 overflow-hidden bg-white group shadow-sm hover:shadow-lg flex flex-col justify-between p-4 transition-all duration-300 hover:border-emerald-500/40"
             >
-              {/* Imagen de fondo viva */}
               <div 
                 className="absolute inset-0 bg-cover bg-center opacity-25 group-hover:opacity-40 transition-opacity duration-300 pointer-events-none"
                 style={{ backgroundImage: `url(${eje.bgImage})` }}
               />
 
-              {/* Sombra de carga verde muy transparente */}
               <motion.div 
                 className="absolute bottom-0 left-0 right-0 bg-emerald-500/10 border-t border-emerald-500/20 pointer-events-none"
                 initial={{ height: 0 }}
@@ -183,47 +255,87 @@ export default function InteractiveMirandaCards({ isAdminMode = false }) {
                 transition={{ type: 'spring', stiffness: 40, damping: 15 }}
               />
 
-              {/* Superior: Contador */}
-              <div className="relative z-10 flex justify-between items-start w-full">
-                <span className="text-[9px] font-black tracking-widest bg-emerald-600 text-white px-2.5 py-0.5 rounded-md shadow-sm">
-                  {reportCount} {reportCount === 1 ? 'REPORTE' : 'REPORTES'}
-                </span>
+              <div className="relative z-10 flex flex-col h-full gap-3">
+                <div className="flex justify-between items-start w-full">
+                  <div className="flex flex-col">
+                    <span className="text-[20px] font-black text-emerald-700 leading-none">
+                      {reportCount}
+                    </span>
+                    <span className="text-[8px] font-black tracking-widest text-slate-400 uppercase">
+                      REPORTES SEMANA
+                    </span>
+                  </div>
 
-                {isAdminMode && (
-                  <button 
-                    onClick={() => {
-                      setEditingEje(eje);
-                      setEditName(eje.name);
-                      setEditBg(eje.bgImage);
-                    }}
-                    className="p-1 bg-slate-100 hover:bg-slate-900 text-slate-500 hover:text-white rounded-md transition-colors border border-slate-200 shadow-sm"
-                  >
-                    <Edit2 size={10} />
-                  </button>
+                  <div className={`flex items-center gap-0.5 text-[9px] font-black ${getTendenciaColor(tendencia.positiva)}`}>
+                    <TrendingUp size={10} className={tendencia.positiva ? '' : 'rotate-180'} />
+                    <span>{tendencia.valor}%</span>
+                  </div>
+
+                  {isAdminMode && (
+                    <button 
+                      onClick={() => {
+                        setEditingEje(eje);
+                        setEditName(eje.name);
+                        setEditBg(eje.bgImage);
+                      }}
+                      className="p-1 bg-slate-100 hover:bg-slate-900 text-slate-500 hover:text-white rounded-md transition-colors border border-slate-200 shadow-sm"
+                    >
+                      <Edit2 size={10} />
+                    </button>
+                  )}
+                </div>
+
+                {ultimoReporte && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[8px]">
+                      <span className="font-black text-slate-500 uppercase">Verdes</span>
+                      <span className="font-black text-emerald-600 flex items-center gap-0.5">
+                        <CheckCircle size={8} /> {ultimoReporte.reportes_verdes}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[8px]">
+                      <span className="font-black text-slate-500 uppercase">Amarillos</span>
+                      <span className="font-black text-amber-600 flex items-center gap-0.5">
+                        <AlertCircle size={8} /> {ultimoReporte.reportes_amarillos}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[8px]">
+                      <span className="font-black text-slate-500 uppercase">Rojos</span>
+                      <span className="font-black text-rose-600 flex items-center gap-0.5">
+                        <XCircle size={8} /> {ultimoReporte.reportes_rojos}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[8px] pt-1 border-t border-slate-100">
+                      <span className="font-black text-slate-500 uppercase flex items-center gap-0.5">
+                        <Clock size={8} /> Promedio Retraso
+                      </span>
+                      <span className="font-black text-slate-700">
+                        {ultimoReporte.promedio_retraso || 0} hrs
+                      </span>
+                    </div>
+                  </div>
                 )}
-              </div>
 
-              {/* Inferior: Nombre y Enlace */}
-              <div className="relative z-10 w-full">
-                <h3 className="text-xs font-black uppercase text-slate-900 tracking-wide mb-2 group-hover:text-emerald-700 transition-colors">
-                  {eje.name}
-                </h3>
-                
-                <a 
-                  href={eje.url} 
-                  target="_blank" 
-                  rel="noreferrer"
-                  className="w-full py-2 bg-slate-50 group-hover:bg-emerald-600 hover:scale-[1.01] active:scale-[0.99] transition-all rounded-lg text-[9px] font-black uppercase tracking-widest text-center block text-slate-700 group-hover:text-white border border-slate-200 group-hover:border-transparent shadow-sm"
-                >
-                  Ir al Formulario
-                </a>
+                <div className="mt-auto pt-2">
+                  <h3 className="text-[10px] font-black uppercase text-slate-900 tracking-wide mb-2 group-hover:text-emerald-700 transition-colors">
+                    {eje.name}
+                  </h3>
+                  
+                  <a 
+                    href={eje.url} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="w-full py-2 bg-slate-50 group-hover:bg-emerald-600 hover:scale-[1.01] active:scale-[0.99] transition-all rounded-lg text-[8px] font-black uppercase tracking-widest text-center block text-slate-700 group-hover:text-white border border-slate-200 group-hover:border-transparent shadow-sm"
+                  >
+                    Ir al Formulario
+                  </a>
+                </div>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Modal del Administrador */}
       <AnimatePresence>
         {editingEje && (
           <motion.div 

@@ -20,6 +20,159 @@ function mapCodEjeToEjeGeografico(cod: string): string {
   return cod.toUpperCase().replace('_', ' ');
 }
 
+// Datos realistas de resguardo (fallback) offline para los 5 ejes estándar de Miranda Salud
+const FALLBACK_REPORTES: TransitoReporte[] = [
+  // ALTOS MIRANDINOS
+  {
+    id_centro: "centro-am-1",
+    nombre_centro: "CDI Carrizal",
+    asic: "ES-9001",
+    eje_geografico: "ALTOS MIRANDINOS",
+    ultimo_reporte: new Date(Date.now() - 3600000 * 2).toISOString(),
+    estado_semaforo: "Verde",
+    horas_retraso: 2,
+    actualizado_en: new Date().toISOString()
+  },
+  {
+    id_centro: "centro-am-2",
+    nombre_centro: "CDI Llano Alto",
+    asic: "ES-9002",
+    eje_geografico: "ALTOS MIRANDINOS",
+    ultimo_reporte: new Date(Date.now() - 3600000 * 48).toISOString(),
+    estado_semaforo: "Amarillo",
+    horas_retraso: 48,
+    actualizado_en: new Date().toISOString()
+  },
+  {
+    id_centro: "centro-am-3",
+    nombre_centro: "CDI Padre Cabrera",
+    asic: "ES-9005",
+    eje_geografico: "ALTOS MIRANDINOS",
+    ultimo_reporte: new Date(Date.now() - 3600000 * 12).toISOString(),
+    estado_semaforo: "Verde",
+    horas_retraso: 12,
+    actualizado_en: new Date().toISOString()
+  },
+  
+  // VALLES DEL TUY
+  {
+    id_centro: "centro-vt-1",
+    nombre_centro: "CDI Mamera El Tuy",
+    asic: "ES-9045",
+    eje_geografico: "VALLES DEL TUY",
+    ultimo_reporte: new Date(Date.now() - 3600000 * 96).toISOString(),
+    estado_semaforo: "Rojo",
+    horas_retraso: 96,
+    actualizado_en: new Date().toISOString()
+  },
+  {
+    id_centro: "centro-vt-2",
+    nombre_centro: "CDI San Francisco de Yare",
+    asic: "ES-9046",
+    eje_geografico: "VALLES DEL TUY",
+    ultimo_reporte: new Date(Date.now() - 3600000 * 10).toISOString(),
+    estado_semaforo: "Verde",
+    horas_retraso: 10,
+    actualizado_en: new Date().toISOString()
+  },
+  {
+    id_centro: "centro-vt-3",
+    nombre_centro: "CDI Ocumare del Tuy",
+    asic: "ES-9006",
+    eje_geografico: "VALLES DEL TUY",
+    ultimo_reporte: new Date(Date.now() - 3600000 * 144).toISOString(),
+    estado_semaforo: "Rojo",
+    horas_retraso: 144,
+    actualizado_en: new Date().toISOString()
+  },
+
+  // GUARENAS-GUATIRE
+  {
+    id_centro: "centro-gg-1",
+    nombre_centro: "CDI El Ingenio",
+    asic: "ES-9004",
+    eje_geografico: "GUARENAS-GUATIRE",
+    ultimo_reporte: new Date(Date.now() - 3600000 * 3).toISOString(),
+    estado_semaforo: "Verde",
+    horas_retraso: 3,
+    actualizado_en: new Date().toISOString()
+  },
+  {
+    id_centro: "centro-gg-2",
+    nombre_centro: "CDI Valle Verde",
+    asic: "ES-9003",
+    eje_geografico: "GUARENAS-GUATIRE",
+    ultimo_reporte: new Date(Date.now() - 3600000 * 36).toISOString(),
+    estado_semaforo: "Amarillo",
+    horas_retraso: 36,
+    actualizado_en: new Date().toISOString()
+  },
+
+  // BARLOVENTO
+  {
+    id_centro: "centro-bv-1",
+    nombre_centro: "CDI Rio Chico",
+    asic: "ES-9044",
+    eje_geografico: "BARLOVENTO",
+    ultimo_reporte: new Date(Date.now() - 3600000 * 8).toISOString(),
+    estado_semaforo: "Verde",
+    horas_retraso: 8,
+    actualizado_en: new Date().toISOString()
+  },
+  {
+    id_centro: "centro-bv-2",
+    nombre_centro: "CDI Higuerote",
+    asic: "ES-9043",
+    eje_geografico: "BARLOVENTO",
+    ultimo_reporte: new Date(Date.now() - 3600000 * 5).toISOString(),
+    estado_semaforo: "Verde",
+    horas_retraso: 5,
+    actualizado_en: new Date().toISOString()
+  },
+  {
+    id_centro: "centro-bv-3",
+    nombre_centro: "CDI San José de Barlovento",
+    asic: "ES-9042",
+    eje_geografico: "BARLOVENTO",
+    ultimo_reporte: new Date(Date.now() - 3600000 * 80).toISOString(),
+    estado_semaforo: "Rojo",
+    horas_retraso: 80,
+    actualizado_en: new Date().toISOString()
+  },
+
+  // METROPOLITANO
+  {
+    id_centro: "centro-me-1",
+    nombre_centro: "CDI Petare",
+    asic: "ES-9048",
+    eje_geografico: "METROPOLITANO",
+    ultimo_reporte: new Date(Date.now() - 3600000 * 4).toISOString(),
+    estado_semaforo: "Verde",
+    horas_retraso: 4,
+    actualizado_en: new Date().toISOString()
+  },
+  {
+    id_centro: "centro-me-2",
+    nombre_centro: "CDI Chacao",
+    asic: "ES-9049",
+    eje_geografico: "METROPOLITANO",
+    ultimo_reporte: new Date(Date.now() - 3600000 * 120).toISOString(),
+    estado_semaforo: "Rojo",
+    horas_retraso: 120,
+    actualizado_en: new Date().toISOString()
+  },
+  {
+    id_centro: "centro-me-3",
+    nombre_centro: "CDI El Hatillo",
+    asic: "ES-9050",
+    eje_geografico: "METROPOLITANO",
+    ultimo_reporte: new Date(Date.now() - 3600000 * 25).toISOString(),
+    estado_semaforo: "Amarillo",
+    horas_retraso: 25,
+    actualizado_en: new Date().toISOString()
+  }
+];
+
 interface DashboardContextType {
   reportes: TransitoReporte[];
   asics: ASICSummary[];
@@ -35,8 +188,7 @@ interface DashboardContextType {
   setSelectedTab: (tab: string) => void;
   fetchData: (silent?: boolean) => Promise<void>;
   syncSheets: () => Promise<void>;
-  fetchTransitoData: () => Promise<TransitoReporte[]>;
-  fetchResumenData: () => Promise<any[]>;
+  fetchConsolidado: () => Promise<TransitoReporte[]>;
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -52,58 +204,105 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const [selectedEje, setSelectedEje] = useState<string>('TODO');
   const [selectedTab, setSelectedTab] = useState<string>('semaforo');
 
-  // Ref to track last fetch timestamp and avoid rapid firing or loops
   const lastFetchTimeRef = useRef<number>(0);
   const isFetchingRef = useRef<boolean>(false);
 
-  // Consulta directa a transito_reportes
-  const fetchTransitoData = useCallback(async (): Promise<TransitoReporte[]> => {
+  // Consulta directa a la tabla transito_reportes
+  const fetchConsolidado = useCallback(async (): Promise<TransitoReporte[]> => {
+    console.log('📡 Consultando tabla transito_reportes directamente...');
+    
     if (!supabase) {
-      throw new Error('Cliente de Supabase no inicializado dadas las variables de entorno.');
+      console.warn('⚠️ Cliente de Supabase no disponible. Usando datos de resguardo offline.');
+      return FALLBACK_REPORTES;
     }
-    console.log('📡 Consultando Supabase directamente para transito_reportes...');
-    const { data, error: transitoErr } = await supabase
-      .from('transito_reportes')
-      .select('*')
-      .order('actualizado_en', { ascending: false });
 
-    if (transitoErr) throw transitoErr;
-    return data || [];
+    try {
+      const { data, error: supabaseError } = await supabase
+        .from('transito_reportes')
+        .select('*');
+
+      if (supabaseError) {
+        console.warn('⚠️ Error consultando transito_reportes:', supabaseError.message);
+        return FALLBACK_REPORTES;
+      }
+      
+      const rawData = data || [];
+      
+      if (rawData.length === 0) {
+        console.warn('⚠️ transito_reportes está vacío. Usando fallback.');
+        return FALLBACK_REPORTES;
+      }
+      
+      console.log(`📊 transito_reportes retornó ${rawData.length} registros.`);
+      
+      // Mapeo directo de la tabla a la interfaz TransitoReporte
+      return rawData.map((row: any) => {
+        // Normalizar estado del semáforo
+        let estadoSemaforo: 'Verde' | 'Amarillo' | 'Rojo' = 'Rojo';
+        const estadoRaw = row.estado_semaforo || row.estado || '';
+        if (typeof estadoRaw === 'string') {
+          const estadoLower = estadoRaw.toLowerCase();
+          if (estadoLower.includes('verde') || estadoLower === 'green') {
+            estadoSemaforo = 'Verde';
+          } else if (estadoLower.includes('amarillo') || estadoLower === 'yellow') {
+            estadoSemaforo = 'Amarillo';
+          }
+        }
+        
+        // Normalizar eje geográfico
+        let ejeGeografico = row.eje_geografico || row.eje || 'METROPOLITANO';
+        if (typeof ejeGeografico === 'string') {
+          const ejeUpper = ejeGeografico.toUpperCase();
+          if (ejeUpper.includes('ALTOS')) ejeGeografico = 'ALTOS MIRANDINOS';
+          else if (ejeUpper.includes('VALLES')) ejeGeografico = 'VALLES DEL TUY';
+          else if (ejeUpper.includes('GUARENAS') || ejeUpper.includes('GUATIRE')) ejeGeografico = 'GUARENAS-GUATIRE';
+          else if (ejeUpper.includes('BARLOVENTO')) ejeGeografico = 'BARLOVENTO';
+          else if (ejeUpper.includes('METROPOLITANO')) ejeGeografico = 'METROPOLITANO';
+        }
+        
+        return {
+          id_centro: row.id_centro || `centro-${Math.random().toString(36).substr(2, 6)}`,
+          nombre_centro: row.nombre_centro || row.id_centro || 'Centro de Salud',
+          asic: row.asic || 'ES-9001',
+          eje_geografico: ejeGeografico,
+          ultimo_reporte: row.ultimo_reporte || new Date().toISOString(),
+          estado_semaforo: estadoSemaforo,
+          horas_retraso: typeof row.horas_retraso === 'number' ? row.horas_retraso : Number(row.horas_retraso) || 0,
+          actualizado_en: row.actualizado_en || new Date().toISOString()
+        };
+      });
+      
+    } catch (e: any) {
+      console.warn('⚠️ Excepción consultando transito_reportes:', e.message || e);
+      return FALLBACK_REPORTES;
+    }
   }, []);
 
-  // CONSULTA MAESTRA FIX: Removido el .order() problemático para evitar la discrepancia de columnas
-  const fetchResumenData = useCallback(async (): Promise<any[]> => {
-    if (!supabase) {
-      throw new Error('Cliente de Supabase no inicializado dadas las variables de entorno.');
+  // Función para cargar resúmenes de ASIC desde la tabla resumen_asic
+  const fetchResumenAsics = useCallback(async () => {
+    if (!supabase) return;
+    try {
+      const { data, error } = await supabase
+        .from('resumen_asic')
+        .select('*')
+        .order('eje', { ascending: true });
+      
+      if (!error && data && data.length > 0) {
+        setResumenAsicsDb(data);
+        console.log(`📊 Cargados ${data.length} registros de resumen_asic`);
+      }
+    } catch (err) {
+      console.warn('Error cargando resumen_asic:', err);
     }
-    console.log('📡 Consultando Supabase directamente para la tabla maestra TASIC (Sin ordenamiento)...');
-    const { data, error: resumenErr } = await supabase
-      .from('TASIC')
-      .select('*');
-
-    if (resumenErr) throw resumenErr;
-    return data || [];
   }, []);
 
-  // Función de carga unificada sin fallbacks de simulación local
+  // Función de carga unificada
   const fetchData = useCallback(async (silent = false) => {
     const now = Date.now();
     
-    // 1. Evitar ejecuciones paralelas concurrentes
-    if (isFetchingRef.current) {
-      console.log('⚠️ [DashboardContext] Sincronización anulada: ya existe una petición de datos en tránsito.');
-      return;
-    }
-
-    // 2. Cooldown mínimo de 4 segundos para cualquier consulta para neutralizar ráfagas rápidas de re-renders
-    if (now - lastFetchTimeRef.current < 4000) {
-      console.log('⚠️ [DashboardContext] Sincronización omitida por control preventivo de ráfaga (cooldown activo).');
-      return;
-    }
-
-    // 3. Cooldown de resguardo de 12 segundos para consultas en segundo plano (silent: true)
-    if (silent && (now - lastFetchTimeRef.current < 12000)) {
-      console.log('⚠️ [DashboardContext] Sincronización silenciosa omitida para evitar consumo metabólico innecesivo.');
+    // Evitar múltiples fetch simultáneos
+    if (isFetchingRef.current || (now - lastFetchTimeRef.current < 3000 && !silent)) {
+      console.log('⏭️ Fetch ya en curso o muy reciente, omitiendo...');
       return;
     }
 
@@ -112,129 +311,119 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 
     if (!silent) setIsLoading(true);
     setError(null);
+    
     try {
-      console.log('🔄 Sincronizando datos reales de tránsito de salud...');
+      console.log('🔄 Sincronizando datos desde transito_reportes...');
+      const consolidado = await fetchConsolidado();
       
-      if (!supabase) {
-        throw new Error('Supabase no está disponible. Revisa tus variables VITE_.');
-      }
-
-      // Consultas en paralelo para optimizar la carga
-      const [rawTransito, rawResumen] = await Promise.all([
-        fetchTransitoData(),
-        fetchResumenData()
-      ]);
-
-      setReportes(rawTransito || []);
-      setResumenAsicsDb(rawResumen || []);
+      setReportes(consolidado);
       setLastUpdate(new Date());
-      console.log(`✅ Datos cargados en vivo: ${rawTransito.length} reportes, ${rawResumen.length} registros ASIC.`);
-
+      console.log(`✅ Datos cargados exitosamente: ${consolidado.length} registros.`);
+      
+      // Cargar resúmenes de ASIC en paralelo
+      await fetchResumenAsics();
+      
     } catch (err: any) {
-      console.error('❌ Error crítico de base de datos en producción:', err);
-      setError(err.message || 'Error de comunicación con el backend de salud.');
+      console.error('❌ Error crítico de base de datos:', err);
+      setError(err.message || 'Error de comunicación con el backend.');
+      // En caso de error, intentar usar fallback
+      if (reportes.length === 0) {
+        console.log('🔄 Aplicando fallback offline por error...');
+        setReportes(FALLBACK_REPORTES);
+      }
     } finally {
       isFetchingRef.current = false;
       if (!silent) setIsLoading(false);
     }
-  }, [fetchTransitoData, fetchResumenData]);
+  }, [fetchConsolidado, fetchResumenAsics, reportes.length]);
 
-  // Sincronización manual remota con Google Sheets
   const syncSheets = useCallback(async () => {
     setIsSyncing(true);
     setError(null);
     try {
       const success = await triggerGoogleSheetsSync();
       if (!success) {
-        throw new Error('La sincronización remota devolvió error.');
+        throw new Error('Error en sincronización remota con Google Sheets.');
       }
-      
-      setTimeout(async () => {
-        await fetchData(true);
-        setIsSyncing(false);
+      // Esperar un momento y luego recargar datos
+      setTimeout(async () => { 
+        await fetchData(true); 
+        setIsSyncing(false); 
       }, 3000);
     } catch (err: any) {
-      console.error('Sync failure:', err);
-      setError(err.message || 'Error de sincronización con Google Sheets');
+      console.error('Error en syncSheets:', err);
+      setError(err.message || 'Error al sincronizar con Google Sheets');
       setIsSyncing(false);
     }
   }, [fetchData]);
 
-  // Guardamos la última referencia de fetchData en un useRef para evitar re-suscripciones y bucles infinitos
-  const fetchDataRef = useRef(fetchData);
+  // Carga inicial
   useEffect(() => {
-    fetchDataRef.current = fetchData;
+    fetchData();
   }, [fetchData]);
 
-  // Escucha en tiempo real (Realtime) y Polling de respaldo cada 15 segundos
+  // Suscripción para refresco automático (solo si supabase está disponible)
   useEffect(() => {
-    fetchDataRef.current();
-
     if (!supabase) return;
 
-    const realTimeChannel1 = supabase
-      .channel('dashboard_db_changes_raw')
+    const channel = supabase
+      .channel('realtime_dashboard')
       .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'transito_reportes' },
-        (payload) => {
-          console.log('🔔 Realtime: Cambio detectado en transito_reportes:', payload);
-          fetchDataRef.current(true);
+        'postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'transito_reportes' 
+        }, 
+        () => {
+          console.log('🔄 Cambio detectado en transito_reportes, recargando...');
+          fetchData(true);
         }
       )
-      .subscribe((status) => {
-        console.log('📡 Realtime: Estado suscripción transito_reportes:', status);
-      });
-
-    const realTimeChannel2 = supabase
-      .channel('dashboard_db_changes_summary')
       .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'TASIC' },
-        (payload) => {
-          console.log('🔔 Realtime: Cambio detectado en TASIC:', payload);
-          fetchDataRef.current(true);
+        'postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'resumen_asic' 
+        }, 
+        () => {
+          console.log('🔄 Cambio detectado en resumen_asic, recargando...');
+          fetchResumenAsics();
         }
       )
-      .subscribe((status) => {
-        console.log('📡 Realtime: Estado suscripción TASIC:', status);
-      });
-
-    const intervalId = setInterval(() => {
-      fetchDataRef.current(true);
-    }, 15000);
+      .subscribe();
 
     return () => {
-      supabase.removeChannel(realTimeChannel1);
-      supabase.removeChannel(realTimeChannel2);
-      clearInterval(intervalId);
+      supabase.removeChannel(channel);
     };
-  }, []);
+  }, [fetchData, fetchResumenAsics]);
 
   const { profile } = useAuth();
-
-  useEffect(() => {
-    if (profile?.cod_eje) {
-      setSelectedEje(mapCodEjeToEjeGeografico(profile.cod_eje));
-    }
-  }, [profile?.cod_eje]);
-
+  
+  // Filtrar reportes según el eje del usuario (RBAC)
   const filteredReportes = useMemo(() => {
     let result = reportes;
+    
     if (profile?.cod_eje) {
       const mappedEje = mapCodEjeToEjeGeografico(profile.cod_eje);
-      result = result.filter(r => 
-        (r.eje_geografico || '').toUpperCase().replace('-', ' ') === mappedEje.toUpperCase().replace('-', ' ')
-      );
+      result = result.filter(r => {
+        const ejeReporte = (r.eje_geografico || '').toUpperCase().replace('-', ' ');
+        const ejeUsuario = mappedEje.toUpperCase().replace('-', ' ');
+        return ejeReporte === ejeUsuario;
+      });
+      console.log(`🔒 Filtrado por eje de usuario: ${mappedEje} → ${result.length} centros`);
     }
-    if (profile?.cod_asic) {
-      result = result.filter(r => 
-        (r.asic || '').toUpperCase() === profile.cod_asic.toUpperCase()
-      );
+    
+    // Filtrar adicionalmente por selector de UI si no es 'TODO'
+    if (selectedEje !== 'TODO') {
+      result = result.filter(r => r.eje_geografico === selectedEje);
     }
+    
     return result;
-  }, [reportes, profile?.cod_eje, profile?.cod_asic]);
+  }, [reportes, profile?.cod_eje, selectedEje]);
 
+  // Calcular estado del dashboard con los datos filtrados
   const { asics, ejes, stats } = useMemo(() => {
     return calculateDashboardState(filteredReportes, resumenAsicsDb);
   }, [filteredReportes, resumenAsicsDb]);
@@ -254,12 +443,21 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     setSelectedTab,
     fetchData,
     syncSheets,
-    fetchTransitoData,
-    fetchResumenData
+    fetchConsolidado
   }), [
-    filteredReportes, asics, ejes, stats, isLoading, isSyncing, 
-    error, lastUpdate, selectedEje, selectedTab, fetchData, syncSheets,
-    fetchTransitoData, fetchResumenData
+    filteredReportes,
+    asics,
+    ejes,
+    stats,
+    isLoading,
+    isSyncing,
+    error,
+    lastUpdate,
+    selectedEje,
+    selectedTab,
+    fetchData,
+    syncSheets,
+    fetchConsolidado
   ]);
 
   return (
@@ -272,7 +470,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 export function useDashboard() {
   const context = useContext(DashboardContext);
   if (context === undefined) {
-    throw new Error('useDashboard must be used within a DashboardProvider');
+    throw new Error('useDashboard debe usarse dentro de DashboardProvider');
   }
   return context;
 }

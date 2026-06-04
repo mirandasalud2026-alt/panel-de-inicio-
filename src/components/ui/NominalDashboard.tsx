@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 import { 
@@ -9,12 +9,34 @@ import {
   FileSpreadsheet, 
   ExternalLink,
   ShieldCheck,
-  LayoutGrid
+  LayoutGrid,
+  AlertTriangle,
+  RefreshCw,
+  Key
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function NominalDashboard() {
   const { user, profile, loading } = useAuth();
+  const [tookTooLong, setTookTooLong] = useState(false);
+
+  useEffect(() => {
+    if (loading) {
+      const timer = setTimeout(() => {
+        setTookTooLong(true);
+      }, 4500);
+      return () => clearTimeout(timer);
+    } else {
+      setTookTooLong(false);
+    }
+  }, [loading]);
+
+  const handleBypassDemo = () => {
+    localStorage.setItem('sim_demo_admin', 'true');
+    localStorage.setItem('sim_demo_role', 'nominal');
+    localStorage.setItem('sim_demo_id_centro', 'nominal-123');
+    window.location.reload();
+  };
 
   const handleLogout = async () => {
     localStorage.removeItem('sim_demo_admin');
@@ -36,17 +58,53 @@ export default function NominalDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-50 p-10 text-center">
-        <div className="relative mb-8">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-neutral-200 border-t-blue-600"></div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <ShieldCheck className="text-blue-600/20" size={24} />
+      <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-6">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-slate-200/80 shadow-xl text-center space-y-6">
+          <div className="relative mx-auto w-16 h-16">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-100 border-t-blue-600" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <ShieldCheck className="text-blue-600/30" size={24} />
+            </div>
           </div>
+          
+          <div className="space-y-1.5">
+            <h4 className="text-[10px] font-black tracking-[0.25em] text-blue-500 uppercase">
+              FICHA NOMINAL TERRITORIAL
+            </h4>
+            <h3 className="text-lg font-black text-blue-900 uppercase tracking-tight">
+              Verificando Sesión Nominal
+            </h3>
+            <p className="text-xs text-slate-500 font-medium leading-relaxed">
+              Autenticando su firma médica e ingresando a la zona de registro...
+            </p>
+          </div>
+
+          {tookTooLong && (
+            <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 space-y-3.5 mt-2">
+              <div className="flex items-center gap-2 text-amber-800 text-xs font-black justify-center">
+                <AlertTriangle size={14} className="shrink-0 text-amber-650" />
+                <span>¿LA RED NO RESPONDE?</span>
+              </div>
+              <p className="text-[10px] text-amber-700/90 font-semibold leading-relaxed">
+                Está tomando más tiempo de lo esperado establecer conexión con el sistema central. Puede reintentar, o forzar el acceso sin conexión utilizando las credenciales de resguardo.
+              </p>
+              <div className="flex flex-col gap-2 pt-1 font-sans">
+                <button
+                  onClick={() => window.location.reload()}
+                  className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <RefreshCw size={11} /> Reintentar Conexión en Vivo
+                </button>
+                <button
+                  onClick={handleBypassDemo}
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <Key size={11} /> Forzar Entrada de Resguardo (Demo Nominal)
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-        <h3 className="text-sm font-black text-blue-900 uppercase tracking-[0.3em] mb-2">Cargando Tablero</h3>
-        <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest max-w-xs leading-relaxed">
-          Verificando sesión nominal institucional...
-        </p>
       </div>
     );
   }

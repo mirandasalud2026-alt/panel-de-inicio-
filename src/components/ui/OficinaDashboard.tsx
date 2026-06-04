@@ -10,7 +10,10 @@ import {
   FileSpreadsheet, 
   Calendar,
   Activity,
-  ArrowRight
+  ArrowRight,
+  AlertTriangle,
+  RefreshCw,
+  Key
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
@@ -21,6 +24,25 @@ export default function OficinaDashboard() {
   const [showForm, setShowForm] = useState(false);
   const [recentReports, setRecentReports] = useState<any[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
+  const [tookTooLong, setTookTooLong] = useState(false);
+
+  useEffect(() => {
+    if (authLoading) {
+      const timer = setTimeout(() => {
+        setTookTooLong(true);
+      }, 4500);
+      return () => clearTimeout(timer);
+    } else {
+      setTookTooLong(false);
+    }
+  }, [authLoading]);
+
+  const handleBypassDemo = () => {
+    localStorage.setItem('sim_demo_admin', 'true');
+    localStorage.setItem('sim_demo_role', 'oficina');
+    localStorage.setItem('sim_demo_id_centro', 'centro-oficina-123');
+    window.location.reload();
+  };
 
   const fetchRecentReports = async () => {
     if (!profile?.id_centro) return;
@@ -62,9 +84,53 @@ export default function OficinaDashboard() {
 
   if (authLoading) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <Clock className="animate-spin text-[#0B3D5C] mr-2" size={24} />
-        <span className="text-sm font-bold text-slate-500 uppercase tracking-widest">Cargando perfil...</span>
+      <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-6">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-slate-200/80 shadow-xl text-center space-y-6">
+          <div className="relative mx-auto w-16 h-16">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-100 border-t-[#0B3D5C]" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Clock className="text-[#0B3D5C]/35 animate-pulse" size={24} />
+            </div>
+          </div>
+          
+          <div className="space-y-1.5">
+            <h4 className="text-[10px] font-black tracking-[0.25em] text-slate-400 uppercase">
+              PORTAL DE OFICINA
+            </h4>
+            <h3 className="text-lg font-black text-[#0B3D5C] uppercase tracking-tight">
+              Cargando Perfil Situacional
+            </h3>
+            <p className="text-xs text-slate-500 font-medium leading-relaxed">
+              Autenticando rango de oficina e iniciando paneles de control...
+            </p>
+          </div>
+
+          {tookTooLong && (
+            <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 space-y-3.5 mt-2">
+              <div className="flex items-center gap-2 text-amber-800 text-xs font-black justify-center">
+                <AlertTriangle size={14} className="shrink-0 text-amber-650" />
+                <span>¿CONEXIÓN INESTABLE?</span>
+              </div>
+              <p className="text-[10px] text-amber-700/90 font-semibold leading-relaxed">
+                Está tomando más tiempo de lo esperado establecer conexión con el sistema central. Puede reintentar, refrescar, o forzar el acceso sin conexión utilizando los credenciales de resguardo.
+              </p>
+              <div className="flex flex-col gap-2 pt-1 font-sans">
+                <button
+                  onClick={() => window.location.reload()}
+                  className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <RefreshCw size={11} /> Reintentar Conexión en Vivo
+                </button>
+                <button
+                  onClick={handleBypassDemo}
+                  className="w-full py-2.5 bg-[#0B3D5C] hover:bg-[#124b6e] text-white rounded-xl text-[9px] font-black uppercase tracking-widest cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <Key size={11} /> Forzar Entrada de Resguardo (Demo Oficina)
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
