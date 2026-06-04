@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase'; // Asegúrate de que esta ruta sea correcta
+import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
 
-// Define la interfaz de tu usuario para mayor orden
 export interface UserProfile {
   id: string;
   nombre: string;
@@ -16,41 +15,40 @@ export function useAuth() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Lógica centralizada para cargar el perfil
   async function cargarPerfil(authUser: User) {
-    // A. MODO DEMO: Si está activado en localStorage, saltamos la DB
+    // A. MODO DEMO
     if (typeof window !== 'undefined' && localStorage.getItem('sim_demo_admin') === 'true') {
-      const role = localStorage.getItem('sim_demo_role');
+      const role = localStorage.getItem('sim_demo_role') || 'nominal';
       return {
         id: 'demo-id',
         nombre: 'Usuario Demo',
         email: authUser.email || 'demo@mirandasalud.com',
-        rol: (role as any) || 'nominal',
+        rol: role,
         estado: 'aprobado'
       } as UserProfile;
     }
 
-    // B. MODO REAL: Consultamos tu tabla maestra 'usuarios'
-    const { data, error } = await supabase
-      .from('usuarios')
-      .select('*')
-      .eq('id', authUser.id)
-      .single();
+    // B. MODO REAL: Consultamos tu tabla 'usuarios'
+    try {
+      const { data, error } = await supabase
+        .from('usuarios')
+        .select('*')
+        .eq('id', authUser.id)
+        .maybeSingle();
 
-    if (error) {
-      console.error("Error cargando perfil desde usuarios:", error);
+      if (error) throw error;
+      return data as UserProfile;
+    } catch (e) {
+      console.error("Error al cargar perfil:", e);
       return null;
     }
-    return data as UserProfile;
   }
 
   useEffect(() => {
     let mounted = true;
 
-    async function initAuth() {
-      setLoading(true);
+    async function init() {
       const { data: { session } } = await supabase.auth.getSession();
-      
       if (session?.user) {
         const p = await cargarPerfil(session.user);
         if (mounted) {
@@ -61,9 +59,8 @@ export function useAuth() {
       if (mounted) setLoading(false);
     }
 
-    initAuth();
+    init();
 
-    // Escuchar cambios de autenticación
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         cargarPerfil(session.user).then(p => {
@@ -78,10 +75,7 @@ export function useAuth() {
       }
     });
 
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
+    return () => { mounted = false; subscription.unsubscribe(); };
   }, []);
 
   return { user, profile, loading };
