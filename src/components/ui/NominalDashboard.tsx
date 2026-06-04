@@ -26,7 +26,7 @@ export default function NominalDashboard() {
     if (supabase) {
       await supabase.auth.signOut();
     }
-    window.location.href = '/login';
+    window.location.href = '/';
   };
 
   const handleOpenForm = (type: 'QUIRURGICA' | 'OBSTETRICIA' | 'DEFUNCION') => {

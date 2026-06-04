@@ -74,33 +74,36 @@ export function useAuth() {
     const initializeAuth = async () => {
       setLoading(true);
       
-      // 1. Obtener la sesión actual
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!mounted) return;
-      
-      if (session?.user) {
-        setUser(session.user);
-        const userProfile = await fetchProfile(session.user.id);
+      // 1. Check demo bypass first
+      const isDemo = localStorage.getItem('sim_demo_admin') === 'true';
+      if (isDemo) {
+        const role = localStorage.getItem('sim_demo_role');
+        const simulatedProfile: UserProfile = {
+          id: 'demo-user-id',
+          nombre: role === 'admin' ? 'Administrador General' : role === 'directivo' ? 'Ficha Directiva SIM' : role === 'nominal' ? 'Ficha Nominal SIM' : 'Operador de Oficina',
+          email: role === 'admin' ? 'miranda.salud2026@gmail.com' : role === 'directivo' ? 'directivo@miranda.gob.ve' : role === 'nominal' ? 'nominal@mirandasalud.com' : 'oficina_centro@miranda.gob.ve',
+          rol: (role || 'admin') as any,
+          estado: 'aprobado',
+          id_centro: localStorage.getItem('sim_demo_id_centro'),
+          cod_eje: localStorage.getItem('sim_demo_cod_eje'),
+          nombre_centro: localStorage.getItem('sim_demo_id_centro') ? 'Centro Médico Demo' : undefined,
+          asic_centro: localStorage.getItem('sim_demo_cod_asic') || undefined
+        };
         if (mounted) {
-          setProfile(userProfile);
+          setUser({ id: 'demo-user-id', email: simulatedProfile.email } as any);
+          setProfile(simulatedProfile);
+          setLoading(false);
         }
-      } else {
-        setUser(null);
-        setProfile(null);
+        return;
       }
-      
-      if (mounted) {
-        setLoading(false);
-      }
-    };
 
-    initializeAuth();
-
-    // 2. Escuchar cambios en la autenticación
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state change:', event, session?.user?.id);
+      // 2. Fallback to Supabase
+      try {
+        if (!supabase) {
+          if (mounted) setLoading(false);
+          return;
+        }
+        const { data: { session } } = await supabase.auth.getSession();
         
         if (!mounted) return;
         
@@ -114,21 +117,77 @@ export function useAuth() {
           setUser(null);
           setProfile(null);
         }
-        
+      } catch (err) {
+        console.error('Unhandled error resolving Supabase session:', err);
+      } finally {
         if (mounted) {
           setLoading(false);
         }
       }
-    );
+    };
+
+    initializeAuth();
+
+    // 3. Escuchar cambios en la autenticación (solo si no es demo)
+    let subscription: any = null;
+    if (supabase && localStorage.getItem('sim_demo_admin') !== 'true') {
+      try {
+        const { data } = supabase.auth.onAuthStateChange(
+          async (event, session) => {
+            console.log('Auth state change:', event, session?.user?.id);
+            
+            if (!mounted) return;
+            if (localStorage.getItem('sim_demo_admin') === 'true') return; // skip if demo was set during interaction
+            
+            try {
+              if (session?.user) {
+                setUser(session.user);
+                const userProfile = await fetchProfile(session.user.id);
+                if (mounted) {
+                  setProfile(userProfile);
+                }
+              } else {
+                setUser(null);
+                setProfile(null);
+              }
+            } catch (err) {
+              console.error('Error on auth state changed logic:', err);
+            } finally {
+              if (mounted) {
+                setLoading(false);
+              }
+            }
+          }
+        );
+        subscription = data?.subscription;
+      } catch (e) {
+        console.error('Error setting up onAuthStateChange:', e);
+      }
+    }
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      if (subscription) {
+        subscription.unsubscribe();
+      }
     };
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    localStorage.removeItem('sim_demo_admin');
+    localStorage.removeItem('sim_demo_role');
+    localStorage.removeItem('sim_demo_cod_eje');
+    localStorage.removeItem('sim_demo_cod_asic');
+    localStorage.removeItem('sim_demo_id_centro');
+    
+    try {
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
+    } catch (e) {
+      console.warn('Supabase auth signout returned error or warning:', e);
+    }
+    
     setUser(null);
     setProfile(null);
   };

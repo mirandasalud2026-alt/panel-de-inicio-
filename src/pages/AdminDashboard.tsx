@@ -5,9 +5,10 @@ import MinimalistDashboard from '../components/ui/MinimalistDashboard';
 import OficinaDashboard from '../components/ui/OficinaDashboard';
 import AdminPortal from '../components/ui/AdminPortal';
 import NominalDashboard from '../components/ui/NominalDashboard';
+import { LogOut, User } from 'lucide-react';
 
 export default function AdminDashboard() {
-  const { profile, loading } = useAuth();
+  const { profile, loading, signOut } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -117,17 +118,95 @@ export default function AdminDashboard() {
     );
   }
 
+  const handleLogoutClick = async () => {
+    await signOut();
+    window.location.href = '/';
+  };
+
   // Usuario autenticado correctamente
   return (
-    <div className="w-full">
-      <div className="bg-green-100 p-2 text-center text-xs text-green-800">
-        ✅ Usuario: {profile.email} | Rol: {profile.rol}
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-between">
+      {/* Main content wrapper */}
+      <div className="flex-grow w-full">
+        {/* Render a premium top header bar for roles other than nominal (as nominal has its own specialized header) */}
+        {profile.rol !== 'nominal' && (
+          <div className="w-full shrink-0">
+            {/* National ribbons top bar */}
+            <div className="h-1.5 w-full flex">
+              <div className="flex-1 bg-[#FFD700]"></div>
+              <div className="flex-1 bg-[#002F6C]"></div>
+              <div className="flex-1 bg-[#CF0921]"></div>
+              <div className="flex-1 bg-[#008751]"></div>
+            </div>
+
+            {/* Main Header Container */}
+            <header className="bg-white border-b border-slate-200 px-6 py-4 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+              {/* Brand and Logo */}
+              <div className="flex items-center gap-3">
+                <span className="text-2xl animate-pulse">🏥</span>
+                <div>
+                  <h1 className="text-sm font-black text-[#0B3D5C] uppercase tracking-wider leading-none">
+                    SALA SITUACIONAL SIM
+                  </h1>
+                  <p className="text-[9px] text-slate-400 font-black uppercase tracking-[0.16em] mt-1">
+                    Dirección Estadal de Salud • Miranda
+                  </p>
+                </div>
+              </div>
+
+              {/* Central system status */}
+              <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-emerald-50 rounded-full border border-emerald-100">
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">Nodos en Línea Directa</span>
+              </div>
+
+              {/* User Session status and Logout button */}
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2.5 text-right font-sans">
+                  <div className="text-right">
+                    <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest">Identidad Activa</span>
+                    <span className="block text-[11px] font-bold text-slate-700 font-mono truncate max-w-[180px]">
+                      {profile.email}
+                    </span>
+                  </div>
+                  <span className="px-2.5 py-1 bg-blue-50 text-blue-700 text-[9px] font-black uppercase tracking-wider rounded-lg border border-blue-100">
+                    {profile.rol === 'admin' ? 'Administrador' : profile.rol === 'directivo' ? 'Ficha Directiva' : profile.rol === 'oficina' ? 'Operador Oficina' : profile.rol}
+                  </span>
+                </div>
+
+                <div className="h-6 w-[1px] bg-slate-200"></div>
+
+                {/* Logout Trigger */}
+                <button
+                  onClick={handleLogoutClick}
+                  className="px-4 py-2 bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-650 rounded-xl border border-slate-200 hover:border-red-100 text-[10px] font-black uppercase tracking-widest transition-colors flex items-center gap-2 cursor-pointer shadow-sm active:scale-98"
+                  title="Cerrar la sesión de usuario"
+                >
+                  <LogOut size={12} />
+                  <span>Salir</span>
+                </button>
+              </div>
+            </header>
+          </div>
+        )}
+
+        {/* Dynamic child workspace rendering */}
+        <div className={profile.rol === 'nominal' ? "" : "p-4 max-w-[1600px] w-full mx-auto"}>
+          {profile.rol === 'admin' && <AdminPortal />}
+          {profile.rol === 'directivo' && <MinimalistDashboard />}
+          {profile.rol === 'oficina' && <OficinaDashboard />}
+          {profile.rol === 'nominal' && <NominalDashboard />}
+        </div>
       </div>
 
-      {profile.rol === 'admin' && <AdminPortal />}
-      {profile.rol === 'directivo' && <MinimalistDashboard />}
-      {profile.rol === 'oficina' && <OficinaDashboard />}
-      {profile.rol === 'nominal' && <NominalDashboard />}
+      {/* Footer Area for Admin views */}
+      {profile.rol !== 'nominal' && (
+        <footer className="py-4 border-t border-slate-150 text-center bg-white shrink-0">
+          <p className="text-[9px] text-slate-400 font-black uppercase tracking-[0.25em]">
+            GOBIERNO DE MIRANDA • DIRECCIÓN ESTADAL DE SALUD • SIM © 2026
+          </p>
+        </footer>
+      )}
     </div>
   );
 }

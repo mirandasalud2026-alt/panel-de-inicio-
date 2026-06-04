@@ -54,6 +54,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 
   // Ref to track last fetch timestamp and avoid rapid firing or loops
   const lastFetchTimeRef = useRef<number>(0);
+  const isFetchingRef = useRef<boolean>(false);
 
   // Consulta directa a transito_reportes
   const fetchTransitoData = useCallback(async (): Promise<TransitoReporte[]> => {
@@ -87,12 +88,26 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   // Función de carga unificada sin fallbacks de simulación local
   const fetchData = useCallback(async (silent = false) => {
     const now = Date.now();
-    // Cooldown check: if it is a silent background call, enforce a 10s cooldown.
-    // If it is an interactive call (silent = false), allow it of course.
-    if (silent && (now - lastFetchTimeRef.current < 10000)) {
-      console.log(`⚠️ [DashboardContext] Sincronización en segundo plano omitida por control de bucle infinito (cooldown activo).`);
+    
+    // 1. Evitar ejecuciones paralelas concurrentes
+    if (isFetchingRef.current) {
+      console.log('⚠️ [DashboardContext] Sincronización anulada: ya existe una petición de datos en tránsito.');
       return;
     }
+
+    // 2. Cooldown mínimo de 4 segundos para cualquier consulta para neutralizar ráfagas rápidas de re-renders
+    if (now - lastFetchTimeRef.current < 4000) {
+      console.log('⚠️ [DashboardContext] Sincronización omitida por control preventivo de ráfaga (cooldown activo).');
+      return;
+    }
+
+    // 3. Cooldown de resguardo de 12 segundos para consultas en segundo plano (silent: true)
+    if (silent && (now - lastFetchTimeRef.current < 12000)) {
+      console.log('⚠️ [DashboardContext] Sincronización silenciosa omitida para evitar consumo metabólico innecesivo.');
+      return;
+    }
+
+    isFetchingRef.current = true;
     lastFetchTimeRef.current = now;
 
     if (!silent) setIsLoading(true);
@@ -119,6 +134,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       console.error('❌ Error crítico de base de datos en producción:', err);
       setError(err.message || 'Error de comunicación con el backend de salud.');
     } finally {
+      isFetchingRef.current = false;
       if (!silent) setIsLoading(false);
     }
   }, [fetchTransitoData, fetchResumenData]);

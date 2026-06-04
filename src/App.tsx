@@ -220,7 +220,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/sitio-informativo" element={<InformativoPage />} />
-          <Route path="/login" element={<LoginPage />} />
+          <Route path="/login" element={<LandingPage />} />
           <Route path="/nominal" element={<NominalDashboard />} />
           <Route path="/nominal-form" element={<NominalFormWindow />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
