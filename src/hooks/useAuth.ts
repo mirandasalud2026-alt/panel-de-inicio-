@@ -60,8 +60,36 @@ export function useAuth() {
         return userProfile;
       }
       
-      console.log('No profile found for user:', userId);
-      return null;
+      console.log('No profile found for user:', userId, ', creating auto-profile in database...');
+      const { data: authData } = await supabase.auth.getUser();
+      const userEmail = authData?.user?.email || '';
+      
+      const isMainAdmin = userEmail.toLowerCase() === 'miranda.salud2026@gmail.com';
+      const defaultProfile: UserProfile = {
+        id: userId,
+        nombre: (userEmail ? userEmail.split('@')[0] : 'USUARIO').toUpperCase(),
+        email: userEmail || 'usuario@mirandasalud.com',
+        rol: isMainAdmin ? 'admin' : 'nominal',
+        estado: 'aprobado',
+        id_centro: null,
+        cod_eje: null
+      };
+
+      try {
+        const { error: insertError } = await supabase
+          .from('usuarios')
+          .insert(defaultProfile);
+        
+        if (insertError) {
+          console.warn('Error al auto-crear perfil en Base de Datos:', insertError);
+        } else {
+          console.log('✅ Perfil auto-creado exitosamente:', defaultProfile);
+        }
+      } catch (insertEx) {
+        console.warn('Error insertando perfil en usuarios:', insertEx);
+      }
+
+      return defaultProfile;
     } catch (err) {
       console.error('Unexpected error in fetchProfile:', err);
       return null;

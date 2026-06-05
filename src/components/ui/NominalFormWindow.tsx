@@ -193,16 +193,20 @@ export default function NominalFormWindow({ type: propType, userEmail: propUserE
         `E${numericPart}`
       ].filter((value, index, self) => value && self.indexOf(value) === index);
 
-      // 1. Intentar buscar en Supabase public.ppacientes primero
+      // 1. Intentar buscar en Supabase public.pacientes primero
       const { data: pData, error: pError } = await supabase
-        .from('ppacientes')
+        .from('pacientes')
         .select('*')
         .in('cedula', candidates)
         .limit(1)
         .maybeSingle();
 
       if (!pError && pData) {
-        p = pData;
+        // Adapt fields if needed
+        p = {
+          ...pData,
+          "Nombre y Apellido": pData["Nombre y Apellido"] || `${pData.nombre} ${pData.apellido}`.trim()
+        };
       }
     } catch (e) {
       console.warn("Fallo de comunicación al buscar paciente en Supabase", e);
@@ -262,14 +266,15 @@ export default function NominalFormWindow({ type: propType, userEmail: propUserE
       ].filter((value, index, self) => value && self.indexOf(value) === index);
 
       const { data: mData, error: mError } = await supabase
-        .from('ppersonal')
+        .from('DATOS_DEL_MEDICO_TRATANTE')
         .select('*')
         .in('cedula', candidates)
         .limit(1)
         .maybeSingle();
 
       if (!mError && mData) {
-        const mappedName = splitFullname(mData["Nombre y Apellido"] || mData.nombre || '');
+        const fullname = mData["Nombre y Apellido"] || `${mData.nombre} ${mData.apellido}`.trim();
+        const mappedName = splitFullname(fullname);
         setFormData(prev => ({
           ...prev,
           nombre_medico: mappedName.nombre || prev.nombre_medico,
@@ -295,48 +300,50 @@ export default function NominalFormWindow({ type: propType, userEmail: propUserE
     setSyncSuccess(false);
 
     try {
-      // 1. Guardar o actualizar Paciente en Supabase/Local (Maestro public.ppacientes)
+      // 1. Guardar o actualizar Paciente en Supabase/Local (Maestro public.pacientes)
       if (formData.cedula_paciente) {
         const { error: errP } = await supabase
-          .from('ppacientes')
+          .from('pacientes')
           .upsert({
             cedula: formData.cedula_paciente.toUpperCase().trim(),
-            "Nombre y Apellido": `${formData.nombre_paciente} ${formData.apellido_paciente}`.toUpperCase().trim(),
-            Sexo: (formData.sexo || 'FEMENINO').toUpperCase(),
-            Edad: parseInt(formData.edad) || 0,
-            Movil01: formData.telefono_movil || ''
+            nombre: formData.nombre_paciente.toUpperCase().trim(),
+            apellido: formData.apellido_paciente.toUpperCase().trim(),
+            sexo: (formData.sexo || 'FEMENINO').toUpperCase(),
+            edad: parseInt(formData.edad) || 0,
+            telefono: formData.telefono_movil || ''
           }, { onConflict: 'cedula' });
         
         if (errP) {
-          console.warn("Fallo al insertar/actualizar paciente en ppacientes, ignorando o reintentando:", errP);
+          console.warn("Fallo al insertar/actualizar paciente en pacientes, ignorando o reintentando:", errP);
         }
       }
 
-      // 2. Guardar o actualizar Médico en Supabase/Local si hay datos (Maestro public.ppersonal)
+      // 2. Guardar o actualizar Médico en Supabase/Local si hay datos (Maestro public.DATOS_DEL_MEDICO_TRATANTE)
       if (formData.cedula_medico) {
         const { error: errM } = await supabase
-          .from('ppersonal')
+          .from('DATOS_DEL_MEDICO_TRATANTE')
           .upsert({
             cedula: formData.cedula_medico.toUpperCase().trim(),
-            "Nombre y Apellido": `${formData.nombre_medico} ${formData.apellido_medico}`.toUpperCase().trim(),
-            Movil01: ''
+            nombre: formData.nombre_medico.toUpperCase().trim(),
+            apellido: formData.apellido_medico.toUpperCase().trim(),
+            telefono: ''
           }, { onConflict: 'cedula' });
 
         if (errM) {
-          console.warn("Fallo al insertar/actualizar personal en ppersonal:", errM);
+          console.warn("Fallo al insertar/actualizar personal en DATOS_DEL_MEDICO_TRATANTE:", errM);
         }
       }
 
       // 3. Inserción en tablas operativas en Supabase
       if (type === 'QUIRURGICA') {
         const { error: errOpe } = await supabase
-          .from('pregistros_quirurgicos')
+          .from('CL_quirurgicos_eventos')
           .insert({
             fecha: formData.fecha_reporte,
             estado: formData.estado_fiscal,
             centro_salud: formData.centro_salud,
-            cedula: formData.cedula_paciente,
-            cedula_personal: formData.cedula_medico,
+            paciente_id: formData.cedula_paciente,
+            personal_id: formData.cedula_medico,
             cantidad_intervencion: parseInt(formData.cantidad) || 1,
             nombre_paciente: formData.nombre_paciente,
             apellido_paciente: formData.apellido_paciente,
@@ -357,21 +364,21 @@ export default function NominalFormWindow({ type: propType, userEmail: propUserE
         }
       } else if (type === 'OBSTETRICA') {
         const { error: errOpe } = await supabase
-          .from('pregistros_obstetricos')
+          .from('CL_obstetricos_eventos')
           .insert({
             fecha: formData.fecha_reporte,
             estado: formData.estado_fiscal,
             centro_salud: formData.centro_salud,
-            cedula: formData.cedula_paciente,
-            cedula_personal: formData.cedula_medico,
+            paciente_id: formData.cedula_paciente,
+            personal_id: formData.cedula_medico,
             nombre_madre: formData.nombre_paciente,
             apellido_madre: formData.apellido_paciente,
             edad_madre: parseInt(formData.edad) || 0,
             telefono_madre: formData.telefono_movil,
-            nombre_infante: formData.complicaciones || '',
-            sexo_infante: formData.condicion_nacimiento || '',
             tipo_parto: formData.tipo_parto,
-            tipo_intervencion: formData.semanas_gestacion || '',
+            complicaciones: formData.complicaciones || 'NINGUNA',
+            vivos: 1,
+            muertos: 0,
             nombre_medico: formData.nombre_medico,
             apellido_medico: formData.apellido_medico,
             telefono_medico: ''
@@ -383,13 +390,13 @@ export default function NominalFormWindow({ type: propType, userEmail: propUserE
         }
       } else if (type === 'DEFUNCION') {
         const { error: errOpe } = await supabase
-          .from('pregistros_defunciones')
+          .from('CL_defunciones_eventos')
           .insert({
             fecha: formData.fecha_reporte,
             estado: formData.estado_fiscal,
             centro_salud: formData.centro_salud,
-            cedula: formData.cedula_paciente,
-            cedula_personal: formData.cedula_medico,
+            paciente_id: formData.cedula_paciente,
+            personal_id: formData.cedula_medico,
             nombre_fallecido: formData.nombre_paciente,
             apellido_fallecido: formData.apellido_paciente,
             edad_fallecido: parseInt(formData.edad) || 0,

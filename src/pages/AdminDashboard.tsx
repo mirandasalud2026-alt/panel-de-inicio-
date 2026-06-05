@@ -17,7 +17,7 @@ export default function AdminDashboard() {
     if (loading) {
       const timer = setTimeout(() => {
         setTookTooLong(true);
-      }, 4500);
+      }, 10000);
       return () => clearTimeout(timer);
     } else {
       setTookTooLong(false);

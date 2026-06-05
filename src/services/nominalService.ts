@@ -107,16 +107,16 @@ export const nominalService = {
 
         // 2. Si no, buscar en registros quirúrgicos
         const { data: qData, error: qError } = await supabase
-          .from('pregistros_quirurgicos')
-          .select('cedula_paciente, nombre_paciente, apellido_paciente, edad_paciente, sexo_paciente, telefono_paciente')
-          .in('cedula_paciente', candidates)
+          .from('CL_quirurgicos_eventos')
+          .select('paciente_id, nombre_paciente, apellido_paciente, edad_paciente, sexo_paciente, telefono_paciente')
+          .in('paciente_id', candidates)
           .order('created_at', { ascending: false })
           .limit(1);
 
         if (!qError && qData && qData.length > 0) {
           const r = qData[0];
           return {
-            cedula: r.cedula_paciente,
+            cedula: r.paciente_id,
             nombre: r.nombre_paciente,
             apellido: r.apellido_paciente,
             edad: parseInt(r.edad_paciente) || 0,
@@ -127,16 +127,16 @@ export const nominalService = {
 
         // 3. Si no, buscar en registros obstétricos
         const { data: oData, error: oError } = await supabase
-          .from('pregistros_obstetricos')
-          .select('cedula_madre, nombre_madre, apellido_madre, edad_madre, telefono_madre')
-          .in('cedula_madre', candidates)
+          .from('CL_obstetricos_eventos')
+          .select('paciente_id, nombre_madre, apellido_madre, edad_madre, telefono_madre')
+          .in('paciente_id', candidates)
           .order('created_at', { ascending: false })
           .limit(1);
 
         if (!oError && oData && oData.length > 0) {
           const r = oData[0];
           return {
-            cedula: r.cedula_madre,
+            cedula: r.paciente_id,
             nombre: r.nombre_madre,
             apellido: r.apellido_madre,
             edad: parseInt(r.edad_madre) || 0,
@@ -147,16 +147,16 @@ export const nominalService = {
 
         // 4. Si no, buscar en defunciones
         const { data: dData, error: dError } = await supabase
-          .from('pregistros_defunciones')
-          .select('cedula_fallecido, nombre_fallecido, apellido_fallecido, edad_fallecido, sexo_fallecido')
-          .in('cedula_fallecido', candidates)
+          .from('CL_defunciones_eventos')
+          .select('paciente_id, nombre_fallecido, apellido_fallecido, edad_fallecido, sexo_fallecido')
+          .in('paciente_id', candidates)
           .order('created_at', { ascending: false })
           .limit(1);
 
         if (!dError && dData && dData.length > 0) {
           const r = dData[0];
           return {
-            cedula: r.cedula_fallecido,
+            cedula: r.paciente_id,
             nombre: r.nombre_fallecido,
             apellido: r.apellido_fallecido,
             edad: parseInt(r.edad_fallecido) || 0,
@@ -205,16 +205,16 @@ export const nominalService = {
 
         // 2. Buscar en registros quirúrgicos para autocompletar médico
         const { data: qData, error: qError } = await supabase
-          .from('pregistros_quirurgicos')
-          .select('cedula_medico, nombre_medico, apellido_medico, telefono_medico')
-          .in('cedula_medico', candidates)
+          .from('CL_quirurgicos_eventos')
+          .select('personal_id, nombre_medico, apellido_medico, telefono_medico')
+          .in('personal_id', candidates)
           .order('created_at', { ascending: false })
           .limit(1);
 
         if (!qError && qData && qData.length > 0) {
           const r = qData[0];
           return {
-            cedula: r.cedula_medico,
+            cedula: r.personal_id,
             nombre: r.nombre_medico,
             apellido: r.apellido_medico,
             telefono: r.telefono_medico || ''
@@ -223,16 +223,16 @@ export const nominalService = {
 
         // 3. Buscar en registros obstétricos para autocompletar médico
         const { data: oData, error: oError } = await supabase
-          .from('pregistros_obstetricos')
-          .select('cedula_medico, nombre_medico, apellido_medico, telefono_medico')
-          .in('cedula_medico', candidates)
+          .from('CL_obstetricos_eventos')
+          .select('personal_id, nombre_medico, apellido_medico, telefono_medico')
+          .in('personal_id', candidates)
           .order('created_at', { ascending: false })
           .limit(1);
 
         if (!oError && oData && oData.length > 0) {
           const r = oData[0];
           return {
-            cedula: r.cedula_medico,
+            cedula: r.personal_id,
             nombre: r.nombre_medico,
             apellido: r.apellido_medico,
             telefono: r.telefono_medico || ''
@@ -241,16 +241,16 @@ export const nominalService = {
 
         // 4. Buscar en defunciones para autocompletar médico
         const { data: dData, error: dError } = await supabase
-          .from('pregistros_defunciones')
-          .select('cedula_medico, nombre_medico, apellido_medico, telefono_medico')
-          .in('cedula_medico', candidates)
+          .from('CL_defunciones_eventos')
+          .select('personal_id, nombre_medico, apellido_medico, telefono_medico')
+          .in('personal_id', candidates)
           .order('created_at', { ascending: false })
           .limit(1);
 
         if (!dError && dData && dData.length > 0) {
           const r = dData[0];
           return {
-            cedula: r.cedula_medico,
+            cedula: r.personal_id,
             nombre: r.nombre_medico,
             apellido: r.apellido_medico,
             telefono: r.telefono_medico || ''
@@ -348,29 +348,29 @@ export const nominalService = {
       // Si la RPC falla, lo hacemos de forma manual por cliente
       try {
         // En quirurgicas (paciente)
-        await supabase.from('pregistros_quirurgicos')
+        await supabase.from('CL_quirurgicos_eventos')
           .update({ nombre_paciente: nombre, apellido_paciente: apellido, telefono_paciente: telefono, edad_paciente: edad, sexo_paciente: sexo })
-          .eq('cedula_paciente', cedula);
+          .eq('paciente_id', cedula);
 
         // En quirurgicas (medico)
-        await supabase.from('pregistros_quirurgicos')
+        await supabase.from('CL_quirurgicos_eventos')
           .update({ nombre_medico: nombre, apellido_medico: apellido, telefono_medico: telefono })
-          .eq('cedula_medico', cedula);
+          .eq('personal_id', cedula);
 
         // En obstetricas (madre)
-        await supabase.from('pregistros_obstetricos')
+        await supabase.from('CL_obstetricos_eventos')
           .update({ nombre_madre: nombre, apellido_madre: apellido, telefono_madre: telefono, edad_madre: edad })
-          .eq('cedula_madre', cedula);
+          .eq('paciente_id', cedula);
 
         // En obstetricas (medico)
-        await supabase.from('pregistros_obstetricos')
+        await supabase.from('CL_obstetricos_eventos')
           .update({ nombre_medico: nombre, apellido_medico: apellido, telefono_medico: telefono })
-          .eq('cedula_medico', cedula);
+          .eq('personal_id', cedula);
 
         // En defunciones (medico)
-        await supabase.from('pregistros_defunciones')
+        await supabase.from('CL_defunciones_eventos')
           .update({ nombre_medico: nombre, apellido_medico: apellido, telefono_medico: telefono })
-          .eq('cedula_medico', cedula);
+          .eq('personal_id', cedula);
       } catch (err) {
         console.warn('Error en corrección manual de campos vacíos:', err);
       }
@@ -450,9 +450,29 @@ export const nominalService = {
 
     if (supabase) {
       try {
+        const mappedRecord = {
+          fecha: record.fecha,
+          estado: record.estado,
+          centro_salud: record.centro_salud,
+          paciente_id: record.cedula_paciente,
+          personal_id: record.cedula_medico,
+          cantidad_intervencion: parseInt(record.cantidad_intervencion) || 1,
+          nombre_paciente: record.nombre_paciente,
+          apellido_paciente: record.apellido_paciente,
+          edad_paciente: parseInt(record.edad_paciente) || 0,
+          sexo_paciente: record.sexo_paciente,
+          telefono_paciente: record.telefono_paciente,
+          especialidad_quirurgica: record.especialidad_quirurgica,
+          tipo_intervencion: record.tipo_intervencion,
+          urgente_electiva: record.urgente_electiva,
+          nombre_medico: record.nombre_medico,
+          apellido_medico: record.apellido_medico,
+          telefono_medico: record.telefono_medico || ''
+        };
+
         const { data, error } = await supabase
-          .from('pregistros_quirurgicos')
-          .insert(record)
+          .from('CL_quirurgicos_eventos')
+          .insert(mappedRecord)
           .select()
           .single();
 
@@ -515,9 +535,28 @@ export const nominalService = {
 
     if (supabase) {
       try {
+        const mappedRecord = {
+          fecha: record.fecha,
+          estado: record.estado,
+          centro_salud: record.centro_salud,
+          paciente_id: record.cedula_madre,
+          personal_id: record.cedula_medico,
+          nombre_madre: record.nombre_madre,
+          apellido_madre: record.apellido_madre,
+          edad_madre: parseInt(record.edad_madre) || 0,
+          telefono_madre: record.telefono_madre,
+          tipo_parto: record.tipo_parto,
+          complicaciones: record.complicaciones || 'NINGUNA',
+          vivos: parseInt(record.vivos) || 1,
+          muertos: parseInt(record.muertos) || 0,
+          nombre_medico: record.nombre_medico,
+          apellido_medico: record.apellido_medico,
+          telefono_medico: record.telefono_medico || ''
+        };
+
         const { data, error } = await supabase
-          .from('pregistros_obstetricos')
-          .insert(record)
+          .from('CL_obstetricos_eventos')
+          .insert(mappedRecord)
           .select()
           .single();
 
@@ -582,9 +621,27 @@ export const nominalService = {
 
     if (supabase) {
       try {
+        const mappedRecord = {
+          fecha: record.fecha,
+          estado: record.estado,
+          centro_salud: record.centro_salud,
+          paciente_id: record.cedula_fallecido,
+          personal_id: record.cedula_medico,
+          nombre_fallecido: record.nombre_fallecido,
+          apellido_fallecido: record.apellido_fallecido,
+          edad_fallecido: parseInt(record.edad_fallecido) || 0,
+          sexo_fallecido: record.sexo_fallecido,
+          hora_fallecimiento: record.hora_fallecimiento || new Date().toLocaleTimeString(),
+          patologia: record.patologia,
+          observacion: record.observacion,
+          nombre_medico: record.nombre_medico,
+          apellido_medico: record.apellido_medico,
+          telefono_medico: record.telefono_medico || ''
+        };
+
         const { data, error } = await supabase
-          .from('pregistros_defunciones')
-          .insert(record)
+          .from('CL_defunciones_eventos')
+          .insert(mappedRecord)
           .select()
           .single();
 
@@ -631,10 +688,18 @@ export const nominalService = {
     if (supabase) {
       try {
         const { data, error } = await supabase
-          .from('pregistros_quirurgicos')
+          .from('CL_quirurgicos_eventos')
           .select('*')
           .order('created_at', { ascending: false });
-        if (!error && data) return data;
+        if (!error && data) {
+          return data.map((item: any) => ({
+            ...item,
+            cedula_paciente: item.cedula_paciente || item.paciente_id,
+            cedula: item.cedula || item.paciente_id,
+            cedula_medico: item.cedula_medico || item.personal_id,
+            cedula_personal: item.cedula_personal || item.personal_id
+          }));
+        }
       } catch (err) {
         console.warn(err);
       }
@@ -646,10 +711,18 @@ export const nominalService = {
     if (supabase) {
       try {
         const { data, error } = await supabase
-          .from('pregistros_obstetricos')
+          .from('CL_obstetricos_eventos')
           .select('*')
           .order('created_at', { ascending: false });
-        if (!error && data) return data;
+        if (!error && data) {
+          return data.map((item: any) => ({
+            ...item,
+            cedula_madre: item.cedula_madre || item.paciente_id,
+            cedula: item.cedula || item.paciente_id,
+            cedula_medico: item.cedula_medico || item.personal_id,
+            cedula_personal: item.cedula_personal || item.personal_id
+          }));
+        }
       } catch (err) {
         console.warn(err);
       }
@@ -661,10 +734,18 @@ export const nominalService = {
     if (supabase) {
       try {
         const { data, error } = await supabase
-          .from('pregistros_defunciones')
+          .from('CL_defunciones_eventos')
           .select('*')
           .order('created_at', { ascending: false });
-        if (!error && data) return data;
+        if (!error && data) {
+          return data.map((item: any) => ({
+            ...item,
+            cedula_fallecido: item.cedula_fallecido || item.paciente_id,
+            cedula: item.cedula || item.paciente_id,
+            cedula_medico: item.cedula_medico || item.personal_id,
+            cedula_personal: item.cedula_personal || item.personal_id
+          }));
+        }
       } catch (err) {
         console.warn(err);
       }

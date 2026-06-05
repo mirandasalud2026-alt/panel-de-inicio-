@@ -357,62 +357,37 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     }
   }, [fetchData]);
 
-  // Carga inicial optimizada esperando la restauración de la sesión de Supabase o cargando en modo demo
+  // Carga inicial directa de la sesión de Supabase sin tiempos de espera artificiales
   useEffect(() => {
     const init = async () => {
       if (!supabase) {
         await fetchData();
         return;
       }
-      
-      // Esperar hasta que haya sesión o transcurra máx de 1.5 segundos para evitar flicker del fallback
-      const maxWait = 1500;
-      const startTime = Date.now();
-      let sessionResolved = false;
-      let sessionObj: any = null;
 
       try {
         const { data } = await supabase.auth.getSession();
-        sessionObj = data.session;
-        sessionResolved = !!sessionObj;
-      } catch (e) {
-        console.warn('Error resolviendo sesión inicial:', e);
-      }
+        const isDemo = localStorage.getItem('sim_demo_admin') === 'true';
 
-      const isDemo = localStorage.getItem('sim_demo_admin') === 'true';
-
-      if (sessionResolved || isDemo) {
-        console.log(isDemo ? '✅ Autenticación de demostración / bypass detectada' : `✅ Sesión restaurada: ${sessionObj?.user?.email}`);
-        await fetchData();
-      } else {
-        // Hacemos una breve espera por si el evento de sesión es tardío
-        let checkSessionObj = null;
-        for (let i = 0; i < 5; i++) {
-          await new Promise(r => setTimeout(r, 150));
-          const { data } = await supabase.auth.getSession();
-          if (data?.session) {
-            checkSessionObj = data.session;
-            break;
-          }
-        }
-
-        if (checkSessionObj) {
-          console.log(`✅ Sesión restaurada tras breve espera: ${checkSessionObj?.user?.email}`);
+        if (data?.session || isDemo) {
+          console.log(isDemo ? '✅ Modo demostración detectado' : `✅ Sesión directa restaurada: ${data.session?.user?.email}`);
           await fetchData();
         } else {
-          console.log('⏳ Sin sesión de Supabase iniciada aún, precargando de todas formas para no comprometer la UI...');
-          // Ejecutar carga inicial silenciosa para mostrar el tablero de inmediato (con datos o fallback si no está autenticado en BD)
-          await fetchData(true);
+          console.log('⏳ Sin sesión iniciada, cargando datos generales...');
+          await fetchData(true); // Carga silenciosa/fallback si no hay sesión
           
-          // Escuchar por si el usuario se autentica después
+          // Escuchar cambios de autenticación para recargar dinámicamente si inicia sesión después
           const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (session) {
-              console.log('✅ Sesión detectada en cambio de estado tardío:', session.user.email);
+              console.log('✅ Sesión iniciada tardíamente:', session.user.email);
               await fetchData();
-              listener?.subscription.unsubscribe();
+              listener?.subscription?.unsubscribe();
             }
           });
         }
+      } catch (err) {
+        console.warn('Error resolviendo sesión inicial de Supabase:', err);
+        await fetchData(true);
       }
     };
     

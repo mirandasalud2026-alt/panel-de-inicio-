@@ -262,15 +262,15 @@ async function startServer() {
         const { data: transito } = await supabaseServerClient.from("transito_reportes").select("*");
         const { data: tasic } = await supabaseServerClient.from("tasic").select("*");
         const { data: tejes } = await supabaseServerClient.from("tejes").select("*");
-        const { data: tmunicipios } = await supabaseServerClient.from("tmunicipios").select("*");
-        const { data: tparroquias } = await supabaseServerClient.from("tparroquias").select("*");
+        const { data: tmunicipios } = await supabaseServerClient.from("DG_municipios").select("*");
+        const { data: tparroquias } = await supabaseServerClient.from("DG_parroquias").select("*");
         
         if (transito) {
           const joinedData = transito.map((tr: any) => {
             const a = tasic?.find((x: any) => x.cod_asic === tr.asic || x.Cod_ASIC === tr.asic);
             const e = tejes?.find((x: any) => x.cod_eje === a?.cod_eje || x.cod_eje === a?.Cod_Eje);
-            const m = tmunicipios?.find((x: any) => x.cod_mun == a?.cod_mun || x.cod_mun == a?.Cod_mun);
-            const p = tparroquias?.find((x: any) => x.cod_parr == a?.cod_parr || x.cod_parr == a?.Cod_parr);
+            const m = tmunicipios?.find((x: any) => x.cod_mun == a?.cod_mun || x.cod_mun == a?.Cod_mun || x.id == a?.cod_mun);
+            const p = tparroquias?.find((x: any) => x.cod_parr == a?.cod_parr || x.cod_parr == a?.Cod_parr || x.id == a?.cod_parr);
             
             return {
               id_centro: tr.id_centro,
@@ -283,10 +283,10 @@ async function startServer() {
               nombre_asic: a ? a.nombre_asic : tr.asic,
               eje_geografico: tr.eje_geografico || e?.nombre_eje || "Sin Eje",
               eje_id: e?.cod_eje || a?.cod_eje || "Sin Eje",
-              nombre_municipio: m?.nombre_municipio || "Sin Municipio",
-              municipio_id: m?.cod_mun || null,
-              nombre_parroquia: p?.nombre_parroquia || "Sin Parroquia",
-              parroquia_id: p?.cod_parr || null
+              nombre_municipio: m?.nombre_municipio || m?.nombre || "Sin Municipio",
+              municipio_id: m?.cod_mun || m?.id || null,
+              nombre_parroquia: p?.nombre_parroquia || p?.nombre || "Sin Parroquia",
+              parroquia_id: p?.cod_parr || p?.id || null
             };
           });
           return res.json({ status: "success", source: "supabase_manual_join", data: joinedData });
@@ -597,9 +597,9 @@ async function startServer() {
     if (supabaseServerClient) {
       try {
         const [qRes, oRes, dRes, nRes] = await Promise.all([
-          supabaseServerClient.from('registros_quirurgicos').select('*'),
-          supabaseServerClient.from('registros_obstetricos').select('*'),
-          supabaseServerClient.from('registros_defunciones').select('*'),
+          supabaseServerClient.from('CL_quirurgicos_eventos').select('*'),
+          supabaseServerClient.from('CL_obstetricos_eventos').select('*'),
+          supabaseServerClient.from('CL_defunciones_eventos').select('*'),
           supabaseServerClient.from('nominales').select('*')
         ]);
         qData = qRes.data || [];
