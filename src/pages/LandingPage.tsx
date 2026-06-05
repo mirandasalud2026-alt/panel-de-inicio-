@@ -26,24 +26,15 @@ export default function LandingPage() {
   // Controls whether we are currently viewing the login panel
   const [showLogin, setShowLogin] = useState(false);
 
-  // Active role tab: 'nominal' | 'admin'
-  const [activeRole, setActiveRole] = useState<'nominal' | 'admin'>('nominal');
-  const [email, setEmail] = useState('nominal@mirandasalud.com');
-  const [password, setPassword] = useState('nominal2026');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Sync state & default credentials when switching tabs
+  // Sync state when switching views
   useEffect(() => {
     setError('');
-    if (activeRole === 'nominal') {
-      setEmail('nominal@mirandasalud.com');
-      setPassword('nominal2026');
-    } else {
-      setEmail('miranda.salud2026@gmail.com');
-      setPassword('Roble.26');
-    }
-  }, [activeRole]);
+  }, [showLogin]);
 
   const handleGoToDashboard = () => {
     navigate('/admin/dashboard');
@@ -55,29 +46,6 @@ export default function LandingPage() {
     setLoading(true);
 
     try {
-      // Direct fast bypass for simulated demo workspace
-      if (email === 'nominal@mirandasalud.com' && password === 'nominal2026') {
-        localStorage.setItem('sim_demo_admin', 'true');
-        localStorage.setItem('sim_demo_role', 'nominal');
-        localStorage.removeItem('sim_demo_cod_eje');
-        localStorage.removeItem('sim_demo_cod_asic');
-        localStorage.removeItem('sim_demo_id_centro');
-        
-        window.location.href = '/admin/dashboard';
-        return;
-      }
-
-      if (email === 'miranda.salud2026@gmail.com' && password === 'Roble.26') {
-        localStorage.setItem('sim_demo_admin', 'true');
-        localStorage.setItem('sim_demo_role', 'admin');
-        localStorage.removeItem('sim_demo_cod_eje');
-        localStorage.removeItem('sim_demo_cod_asic');
-        localStorage.removeItem('sim_demo_id_centro');
-        
-        window.location.href = '/admin/dashboard';
-        return;
-      }
-
       // Supabase connection
       if (!supabase) {
         throw new Error('Servicio de Base de Datos no disponible.');
@@ -98,23 +66,6 @@ export default function LandingPage() {
       setError(err?.message === 'Invalid login credentials' ? 'Credenciales de acceso incorrectas.' : (err?.message || 'Error de comunicación. Intente más tarde.'));
     } finally {
       setLoading(false);
-    }
-  };
-
-  const rolesConfig = {
-    nominal: {
-      title: 'Ficha Nominal',
-      badge: 'Carga de Datos',
-      description: 'Acceso para el personal médico encargado del registro de partos, cirugías, defunciones y de atenciones nominales diarias.',
-      color: 'border-blue-500 text-blue-600 bg-blue-50/50 hover:bg-blue-100/40',
-      activeColor: 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/10'
-    },
-    admin: {
-      title: 'Administración',
-      badge: 'Control Global',
-      description: 'Panel de control de usuarios aprobados, supervisión administrativa central y depuración/auditoría de atenciones nominales registradas.',
-      color: 'border-[#0B3D5C] text-[#0B3D5C] bg-[#0b3d5c]/5 hover:bg-[#0b3d5c]/10',
-      activeColor: 'bg-[#0B3D5C] text-white border-[#0B3D5C] shadow-lg shadow-[#0B3D5C]/10'
     }
   };
 
@@ -190,8 +141,6 @@ export default function LandingPage() {
                 <button
                   id="btn-acceso-sim"
                   onClick={() => {
-                    // Reset tab to Nominal and open form
-                    setActiveRole('nominal');
                     setShowLogin(true);
                   }}
                   className="w-full sm:w-auto px-8 py-4.5 bg-white hover:bg-slate-50 text-[#0B3D5C] font-black text-xs uppercase tracking-widest rounded-2xl shadow-sm border border-slate-200 transition-all duration-200 active:scale-98 flex items-center justify-center gap-2.5 cursor-pointer"
@@ -262,47 +211,6 @@ export default function LandingPage() {
                   <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-2">INGRESO SEGURO DE OPERACIONES</p>
                 </div>
 
-                {/* ROLE SELECTION TABS */}
-                <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-150 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setActiveRole('nominal')}
-                    className={`text-[10px] font-black uppercase py-2.5 rounded-xl transition-all cursor-pointer ${
-                      activeRole === 'nominal' 
-                        ? 'bg-white text-[#0B3D5C] shadow-sm font-black' 
-                        : 'text-slate-400 hover:text-slate-600 font-bold'
-                    }`}
-                  >
-                    Nominal
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveRole('admin')}
-                    className={`text-[10px] font-black uppercase py-2.5 rounded-xl transition-all cursor-pointer ${
-                      activeRole === 'admin' 
-                        ? 'bg-white text-[#0B3D5C] shadow-sm font-black' 
-                        : 'text-slate-400 hover:text-slate-600 font-bold'
-                    }`}
-                  >
-                    Admin
-                  </button>
-                </div>
-
-                {/* ROLE DESCRIPTIVE SUMMARY */}
-                <div className="p-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-800">
-                      Rango de Operación
-                    </span>
-                    <span className="text-[9px] font-black px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100 uppercase tracking-widest animate-pulse">
-                      {rolesConfig[activeRole].badge}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
-                    {rolesConfig[activeRole].description}
-                  </p>
-                </div>
-
                 {/* FORM INPUT BLOCK */}
                 <form onSubmit={handleLogin} className="space-y-4">
                   {error && (
@@ -352,38 +260,6 @@ export default function LandingPage() {
                     </button>
                   </div>
                 </form>
-
-                {/* FASTRACK ONE-CLICK ACCESS DECORATOR AND BUTTON */}
-                <div className="pt-2">
-                  <div className="relative flex py-1 items-center">
-                    <div className="flex-grow border-t border-slate-100"></div>
-                    <span className="flex-shrink mx-3 text-[8px] font-black text-slate-300 uppercase tracking-widest">Entrada de un clic</span>
-                    <div className="flex-grow border-t border-slate-100"></div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoading(true);
-                      setTimeout(() => {
-                        if (activeRole === 'nominal') {
-                          localStorage.setItem('sim_demo_admin', 'true');
-                          localStorage.setItem('sim_demo_role', 'nominal');
-                        } else {
-                          localStorage.setItem('sim_demo_admin', 'true');
-                          localStorage.setItem('sim_demo_role', 'admin');
-                        }
-                        localStorage.removeItem('sim_demo_cod_eje');
-                        localStorage.removeItem('sim_demo_cod_asic');
-                        localStorage.removeItem('sim_demo_id_centro');
-                        window.location.href = '/admin/dashboard';
-                      }, 400);
-                    }}
-                    className="w-full py-3 border border-dashed border-blue-200 hover:border-blue-400 bg-blue-50/40 hover:bg-blue-50/80 text-[#0B3D5C] rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <Key size={12} /> Acceso Rápido como {rolesConfig[activeRole].title}
-                  </button>
-                </div>
 
               </div>
             </motion.div>
