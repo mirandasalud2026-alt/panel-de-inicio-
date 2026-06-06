@@ -1,5 +1,8 @@
 {
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/api/(.*)", "destination": "/api/serverless.js" }
+  ],
+  "builds": [
+    { "src": "backend/server.ts", "use": "@vercel/node" }
   ]
 }
