@@ -13,41 +13,52 @@ export default function LandingPage() {
       </div>
 
       {/* Hero */}
-      <header className="bg-[#0B3D5C] text-white py-12 px-6 text-center">
-        <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tight">Miranda Salud</h1>
-        <p className="text-sm md:text-base text-slate-300 mt-2 max-w-2xl mx-auto">
-          Sistema Integrado de Información en Salud – Sala Situacional y Registro Nominal
-        </p>
-        <div className="mt-6 flex gap-4 justify-center flex-wrap">
-          <Link to="/sitio-informativo" className="bg-white text-[#0B3D5C] px-6 py-2 rounded-xl font-bold text-sm">Ver informativo</Link>
-          <Link to="/login" className="bg-amber-500 text-[#0B3D5C] px-6 py-2 rounded-xl font-bold text-sm">Acceso al sistema</Link>
+      <header className="relative bg-radial from-[#13496C] via-[#0B3D5C] to-[#062438] text-white py-16 px-6 text-center shadow-lg overflow-hidden">
+        {/* Abstract background grids or lights */}
+        <div className="absolute inset-0 opacity-10 bg-[linear-gradient(to_right,#808080_1px,transparent_1px),linear-gradient(to_bottom,#808080_1px,transparent_1px)] bg-[size:24px_24px]"></div>
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-96 bg-cyan-500/10 blur-3xl rounded-full"></div>
+
+        <div className="relative max-w-4xl mx-auto z-10 space-y-6">
+          {/* Institutional crest header block */}
+          <div className="flex flex-col items-center justify-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 shadow-sm animate-pulse mb-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Red Central Activa
+            </span>
+            <p className="text-[10px] md:text-xs font-black uppercase tracking-widest text-[#FFD700] max-w-lg leading-relaxed">
+              GOBERNACIÓN DEL ESTADO BOLIVARIANO DE MIRANDA
+            </p>
+            <p className="text-[9px] md:text-[10px] font-bold text-slate-300 uppercase tracking-wider -mt-1">
+              Dirección Estadal de Salud • SIM Miranda 2026
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tight font-display text-white drop-shadow-md">
+              Miranda <span className="text-amber-400">Salud</span>
+            </h1>
+            <p className="text-sm md:text-lg text-slate-200 font-medium max-w-3xl mx-auto leading-relaxed">
+              Sistema Integrado de Información en Salud para salas situacionales y registros de nóminas nominales del Estado Miranda.
+            </p>
+          </div>
+
+          <div className="pt-2 flex gap-4 justify-center flex-wrap">
+            <Link 
+              to="/sitio-informativo" 
+              className="bg-transparent hover:bg-white/10 text-white border-2 border-white/20 px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all duration-300 shadow-sm"
+              id="btn-ver-informativo"
+            >
+              Ver Informativo
+            </Link>
+            <Link 
+              to="/login" 
+              className="bg-[#FFD700] hover:bg-[#ffe234] text-[#062438] hover:scale-[1.02] px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all duration-300 shadow-md"
+              id="btn-acceso-sistema"
+            >
+              Acceso al Sistema
+            </Link>
+          </div>
         </div>
       </header>
-
-      {/* Tarjetas de funcionalidades */}
-      <section className="max-w-6xl mx-auto py-16 px-6 grid md:grid-cols-3 gap-8">
-        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-center">
-          <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <Activity className="text-blue-700" size={24} />
-          </div>
-          <h3 className="font-black text-lg uppercase">Nominal Quirúrgica</h3>
-          <p className="text-sm text-slate-500 mt-2">Registro de intervenciones quirúrgicas con trazabilidad de pacientes y médicos tratantes.</p>
-        </div>
-        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-center">
-          <div className="w-12 h-12 bg-pink-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <HeartPulse className="text-pink-700" size={24} />
-          </div>
-          <h3 className="font-black text-lg uppercase">Nómina Obstétrica</h3>
-          <p className="text-sm text-slate-500 mt-2">Control de partos, nacimientos y seguimiento materno-infantil.</p>
-        </div>
-        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-center">
-          <div className="w-12 h-12 bg-stone-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <FileSpreadsheet className="text-stone-700" size={24} />
-          </div>
-          <h3 className="font-black text-lg uppercase">Defunciones</h3>
-          <p className="text-sm text-slate-500 mt-2">Certificación de defunciones y análisis de causas de mortalidad.</p>
-        </div>
-      </section>
 
       {/* Footer */}
       <footer className="bg-slate-100 py-6 text-center text-xs text-slate-400 uppercase tracking-wider">

@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { useEffect } from 'react';   // <-- ESTA ES LA LÍNEA QUE FALTA
 import LandingPage from './pages/LandingPage';
+import LoginPage from './pages/LoginPage';
 import InformativoPage from './pages/InformativoPage';
 import AdminDashboard from './pages/AdminDashboard';
 import NominalDashboard from './components/ui/NominalDashboard';
@@ -20,7 +21,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/sitio-informativo" element={<InformativoPage />} />
-        <Route path="/login" element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
@@ -43,7 +44,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/sitio-informativo" element={<InformativoPage />} />
-      <Route path="/login" element={<LandingPage />} />
+      <Route path="/login" element={<LoginPage />} />
       <Route path="/nominal" element={<NominalDashboard />} />
       <Route path="/nominal-form" element={<NominalFormWindow />} />
       <Route path="/admin/dashboard" element={<AdminDashboard />} />

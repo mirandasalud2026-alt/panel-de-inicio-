@@ -1,13 +1,15 @@
 import { useAuth } from '../../hooks/useAuth';
 import { Activity, HeartPulse, FileSpreadsheet, LogOut, User } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 
 export default function NominalDashboard() {
   const { user, profile, signOut } = useAuth();
+  const navigate = useNavigate();
 
   const openForm = (type: 'QUIRURGICA' | 'OBSTETRICA' | 'DEFUNCION') => {
     const emailParam = user?.email ? encodeURIComponent(user.email) : '';
-    window.open(`/nominal-form?type=${type}&email=${emailParam}`, '_blank');
+    navigate(`/nominal-form?type=${type}&email=${emailParam}`);
   };
 
   return (

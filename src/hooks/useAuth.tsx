@@ -133,6 +133,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
         return;
       }
+      const isNominalDemo = localStorage.getItem('sim_demo_nominal') === 'true';
+      if (isNominalDemo) {
+        setUser({ id: 'demo-nominal-id', email: 'nominal@mirandasalud.com' } as any);
+        setProfile({
+          id: 'demo-nominal-id', nombre: 'OPERADOR NOMINAL', email: 'nominal@mirandasalud.com',
+          rol: 'nominal', estado: 'aprobado',
+          id_centro: null,
+          cod_eje: null,
+        });
+        setLoading(false);
+        return;
+      }
       if (!supabase) {
         setLoading(false);
         return;
@@ -150,7 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     init();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (localStorage.getItem('sim_demo_admin') === 'true') return;
+      if (localStorage.getItem('sim_demo_admin') === 'true' || localStorage.getItem('sim_demo_nominal') === 'true') return;
       if (session?.user) {
         setUser(session.user);
         await fetchProfile(session.user.id, session.user.email);
@@ -169,6 +181,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     localStorage.removeItem('sim_demo_admin');
+    localStorage.removeItem('sim_demo_nominal');
     localStorage.removeItem('sim_demo_role');
     localStorage.removeItem('sim_demo_cod_eje');
     localStorage.removeItem('sim_demo_cod_asic');
