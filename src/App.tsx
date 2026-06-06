@@ -40,15 +40,14 @@ function AppRoutes() {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/sitio-informativo" element={<InformativoPage />} />
-      <Route path="/login" element={<LandingPage />} />
-      <Route path="/nominal" element={<NominalDashboard />} />
-      <Route path="/nominal-form" element={<NominalFormWindow />} />
-      <Route path="/admin/dashboard" element={<AdminDashboard />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+  <Routes>
+  <Route path="/" element={<LandingPage />} />
+  <Route path="/sitio-informativo" element={<InformativoPage />} />
+  <Route path="/login" element={<LandingPage />} />  {/* o un componente LoginPage */}
+  <Route path="/nominal" element={<NominalDashboard />} />
+  <Route path="/nominal-form" element={<NominalFormWindow />} />
+  <Route path="/admin/dashboard" element={<AdminDashboard />} />
+  </Routes>
   );
 }
 
