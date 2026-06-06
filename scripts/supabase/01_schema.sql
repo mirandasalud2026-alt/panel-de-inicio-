@@ -1,0 +1,434 @@
+-- =========================================================================
+-- MIRANDA SALUD 2026 - ESQUEMA ÚNICO
+-- Este script reemplaza database-setup.sql, supabase_setup.sql, etc.
+-- Ejecutar en SQL Editor de Supabase.
+-- =========================================================================
+
+-- 1. TABLA DE EJES GEOGRÁFICOS (con doble columna para compatibilidad)
+CREATE TABLE IF NOT EXISTS public.tejes (
+    cod_eje TEXT PRIMARY KEY,
+    nombre_eje TEXT NOT NULL,
+    nombre TEXT,                    -- alias compatible
+    eje TEXT,                       -- alias compatible
+    responsable TEXT,
+    poblacion_estimada INTEGER DEFAULT 0,
+    url_imagen_mapa TEXT,
+    descripcion_texto TEXT,
+    contacto_emergencia TEXT,
+    total_asics_oficial INTEGER DEFAULT 0,
+    total_cdis_oficial INTEGER DEFAULT 0,
+    cumplimiento_global INTEGER DEFAULT 100
+);
+
+-- Trigger para sincronizar nombre_eje <-> nombre
+CREATE OR REPLACE FUNCTION sync_tejes_names()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.nombre IS NULL AND NEW.nombre_eje IS NOT NULL THEN
+        NEW.nombre := NEW.nombre_eje;
+    ELSIF NEW.nombre_eje IS NULL AND NEW.nombre IS NOT NULL THEN
+        NEW.nombre_eje := NEW.nombre;
+    END IF;
+    IF NEW.eje IS NULL AND NEW.nombre_eje IS NOT NULL THEN
+        NEW.eje := 'Eje ' || NEW.nombre_eje;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_sync_tejes_names ON public.tejes;
+CREATE TRIGGER tr_sync_tejes_names
+BEFORE INSERT OR UPDATE ON public.tejes
+FOR EACH ROW EXECUTE FUNCTION sync_tejes_names();
+
+-- 2. TABLA DE ASIC (con doble columna)
+CREATE TABLE IF NOT EXISTS public.tasic (
+    id VARCHAR PRIMARY KEY,         -- código ASIC
+    cod_asic VARCHAR,               -- alias
+    nombre VARCHAR NOT NULL,
+    nombre_asic VARCHAR,            -- alias
+    cod_eje TEXT REFERENCES public.tejes(cod_eje) ON DELETE SET NULL,
+    cod_mun NUMERIC,
+    cod_parr NUMERIC,
+    municipio VARCHAR,
+    parroquia VARCHAR,
+    poblacion_estimada INTEGER DEFAULT 0,
+    numero_centros INTEGER DEFAULT 0,
+    autoridades JSONB DEFAULT '{
+        "director": {"nombre": "Sin Asignar", "cedula": "", "telefono": "", "correo": ""},
+        "epidemiologia": {"nombre": "Sin Asignar", "cedula": "", "telefono": "", "correo": ""}
+    }'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    responsable TEXT,
+    telefono_contacto TEXT,
+    correo_contacto TEXT
+);
+
+-- Trigger para sincronizar id <-> cod_asic y nombre <-> nombre_asic
+CREATE OR REPLACE FUNCTION sync_tasic_fields()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.id IS NULL AND NEW.cod_asic IS NOT NULL THEN
+        NEW.id := NEW.cod_asic;
+    ELSIF NEW.cod_asic IS NULL AND NEW.id IS NOT NULL THEN
+        NEW.cod_asic := NEW.id;
+    END IF;
+    IF NEW.nombre IS NULL AND NEW.nombre_asic IS NOT NULL THEN
+        NEW.nombre := NEW.nombre_asic;
+    ELSIF NEW.nombre_asic IS NULL AND NEW.nombre IS NOT NULL THEN
+        NEW.nombre_asic := NEW.nombre;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_sync_tasic_fields ON public.tasic;
+CREATE TRIGGER tr_sync_tasic_fields
+BEFORE INSERT OR UPDATE ON public.tasic
+FOR EACH ROW EXECUTE FUNCTION sync_tasic_fields();
+
+-- 3. TABLA DE USUARIOS (vinculada a auth.users)
+CREATE TABLE IF NOT EXISTS public.usuarios (
+    id UUID PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    rol TEXT DEFAULT 'nominal' CHECK (rol IN ('admin', 'directivo', 'oficina', 'nominal')),
+    estado TEXT DEFAULT 'aprobado' CHECK (estado IN ('pendiente', 'aprobado', 'rechazado')),
+    id_centro TEXT,
+    cod_eje TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. TABLAS MAESTRAS DE PACIENTES Y MÉDICOS (snake_case, sin espacios)
+CREATE TABLE IF NOT EXISTS public.pacientes (
+    cedula VARCHAR(50) PRIMARY KEY,
+    nombre VARCHAR(255) NOT NULL,
+    apellido VARCHAR(255) NOT NULL,
+    edad INTEGER NOT NULL,
+    sexo VARCHAR(50) NOT NULL,
+    telefono VARCHAR(150),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.medicos (
+    cedula VARCHAR(50) PRIMARY KEY,
+    nombre VARCHAR(255) NOT NULL,
+    apellido VARCHAR(255) NOT NULL,
+    telefono VARCHAR(150),
+    especialidad VARCHAR(100),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5. TABLAS DE REGISTROS NOMINALES (operativas)
+CREATE TABLE IF NOT EXISTS public.registros_quirurgicos (
+    id SERIAL PRIMARY KEY,
+    fecha DATE DEFAULT CURRENT_DATE,
+    estado VARCHAR(100) DEFAULT 'MIRANDA',
+    centro_salud VARCHAR(255) NOT NULL,
+    cedula_paciente VARCHAR(50) REFERENCES public.pacientes(cedula) ON UPDATE CASCADE,
+    nombre_paciente VARCHAR(255),
+    apellido_paciente VARCHAR(255),
+    edad_paciente INTEGER,
+    sexo_paciente VARCHAR(50),
+    telefono_paciente VARCHAR(150),
+    especialidad_quirurgica VARCHAR(255) NOT NULL,
+    tipo_intervencion VARCHAR(255) NOT NULL,
+    urgente_electiva VARCHAR(50) NOT NULL,
+    cantidad_intervencion INTEGER DEFAULT 1,
+    cedula_medico VARCHAR(50) REFERENCES public.medicos(cedula) ON UPDATE CASCADE,
+    nombre_medico VARCHAR(255),
+    apellido_medico VARCHAR(255),
+    telefono_medico VARCHAR(150),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.registros_obstetricos (
+    id SERIAL PRIMARY KEY,
+    fecha DATE DEFAULT CURRENT_DATE,
+    estado VARCHAR(100) DEFAULT 'MIRANDA',
+    centro_salud VARCHAR(255) NOT NULL,
+    cedula_madre VARCHAR(50) REFERENCES public.pacientes(cedula) ON UPDATE CASCADE,
+    nombre_madre VARCHAR(255),
+    apellido_madre VARCHAR(255),
+    edad_madre INTEGER,
+    telefono_madre VARCHAR(150),
+    nombre_infante VARCHAR(255),
+    sexo_infante VARCHAR(50),
+    tipo_parto VARCHAR(100) NOT NULL,
+    tipo_intervencion VARCHAR(100) NOT NULL,
+    cedula_medico VARCHAR(50) REFERENCES public.medicos(cedula) ON UPDATE CASCADE,
+    nombre_medico VARCHAR(255),
+    apellido_medico VARCHAR(255),
+    telefono_medico VARCHAR(150),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.registros_defunciones (
+    id SERIAL PRIMARY KEY,
+    fecha DATE DEFAULT CURRENT_DATE,
+    estado VARCHAR(100) DEFAULT 'MIRANDA',
+    centro_salud VARCHAR(255) NOT NULL,
+    cedula_fallecido VARCHAR(50) REFERENCES public.pacientes(cedula) ON UPDATE CASCADE,
+    nombre_fallecido VARCHAR(255) NOT NULL,
+    apellido_fallecido VARCHAR(255) NOT NULL,
+    edad_fallecido INTEGER NOT NULL,
+    sexo_fallecido VARCHAR(50) NOT NULL,
+    hora_fallecimiento VARCHAR(100) NOT NULL,
+    patologia VARCHAR(500) NOT NULL,
+    observacion TEXT,
+    cedula_medico VARCHAR(50) REFERENCES public.medicos(cedula) ON UPDATE CASCADE,
+    nombre_medico VARCHAR(255),
+    apellido_medico VARCHAR(255),
+    telefono_medico VARCHAR(150),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 6. TABLA DE NOMINALES (retención 7 días)
+CREATE TABLE IF NOT EXISTS public.nominales (
+    id SERIAL PRIMARY KEY,
+    tipo_registro VARCHAR(100) NOT NULL,
+    registro_id INTEGER NOT NULL,
+    cedula_principal VARCHAR(50) NOT NULL,
+    centro_salud VARCHAR(255) NOT NULL,
+    fecha_creacion TIMESTAMPTZ DEFAULT NOW(),
+    datos JSONB NOT NULL
+);
+
+-- 7. TABLAS DEL SEMÁFORO Y REPORTES
+CREATE TABLE IF NOT EXISTS public.transito_reportes (
+    id_centro TEXT PRIMARY KEY,
+    nombre_centro TEXT NOT NULL,
+    asic TEXT NOT NULL,
+    eje_geografico TEXT NOT NULL,
+    ultimo_reporte TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    estado_semaforo TEXT NOT NULL DEFAULT 'Verde' CHECK (estado_semaforo IN ('Verde', 'Amarillo', 'Rojo')),
+    horas_retraso INTEGER NOT NULL DEFAULT 0,
+    actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.resumen_asic (
+    asic TEXT PRIMARY KEY,
+    eje TEXT,
+    total_centros INTEGER DEFAULT 0,
+    centros_reportaron INTEGER DEFAULT 0,
+    porcentaje_reporte NUMERIC DEFAULT 0,
+    actualizado_en TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 8. TABLAS AUXILIARES
+CREATE TABLE IF NOT EXISTS public.noticias (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    titulo TEXT NOT NULL,
+    categoria TEXT CHECK (categoria IN ('urgente', 'informativa', 'evento')),
+    texto TEXT NOT NULL,
+    fecha TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.mapa_config (
+    id TEXT PRIMARY KEY DEFAULT 'default',
+    background_image TEXT,
+    ejes_data JSONB,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.mapa_poligonos (
+    id TEXT PRIMARY KEY,
+    eje_id TEXT NOT NULL,
+    points JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.clinicas_populares (
+    id SERIAL PRIMARY KEY,
+    nombre_establecimiento VARCHAR(255) NOT NULL,
+    cod_asic VARCHAR(50),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 9. VISTAS
+CREATE OR REPLACE VIEW public.vista_unificada_territorial AS
+SELECT 
+    tr.id_centro,
+    tr.nombre_centro,
+    tr.asic AS centro_asic_cod,
+    tr.estado_semaforo,
+    tr.horas_retraso,
+    tr.ultimo_reporte,
+    tr.actualizado_en,
+    a.nombre AS nombre_asic,
+    COALESCE(tr.eje_geografico, e.nombre_eje) AS eje_geografico,
+    e.cod_eje AS eje_id,
+    a.municipio AS nombre_municipio,
+    a.cod_mun AS municipio_id,
+    a.parroquia AS nombre_parroquia,
+    a.cod_parr AS parroquia_id
+FROM public.transito_reportes tr
+LEFT JOIN public.tasic a ON a.id = tr.asic OR a.cod_asic = tr.asic
+LEFT JOIN public.tejes e ON e.cod_eje = a.cod_eje;
+
+CREATE OR REPLACE VIEW public.v_acumulado_semanal_agregado AS
+SELECT 
+    tr.asic,
+    UPPER(COALESCE(e.nombre_eje, tr.eje_geografico, 'Sin Eje')) AS eje_geografico,
+    COUNT(tr.id_centro) AS total_centros,
+    SUM(CASE WHEN tr.estado_semaforo = 'Verde' THEN 1 ELSE 0 END) AS centros_verdes,
+    SUM(CASE WHEN tr.estado_semaforo = 'Amarillo' THEN 1 ELSE 0 END) AS centros_amarillos,
+    SUM(CASE WHEN tr.estado_semaforo = 'Rojo' THEN 1 ELSE 0 END) AS centros_rojos,
+    ROUND(AVG(tr.horas_retraso))::INTEGER AS promedio_retraso,
+    (COUNT(tr.id_centro) * 45 + COALESCE((
+        SELECT COUNT(*) 
+        FROM public.nominales n 
+        JOIN public.transito_reportes tr2 ON tr2.nombre_centro = n.centro_salud
+        WHERE tr2.asic = tr.asic
+    ), 0))::INTEGER AS total_atenciones_semanales
+FROM public.transito_reportes tr
+LEFT JOIN public.tasic a ON a.id = tr.asic OR a.cod_asic = tr.asic
+LEFT JOIN public.tejes e ON e.cod_eje = a.cod_eje
+GROUP BY tr.asic, e.nombre_eje, tr.eje_geografico;
+
+-- 10. FUNCIONES Y TRIGGERS
+CREATE OR REPLACE FUNCTION public.propagar_datos_por_cedula(
+    target_cedula VARCHAR, 
+    target_nombre VARCHAR, 
+    target_apellido VARCHAR, 
+    target_telefono VARCHAR, 
+    target_edad INTEGER, 
+    target_sexo VARCHAR
+)
+RETURNS VOID AS $$
+BEGIN
+    UPDATE public.registros_quirurgicos
+    SET 
+        nombre_paciente = COALESCE(nombre_paciente, target_nombre),
+        apellido_paciente = COALESCE(apellido_paciente, target_apellido),
+        telefono_paciente = COALESCE(telefono_paciente, target_telefono),
+        edad_paciente = COALESCE(edad_paciente, target_edad),
+        sexo_paciente = COALESCE(sexo_paciente, target_sexo)
+    WHERE cedula_paciente = target_cedula AND (nombre_paciente IS NULL OR nombre_paciente = '');
+
+    UPDATE public.registros_quirurgicos
+    SET 
+        nombre_medico = COALESCE(nombre_medico, target_nombre),
+        apellido_medico = COALESCE(apellido_medico, target_apellido),
+        telefono_medico = COALESCE(telefono_medico, target_telefono)
+    WHERE cedula_medico = target_cedula AND (nombre_medico IS NULL OR nombre_medico = '');
+
+    UPDATE public.registros_obstetricos
+    SET 
+        nombre_madre = COALESCE(nombre_madre, target_nombre),
+        apellido_madre = COALESCE(apellido_madre, target_apellido),
+        telefono_madre = COALESCE(telefono_madre, target_telefono),
+        edad_madre = COALESCE(edad_madre, target_edad)
+    WHERE cedula_madre = target_cedula AND (nombre_madre IS NULL OR nombre_madre = '');
+
+    UPDATE public.registros_obstetricos
+    SET 
+        nombre_medico = COALESCE(nombre_medico, target_nombre),
+        apellido_medico = COALESCE(apellido_medico, target_apellido),
+        telefono_medico = COALESCE(telefono_medico, target_telefono)
+    WHERE cedula_medico = target_cedula AND (nombre_medico IS NULL OR nombre_medico = '');
+
+    UPDATE public.registros_defunciones
+    SET 
+        nombre_medico = COALESCE(nombre_medico, target_nombre),
+        apellido_medico = COALESCE(apellido_medico, target_apellido),
+        telefono_medico = COALESCE(telefono_medico, target_telefono)
+    WHERE cedula_medico = target_cedula AND (nombre_medico IS NULL OR nombre_medico = '');
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger para purgar nominales antiguos (7 días)
+CREATE OR REPLACE FUNCTION public.purgar_nominales_antiguos()
+RETURNS TRIGGER AS $$
+BEGIN
+    DELETE FROM public.nominales 
+    WHERE fecha_creacion < NOW() - INTERVAL '7 days';
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_purgar_nominales ON public.nominales;
+CREATE TRIGGER tr_purgar_nominales
+AFTER INSERT ON public.nominales
+FOR EACH STATEMENT
+EXECUTE FUNCTION public.purgar_nominales_antiguos();
+
+-- Trigger para crear perfil de usuario automáticamente
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.usuarios (id, nombre, email, rol, estado)
+    VALUES (
+        NEW.id, 
+        COALESCE(NEW.raw_user_meta_data->>'nombre', NEW.raw_user_meta_data->>'full_name', 'Usuario Nuevo'), 
+        NEW.email, 
+        'nominal', 
+        'aprobado'
+    );
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- 11. DATOS SEMILLA (EJES, ASICS, CLÍNICAS)
+INSERT INTO public.tejes (cod_eje, nombre_eje, nombre, eje, poblacion_estimada, total_asics_oficial, total_cdis_oficial, responsable, contacto_emergencia, cumplimiento_global) VALUES
+('AMI', 'Altos Mirandinos', 'Altos Mirandinos', 'Eje Altos Mirandinos', 460469, 9, 7, 'Ericka Andrelys Medina Zapata', '+58-412-4795341', 92),
+('VTY', 'Valles del Tuy', 'Valles del Tuy', 'Eje Valles del Tuy', 883132, 18, 16, 'Evi Mizael Padilla Hernandez', '+58-412-9952583', 78),
+('GGU', 'Guarenas - Guatire', 'Guarenas - Guatire', 'Eje Guarenas - Guatire', 497893, 9, 9, 'Maria Isabel Aguirre Marquez', '+58-424-1073830', 95),
+('BAR', 'Barlovento', 'Barlovento', 'Eje Barlovento', 305313, 8, 8, 'Saudis Alexandra Herrera Ortuño', '+58-412-9111995', 84),
+('MET', 'Metropolitano', 'Metropolitano', 'Eje Metropolitano', 1326302, 23, 20, 'Dra. Sofía Delgado Castro (Sinc)', 'Por definir', 70)
+ON CONFLICT (cod_eje) DO UPDATE SET 
+    nombre_eje = EXCLUDED.nombre_eje,
+    nombre = EXCLUDED.nombre,
+    eje = EXCLUDED.eje,
+    poblacion_estimada = EXCLUDED.poblacion_estimada,
+    responsable = EXCLUDED.responsable,
+    contacto_emergencia = EXCLUDED.contacto_emergencia;
+
+INSERT INTO public.tasic (id, cod_asic, nombre, nombre_asic, cod_eje, municipio, parroquia, poblacion_estimada, numero_centros, responsable, telefono_contacto) VALUES
+('AMI-01', 'AMI-01', 'ASIC Altos Mirandinos I', 'ASIC Altos Mirandinos I', 'AMI', 'Guaicaipuro', 'Los Teques', 115000, 12, 'Dra. Nancy Gomez', '+58-414-2223344'),
+('AMI-02', 'AMI-02', 'ASIC Altos Mirandinos II', 'ASIC Altos Mirandinos II', 'AMI', 'Carrizal', 'Carrizal', 83000, 8, 'Dr. José Pérez', '+58-424-3334455'),
+('AMI-03', 'AMI-03', 'ASIC Altos Mirandinos III', 'ASIC Altos Mirandinos III', 'AMI', 'Los Salias', 'San Antonio', 62000, 6, 'Dra. Elena Ruiz', '+58-412-5556677'),
+('VTY-01', 'VTY-01', 'ASIC Ocumare del Tuy', 'ASIC Ocumare del Tuy', 'VTY', 'Lander', 'Ocumare', 210000, 22, 'Dra. Clara Flores', '+58-416-8889900'),
+('VTY-02', 'VTY-02', 'ASIC Charallave', 'ASIC Charallave', 'VTY', 'Cristóbal Rojas', 'Charallave', 185000, 18, 'Dr. Marco Vivas', '+58-414-7778899'),
+('VTY-03', 'VTY-03', 'ASIC Santa Teresa del Tuy', 'ASIC Santa Teresa del Tuy', 'VTY', 'Independencia', 'Santa Teresa', 198000, 19, 'Dr. Andres Sanoja', '+58-412-1112233'),
+('GGU-01', 'GGU-01', 'ASIC Guarenas', 'ASIC Guarenas', 'GGU', 'Plaza', 'Guarenas', 248000, 20, 'Dra. Xiomara Lucena', '+58-424-9993311'),
+('GGU-02', 'GGU-02', 'ASIC Guatire', 'ASIC Guatire', 'GGU', 'Zamora', 'Guatire', 249000, 21, 'Dr. Ramon Alvarez', '+58-416-4447788'),
+('BAR-01', 'BAR-01', 'ASIC Higuerote', 'ASIC Higuerote', 'BAR', 'Brión', 'Higuerote', 92000, 11, 'Dra. Sandra Ortiz', '+58-414-9988776'),
+('BAR-02', 'BAR-02', 'ASIC Rio Chico', 'ASIC Rio Chico', 'BAR', 'Páez', 'Rio Chico', 83000, 10, 'Dr. Hector Torres', '+58-412-3344556'),
+('MET-01', 'MET-01', 'ASIC Petare I', 'ASIC Petare I', 'MET', 'Sucre', 'Petare', 350000, 32, 'Dra. Alicia Mendoza', '+58-414-6667788'),
+('MET-02', 'MET-02', 'ASIC Chacao', 'ASIC Chacao', 'MET', 'Chacao', 'Chacao', 78000, 7, 'Dr. Luis Rodriguez', '+58-424-1122334'),
+('MET-03', 'MET-03', 'ASIC Baruta', 'ASIC Baruta', 'MET', 'Baruta', 'Baruta', 230000, 15, 'Dra. Carmen Silva', '+58-412-6677889')
+ON CONFLICT (id) DO UPDATE SET
+    cod_asic = EXCLUDED.cod_asic,
+    nombre = EXCLUDED.nombre,
+    nombre_asic = EXCLUDED.nombre_asic,
+    cod_eje = EXCLUDED.cod_eje,
+    poblacion_estimada = EXCLUDED.poblacion_estimada,
+    numero_centros = EXCLUDED.numero_centros,
+    responsable = EXCLUDED.responsable,
+    telefono_contacto = EXCLUDED.telefono_contacto;
+
+INSERT INTO public.clinicas_populares (nombre_establecimiento, cod_asic) VALUES
+('CLÍNICA POPULAR PARACOTOS', 'AMI-01'),
+('CDI DOCTOR JOSÉ GREGORIO HERNÁNDEZ', 'AMI-01'),
+('AMBULATORIO PRADO DE MARÍA', 'AMI-02'),
+('CDI CONTEXTO MIRANDINO', 'AMI-03'),
+('CLÍNICA POPULAR HUGO CHÁVEZ', 'VTY-01'),
+('CDI CARTANAL', 'VTY-03'),
+('CLÍNICA POPULAR VALLES DEL TUY', 'VTY-02'),
+('HOSPITAL GENERAL DE GUARENAS', 'GGU-01'),
+('CDI EL QUEMADO', 'GGU-02'),
+('HOSPITAL HIGUEROTE', 'BAR-01'),
+('CLÍNICA POPULAR RIO CHICO', 'BAR-02'),
+('HOSPITAL ANA FRANCISCA PEREZ DE LEON II', 'MET-01'),
+('AMBULATORIO CHACAO', 'MET-02'),
+('HOSPITAL DOMINGO LUCIANI', 'MET-01')
+ON CONFLICT DO NOTHING;
+
+NOTIFY pgrst, 'reload schema';

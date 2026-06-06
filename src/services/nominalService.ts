@@ -803,6 +803,69 @@ export const nominalService = {
     return deletedCount;
   },
 
+  // Eliminar un registro nominal de forma definitiva e integrada
+  async eliminarRegistroNominal(tipoRegistro: 'quirurgica' | 'obstetrica' | 'defuncion', id: number): Promise<boolean> {
+    console.log(`🗑️ Elminando registro nominal tipo ${tipoRegistro} con ID: ${id}`);
+    
+    if (supabase) {
+      try {
+        const tableName = 
+          tipoRegistro === 'quirurgica' ? 'CL_quirurgicos_eventos' :
+          tipoRegistro === 'obstetrica' ? 'CL_obstetricos_eventos' : 
+          'CL_defunciones_eventos';
+
+        // 1. Eliminar de la tabla específica
+        const { error: eventErr } = await supabase
+          .from(tableName)
+          .delete()
+          .eq('id', id);
+
+        if (eventErr) {
+          console.warn(`Error eliminando de la tabla específica ${tableName}:`, eventErr.message);
+        }
+
+        // 2. Eliminar de la tabla de retención consolidada 'nominales'
+        const { error: nomErr } = await supabase
+          .from('nominales')
+          .delete()
+          .eq('tipo_registro', tipoRegistro)
+          .eq('registro_id', id);
+
+        if (nomErr) {
+          console.warn('Error eliminando de la tabla consolidada nominales:', nomErr.message);
+        }
+      } catch (err: any) {
+        console.error('Fallo de conexión al eliminar de Supabase:', err.message || err);
+      }
+    }
+
+    // Alinear con el almacenamiento local (fallbacks) sin importar si la base de datos está offline
+    try {
+      if (tipoRegistro === 'quirurgica') {
+        const list = getLocalData<any[]>(L_KEY_QUIRURGICA, []);
+        const filtered = list.filter(item => item.id !== id);
+        setLocalData(L_KEY_QUIRURGICA, filtered);
+      } else if (tipoRegistro === 'obstetrica') {
+        const list = getLocalData<any[]>(L_KEY_OBSTETRICA, []);
+        const filtered = list.filter(item => item.id !== id);
+        setLocalData(L_KEY_OBSTETRICA, filtered);
+      } else if (tipoRegistro === 'defuncion') {
+        const list = getLocalData<any[]>(L_KEY_DEFUNCION, []);
+        const filtered = list.filter(item => item.id !== id);
+        setLocalData(L_KEY_DEFUNCION, filtered);
+      }
+
+      // Limpiar del log general
+      const generalList = getLocalData<any[]>(L_KEY_NOMINALES, []);
+      const generalFiltered = generalList.filter(item => !(item.tipo_registro === tipoRegistro && item.registro_id === id));
+      setLocalData(L_KEY_NOMINALES, generalFiltered);
+      return true;
+    } catch (e) {
+      console.error('Error al actualizar local storage tras eliminación:', e);
+      return false;
+    }
+  },
+
   // Ejecuta trigger manual para forzar un backup a Google Drive de forma instantánea
   async realizarBackupGoogleDrive(): Promise<{ status: string; message: string; filesFound?: number }> {
     try {

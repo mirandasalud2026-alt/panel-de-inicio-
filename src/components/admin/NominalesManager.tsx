@@ -88,6 +88,27 @@ export default function NominalesManager() {
     }
   };
 
+  // Limpieza total del almacenamiento local/caché local forzada por el Administrador
+  const limpiarMemoriaAuxiliar = async () => {
+    if (!window.confirm('¿Desea borrar la memoria caché offline local de registros? Esto forzará una recarga limpia y directa de datos en tiempo real desde Supabase.')) return;
+    setActionLoading(true);
+    addLog('Borrando memoria auxiliar y cachés locales...');
+    try {
+      localStorage.removeItem('nominal_sim_pacientes');
+      localStorage.removeItem('nominal_sim_medicos');
+      localStorage.removeItem('nominal_sim_quirurgica');
+      localStorage.removeItem('nominal_sim_obstetrica');
+      localStorage.removeItem('nominal_sim_defuncion');
+      localStorage.removeItem('nominal_sim_nominales');
+      addLog('✓ Memoria de almacenamiento local limpia.');
+      await cargarListas();
+    } catch (err: any) {
+      addLog(`❌ Fallo limpiando caché: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Respaldo manual inmediato
   const dispararRespaldoDrive = async () => {
     setActionLoading(true);
@@ -99,6 +120,28 @@ export default function NominalesManager() {
       addLog(`✓ Destino: https://drive.google.com/drive/folders/19RTGSwQuisCSr1YLZrZX6ezngQ_69Mhv`);
     } catch (err: any) {
       addLog(`⚠️ Backup completado en modo simulación: Archivos empaquetados e introducidos listos para carga.`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Eliminar un registro nominal de forma segura desde Supabase/Local
+  const handleDeleteRecord = async (tipo: 'quirurgica' | 'obstetrica' | 'defuncion', id: number) => {
+    const confirmMessage = `¿Está seguro de que desea eliminar permanentemente este registro clínico de tipo [${tipo.toUpperCase()}] con ID ${id} de la base de datos? Esta acción es irreversible.`;
+    if (!window.confirm(confirmMessage)) return;
+
+    setActionLoading(true);
+    addLog(`Iniciando remoción del registro ${tipo.toUpperCase()} (ID: ${id})...`);
+    try {
+      const exito = await nominalService.eliminarRegistroNominal(tipo, id);
+      if (exito) {
+        addLog(`✓ Registro ${tipo.toUpperCase()} (ID: ${id}) purgado exitosamente de Supabase y cachés locales.`);
+        await cargarListas();
+      } else {
+        addLog(`❌ El proceso de eliminación reportó fallas en alguno de los niveles de almacenamiento.`);
+      }
+    } catch (err: any) {
+      addLog(`❌ Error procesando remoción nominal: ${err.message || err}`);
     } finally {
       setActionLoading(false);
     }
@@ -160,6 +203,15 @@ export default function NominalesManager() {
                   className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer"
                 >
                   <Trash2 size={12} /> Purgar (&gt;7 días)
+                </button>
+
+                <button
+                  onClick={limpiarMemoriaAuxiliar}
+                  disabled={actionLoading}
+                  title="Vacía los datos cargados localmente en caché para forzar una sincronización limpia con Supabase"
+                  className="flex items-center gap-1.5 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer border border-rose-100"
+                >
+                  <RefreshCw size={12} className={actionLoading ? 'animate-spin' : ''} /> Vaciar Caché Local
                 </button>
 
                 <button
@@ -267,12 +319,13 @@ export default function NominalesManager() {
                           <th className="px-4 py-3">PACIENTE</th>
                           <th className="px-4 py-3">CRITERIO QUIRÚRGICO</th>
                           <th className="px-4 py-3">MÉDICO TRATANTE</th>
+                          <th className="px-4 py-3 text-right">ACCIONES</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                         {currentQuirurgicas.length === 0 ? (
                           <tr>
-                            <td colSpan={5} className="px-4 py-8 text-center text-slate-400 text-[10px] uppercase font-bold">No hay registros quirúrgicos que coincidan.</td>
+                            <td colSpan={6} className="px-4 py-8 text-center text-slate-400 text-[10px] uppercase font-bold">No hay registros quirúrgicos que coincidan.</td>
                           </tr>
                         ) : (
                           currentQuirurgicas.map((item, idx) => (
@@ -297,6 +350,17 @@ export default function NominalesManager() {
                                 <p className="font-bold text-slate-700 uppercase">{item.nombre_medico} {item.apellido_medico}</p>
                                 <p className="text-[8.5px] text-slate-400 font-mono">C.I: {item.cedula_medico}</p>
                               </td>
+                              <td className="px-4 py-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteRecord('quirurgica', item.id)}
+                                  disabled={actionLoading}
+                                  className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                                  title="Eliminar registro quirúrgico permanentemente de la base de datos"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </td>
                             </tr>
                           ))
                         )}
@@ -314,12 +378,13 @@ export default function NominalesManager() {
                           <th className="px-4 py-3">MADRE</th>
                           <th className="px-4 py-3">INFANTE / PARTO</th>
                           <th className="px-4 py-3">MÉDICO OBSTETRA</th>
+                          <th className="px-4 py-3 text-right">ACCIONES</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                         {currentObstetricas.length === 0 ? (
                           <tr>
-                            <td colSpan={5} className="px-4 py-8 text-center text-slate-400 text-[10px] uppercase font-bold">No hay nóminas obstétricas que coincidan.</td>
+                            <td colSpan={6} className="px-4 py-8 text-center text-slate-400 text-[10px] uppercase font-bold">No hay nóminas obstétricas que coincidan.</td>
                           </tr>
                         ) : (
                           currentObstetricas.map((item) => (
@@ -346,6 +411,17 @@ export default function NominalesManager() {
                                 <p className="font-bold text-slate-700 uppercase">{item.nombre_medico} {item.apellido_medico}</p>
                                 <p className="text-[8.5px] text-slate-400 font-mono">C.I: {item.cedula_medico}</p>
                               </td>
+                              <td className="px-4 py-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteRecord('obstetrica', item.id)}
+                                  disabled={actionLoading}
+                                  className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                                  title="Eliminar registro obstétrico permanentemente de la base de datos"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </td>
                             </tr>
                           ))
                         )}
@@ -363,12 +439,13 @@ export default function NominalesManager() {
                           <th className="px-4 py-3">FALLEcido</th>
                           <th className="px-4 py-3">HORA / FISIOPATOLOGÍA</th>
                           <th className="px-4 py-3">CERTIFICANTE</th>
+                          <th className="px-4 py-3 text-right">ACCIONES</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                         {currentDefunciones.length === 0 ? (
                           <tr>
-                            <td colSpan={5} className="px-4 py-8 text-center text-slate-400 text-[10px] uppercase font-bold">No hay nóminas de defunción registradas.</td>
+                            <td colSpan={6} className="px-4 py-8 text-center text-slate-400 text-[10px] uppercase font-bold">No hay nóminas de defunción registradas.</td>
                           </tr>
                         ) : (
                           currentDefunciones.map((item) => (
@@ -393,6 +470,17 @@ export default function NominalesManager() {
                                 <p className="font-bold text-slate-700 uppercase">{item.nombre_medico} {item.apellido_medico}</p>
                                 <p className="text-[8.5px] text-slate-400 font-mono">C.I: {item.cedula_medico}</p>
                               </td>
+                              <td className="px-4 py-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteRecord('defuncion', item.id)}
+                                  disabled={actionLoading}
+                                  className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                                  title="Eliminar registro de defunción permanentemente de la base de datos"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </td>
                             </tr>
                           ))
                         )}
@@ -410,12 +498,13 @@ export default function NominalesManager() {
                           <th className="px-4 py-3">CÉDULA PRINCIPAL</th>
                           <th className="px-4 py-3">STABLECIMIENTO</th>
                           <th className="px-4 py-3">MÉDICO ASOCIADO</th>
+                          <th className="px-4 py-3 text-right">ACCIONES</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                         {currentNominales.length === 0 ? (
                           <tr>
-                            <td colSpan={5} className="px-4 py-8 text-center text-slate-400 text-[10px] uppercase font-bold">Sin datos vigentes en el Libro Diario Temporal (Retención 7 días).</td>
+                            <td colSpan={6} className="px-4 py-8 text-center text-slate-400 text-[10px] uppercase font-bold">Sin datos vigentes en el Libro Diario Temporal (Retención 7 días).</td>
                           </tr>
                         ) : (
                           currentNominales.map((item) => {
@@ -452,6 +541,17 @@ export default function NominalesManager() {
                                 <td className="px-4 py-3 uppercase text-slate-800">
                                   {item.datos?.nombre_medico} {item.datos?.apellido_medico}
                                   <p className="text-[7.5px] text-slate-400 font-mono">CI: {item.datos?.cedula_medico || 'S-M'}</p>
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteRecord(item.tipo_registro, item.registro_id)}
+                                    disabled={actionLoading}
+                                    className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                                    title="Eliminar este asiento nominal consolidado"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
                                 </td>
                               </tr>
                             );
