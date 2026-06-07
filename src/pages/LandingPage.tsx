@@ -35,9 +35,6 @@ export default function LandingPage() {
             <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tight font-display text-white drop-shadow-md">
               Miranda <span className="text-amber-400">Salud</span>
             </h1>
-            <p className="text-xs md:text-sm text-slate-200 font-medium max-w-2xl mx-auto leading-relaxed">
-              Sistema Integrado de Información en Salud para salas situacionales y registros de nóminas nominales del Estado Miranda.
-            </p>
           </div>
  
           <div className="pt-2 flex gap-4 justify-center flex-wrap">
