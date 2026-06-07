@@ -273,26 +273,331 @@ CREATE OR REPLACE VIEW public.pregistros_obstetricos AS SELECT * FROM public.reg
 CREATE OR REPLACE VIEW public.pregistros_defunciones AS SELECT * FROM public.registros_defunciones;
 
 
--- 11. VISTAS AGREGADAS DE CONTROL PARA PANELES DE DIRECCIÓN Y CUMPLIMIENTO
-CREATE OR REPLACE VIEW public.vista_unificada_territorial AS
-SELECT 
-    tr.id_centro,
-    tr.nombre_centro,
-    tr.asic AS centro_asic_cod,
-    tr.estado_semaforo,
-    tr.horas_retraso,
-    tr.ultimo_reporte,
-    tr.actualizado_en,
-    a.nombre AS nombre_asic,
-    COALESCE(tr.eje_geografico, e.nombre_eje) AS eje_geografico,
-    e.cod_eje AS eje_id,
-    a.municipio AS nombre_municipio,
-    a.cod_mun AS municipio_id,
-    a.parroquia AS nombre_parroquia,
-    a.cod_parr AS parroquia_id
-FROM public.transito_reportes tr
-LEFT JOIN public."TASIC" a ON a.id = tr.asic OR a.cod_asic = tr.asic
-LEFT JOIN public."TEjes" e ON e.cod_eje = a.cod_eje;
+-- 11. VISTAS AGREGADAS DE CONTROL PARA PANELES DE DIRECCIÓN Y CUMPLIMIENTO (CREADAS DINÁMICAMENTE)
+DO $$
+DECLARE
+    transito_table TEXT;
+    join_cond      TEXT;
+    asic_column   TEXT;
+    semaforo_column TEXT;
+    horas_retraso_column TEXT;
+    ultimo_reporte_column TEXT;
+    actualizado_en_column TEXT;
+    eje_join_column TEXT;
+    sql_create TEXT;
+BEGIN
+    -- 1. Detectar tabla de tránsito (ignorando mayúsculas y comillas)
+    SELECT CASE
+        WHEN to_regclass('public.transito_reportes') IS NOT NULL THEN 'transito_reportes'
+        WHEN to_regclass('public."transito_reportes"') IS NOT NULL THEN 'transito_reportes'
+        WHEN to_regclass('public."TRANSITO_REPORTES"') IS NOT NULL THEN 'TRANSITO_REPORTES'
+        WHEN to_regclass('public."Transito_reportes"') IS NOT NULL THEN 'Transito_reportes'
+        ELSE NULL
+    END INTO transito_table;
+
+    -- Fallback simple si no lo detecta de forma directa con regclass
+    IF transito_table IS NULL THEN
+        SELECT relname INTO transito_table
+        FROM pg_class
+        WHERE relkind = 'r'
+          AND relnamespace = 'public'::regnamespace
+          AND lower(relname) = 'transito_reportes'
+        LIMIT 1;
+    END IF;
+
+    IF transito_table IS NULL THEN
+        -- Si no existe en absoluto, creamos la tabla física como fallback para permitir compilar
+        CREATE TABLE IF NOT EXISTS public.transito_reportes (
+            id_centro SERIAL PRIMARY KEY,
+            nombre_centro VARCHAR(255) NOT NULL UNIQUE,
+            asic VARCHAR(100),
+            indigo_semaforo VARCHAR(50) DEFAULT 'Rojo',
+            horas_retraso INTEGER DEFAULT 0,
+            ultimo_reporte TIMESTAMPTZ DEFAULT NOW(),
+            actualizado_en TIMESTAMPTZ DEFAULT NOW(),
+            eje_geografico VARCHAR(100)
+        );
+        transito_table := 'transito_reportes';
+        RAISE NOTICE 'Se ha creado una tabla dummy transito_reportes como fallback.';
+    END IF;
+
+    -- 2. Detectar columnas en esa tabla
+    -- Código ASIC
+    SELECT column_name INTO asic_column
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = transito_table
+      AND lower(column_name) IN ('asic', 'cod_asic', 'id_asic')
+    ORDER BY ordinal_position
+    LIMIT 1;
+
+    -- Estado semáforo
+    SELECT column_name INTO semaforo_column
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = transito_table
+      AND lower(column_name) IN ('estado_semaforo', 'semaforo', 'color')
+    ORDER BY ordinal_position
+    LIMIT 1;
+
+    -- Horas de retraso
+    SELECT column_name INTO horas_retraso_column
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = transito_table
+      AND lower(column_name) IN ('horas_retraso', 'retraso_horas', 'horas_demora')
+    ORDER BY ordinal_position
+    LIMIT 1;
+
+    -- Último reporte
+    SELECT column_name INTO ultimo_reporte_column
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = transito_table
+      AND lower(column_name) IN ('ultimo_reporte', 'fecha_reporte', 'fecha')
+    ORDER BY ordinal_position
+    LIMIT 1;
+
+    -- Actualizado en
+    SELECT column_name INTO actualizado_en_column
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = transito_table
+      AND lower(column_name) IN ('actualizado_en', 'updated_at', 'fecha_actualizacion')
+    ORDER BY ordinal_position
+    LIMIT 1;
+
+    -- Asignación de columnas por defecto en caso de nulo
+    asic_column := COALESCE(asic_column, 'asic');
+    semaforo_column := COALESCE(semaforo_column, 'estado_semaforo');
+    horas_retraso_column := COALESCE(horas_retraso_column, 'horas_retraso');
+    ultimo_reporte_column := COALESCE(ultimo_reporte_column, 'ultimo_reporte');
+    actualizado_en_column := COALESCE(actualizado_en_column, 'actualizado_en');
+
+    -- 3. Detectar join territorial con TASIC (por columnas existentes)
+    join_cond := '';
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema='public' AND table_name IN ('TASIC','tasic')
+          AND column_name IN ('id','Id','ID')
+    ) THEN
+        join_cond := join_cond || format('tas.id::TEXT = tr.%I', asic_column);
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema='public' AND table_name IN ('TASIC','tasic')
+          AND column_name ILIKE 'cod_asic'
+    ) THEN
+        IF join_cond <> '' THEN join_cond := join_cond || ' OR '; END IF;
+        
+        join_cond := join_cond || (
+          SELECT format('tas.%I::TEXT = tr.%I', column_name, asic_column)
+          FROM information_schema.columns
+          WHERE table_schema='public'
+            AND table_name IN ('TASIC','tasic')
+            AND column_name ILIKE 'cod_asic'
+          ORDER BY ordinal_position
+          LIMIT 1
+         );
+    END IF;
+
+    IF join_cond = '' THEN
+        join_cond := format('tas.cod_asic::TEXT = tr.%I', asic_column); -- Fallback
+    END IF;
+
+    -- Detectar columna de eje en TASIC (para join con TEjes)
+    SELECT column_name INTO eje_join_column
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'TASIC'
+      AND lower(column_name) IN ('cod_eje', 'eje_id', 'id_eje')
+    ORDER BY ordinal_position
+    LIMIT 1;
+
+    eje_join_column := COALESCE(eje_join_column, 'cod_eje');
+
+    -- 4. Crear vista_unificada_territorial (dinámica)
+    sql_create := format('
+        CREATE OR REPLACE VIEW public.vista_unificada_territorial AS
+        SELECT
+            tr.id_centro,
+            tr.nombre_centro,
+            tr.%I AS centro_asic_cod,
+            tr.%I AS estado_semaforo,
+            COALESCE(tr.%I, 0) AS horas_retraso,
+            tr.%I AS ultimo_reporte,
+            tr.%I AS actualizado_en,
+            tas.nombre_asic,
+            COALESCE(tr.eje_geografico, eje.nombre_eje) AS eje_geografico,
+            eje.cod_eje AS eje_id,
+            tas.municipio AS nombre_municipio,
+            tas.municipio_id,
+            tas.parroquia AS nombre_parroquia,
+            tas.parroquia_id
+        FROM public.%I tr
+        LEFT JOIN public."TASIC" tas ON (%s)
+        LEFT JOIN public."TEjes" eje ON eje.cod_eje = tas.%I
+    ',
+    asic_column, semaforo_column, horas_retraso_column,
+    ultimo_reporte_column, actualizado_en_column,
+    transito_table, join_cond, eje_join_column
+    );
+    EXECUTE sql_create;
+    RAISE NOTICE 'Vista vista_unificada_territorial creada';
+
+    -- 5. Crear v_acumulado_semanal_agregado (dinámica)
+    EXECUTE format($sql$
+        CREATE OR REPLACE VIEW public.v_acumulado_semanal_agregado AS
+        SELECT
+            tr.%I AS asic,
+            UPPER(COALESCE(eje.nombre_eje, tr.eje_geografico, 'Sin Eje')) AS eje_geografico,
+            COUNT(tr.id_centro) AS total_centros,
+            SUM(CASE WHEN tr.%I = 'Verde' THEN 1 ELSE 0 END) AS centros_verdes,
+            SUM(CASE WHEN tr.%I = 'Amarillo' THEN 1 ELSE 0 END) AS centros_amarillos,
+            SUM(CASE WHEN tr.%I = 'Rojo' THEN 1 ELSE 0 END) AS centros_rojos,
+            ROUND(AVG(COALESCE(tr.%I, 0)))::INTEGER AS promedio_retraso,
+            (COUNT(tr.id_centro) * 45
+              + COALESCE((
+                  SELECT COUNT(*)
+                  FROM public.nominales n
+                  JOIN public.%I tr2 ON tr2.nombre_centro = n.centro_salud
+                  WHERE tr2.%I = tr.%I
+              ), 0)
+            )::INTEGER AS total_atenciones_semanales
+        FROM public.%I tr
+        LEFT JOIN public."TASIC" tas ON (%s)
+        LEFT JOIN public."TEjes" eje ON eje.cod_eje = tas.%I
+        GROUP BY tr.%I, eje.nombre_eje, tr.eje_geografico;
+    $sql$, 
+    asic_column, semaforo_column, semaforo_column, semaforo_column, horas_retraso_column,
+    transito_table, asic_column, asic_column,
+    transito_table, join_cond, eje_join_column, asic_column);
+    RAISE NOTICE 'Vista v_acumulado_semanal_agregado creada';
+
+    -- 6. Crear vistas adicionales del dashboard territorial + nominales
+    -- Vista 1: Resumen territorial para tarjetas y gráficos
+    EXECUTE '
+        CREATE OR REPLACE VIEW public.v_dashboard_territorial AS
+        SELECT
+            COALESCE(eje_geografico, \'Sin eje\') AS eje,
+            COUNT(DISTINCT id_centro) AS total_centros,
+            SUM(CASE WHEN estado_semaforo = \'Verde\' THEN 1 ELSE 0 END) AS verdes,
+            SUM(CASE WHEN estado_semaforo = \'Amarillo\' THEN 1 ELSE 0 END) AS amarillos,
+            SUM(CASE WHEN estado_semaforo = \'Rojo\' THEN 1 ELSE 0 END) AS rojos,
+            COALESCE(ROUND(AVG(horas_retraso))::INT, 0) AS retraso_promedio,
+            (SELECT COUNT(*) FROM public.nominales WHERE fecha_registro >= CURRENT_DATE - INTERVAL \'7 days\') AS atenciones_semana
+        FROM public.vista_unificada_territorial
+        GROUP BY eje_geografico
+        ORDER BY total_centros DESC;
+    ';
+
+    -- Vista 2: Detalle por municipio (drilldown)
+    EXECUTE '
+        CREATE OR REPLACE VIEW public.v_drilldown_municipio AS
+        SELECT
+            nombre_municipio,
+            municipio_id,
+            eje_geografico,
+            COUNT(DISTINCT id_centro) AS centros,
+            SUM(CASE WHEN estado_semaforo = \'Rojo\' THEN 1 ELSE 0 END) AS alertas_rojas,
+            AVG(horas_retraso) AS retraso_promedio
+        FROM public.vista_unificada_territorial
+        WHERE nombre_municipio IS NOT NULL
+        GROUP BY nombre_municipio, municipio_id, eje_geografico
+        ORDER BY alertas_rojas DESC;
+    ';
+
+    -- Vista 3: Detalle por parroquia (drilldown)
+    EXECUTE '
+        CREATE OR REPLACE VIEW public.v_drilldown_parroquia AS
+        SELECT
+            nombre_parroquia,
+            parroquia_id,
+            nombre_municipio,
+            COUNT(DISTINCT id_centro) AS centros,
+            SUM(CASE WHEN estado_semaforo = \'Rojo\' THEN 1 ELSE 0 END) AS alertas_rojas,
+            MAX(horas_retraso) AS max_retraso
+        FROM public.vista_unificada_territorial
+        WHERE nombre_parroquia IS NOT NULL
+        GROUP BY nombre_parroquia, parroquia_id, nombre_municipio;
+    ';
+
+    -- Vista 4: Histórico nominal semanal (últimos 7 días) con tipo_registro desglosado
+    EXECUTE '
+        CREATE OR REPLACE VIEW public.v_nominales_semana AS
+        SELECT
+            n.id,
+            n.centro_salud,
+            n.cedula_paciente,
+            n.nombre_paciente,
+            n.medico_tratante,
+            n.tipo_registro->>\'tipo\' AS tipo,
+            n.tipo_registro->>\'descripcion\' AS descripcion,
+            n.fecha_registro,
+            v.eje_geografico,
+            v.nombre_municipio
+        FROM public.nominales n
+        LEFT JOIN public.vista_unificada_territorial v ON v.nombre_centro = n.centro_salud
+        WHERE n.fecha_registro >= CURRENT_DATE - INTERVAL \'7 days\'
+        ORDER BY n.fecha_registro DESC;
+    ';
+
+    -- Vista 5: Exportación nominal (optimizada para grandes volúmenes)
+    EXECUTE '
+        CREATE OR REPLACE VIEW public.v_export_nominales AS
+        SELECT
+            n.id,
+            n.centro_salud,
+            n.cedula_paciente,
+            n.nombre_paciente,
+            n.medico_tratante,
+            n.tipo_registro,
+            n.fecha_registro,
+            v.eje_geografico,
+            v.nombre_asic,
+            v.nombre_municipio,
+            v.nombre_parroquia
+        FROM public.nominales n
+        INNER JOIN public.vista_unificada_territorial v ON v.nombre_centro = n.centro_salud
+        ORDER BY n.fecha_registro DESC;
+    ';
+
+    -- Vista 6: Administration de centros (listado paginable con filtros)
+    EXECUTE '
+        CREATE OR REPLACE VIEW public.v_admin_centros AS
+        SELECT
+            id_centro,
+            nombre_centro,
+            centro_asic_cod,
+            estado_semaforo,
+            horas_retraso,
+            ultimo_reporte,
+            actualizado_en,
+            nombre_asic,
+            eje_geografico,
+            nombre_municipio,
+            nombre_parroquia
+        FROM public.vista_unificada_territorial;
+    ';
+
+    -- Vista 7: Resumen por ASIC con métricas nominales reales (si existe columna de fecha en nominales)
+    EXECUTE '
+        CREATE OR REPLACE VIEW public.v_asic_resumen_nominal AS
+        SELECT
+            v.centro_asic_cod AS asic,
+            v.eje_geografico,
+            COUNT(DISTINCT v.id_centro) AS centros,
+            COUNT(n.id) AS atenciones_ultima_semana,
+            ROUND(AVG(v.horas_retraso))::INT AS retraso_promedio
+        FROM public.vista_unificada_territorial v
+        LEFT JOIN public.nominales n ON n.centro_salud = v.nombre_centro
+            AND n.fecha_registro >= CURRENT_DATE - INTERVAL \'7 days\'
+        GROUP BY v.centro_asic_cod, v.eje_geografico;
+    ';
+
+    RAISE NOTICE 'Todas las vistas fueron creadas exitosamente.';
+END $$;
 
 CREATE OR REPLACE VIEW public.vista_noticias_autores AS
 SELECT 
@@ -326,26 +631,7 @@ SELECT
 FROM public."TASIC" a
 LEFT JOIN public."TEjes" e ON e.cod_eje = a.cod_eje;
 
--- La vista agregada semanal requerida por los paneles de Sala Situacional
-CREATE OR REPLACE VIEW public.v_acumulado_semanal_agregado AS
-SELECT 
-    tr.asic,
-    UPPER(COALESCE(e.nombre_eje, tr.eje_geografico, 'Sin Eje')) AS eje_geografico,
-    COUNT(tr.id_centro) AS total_centros,
-    SUM(CASE WHEN tr.estado_semaforo = 'Verde' THEN 1 ELSE 0 END) AS centros_verdes,
-    SUM(CASE WHEN tr.estado_semaforo = 'Amarillo' THEN 1 ELSE 0 END) AS centros_amarillos,
-    SUM(CASE WHEN tr.estado_semaforo = 'Rojo' THEN 1 ELSE 0 END) AS centros_rojos,
-    ROUND(AVG(tr.horas_retraso))::INTEGER AS promedio_retraso,
-    (COUNT(tr.id_centro) * 45 + COALESCE((
-        SELECT COUNT(*) 
-        FROM public.nominales n 
-        JOIN public.transito_reportes tr2 ON tr2.nombre_centro = n.centro_salud
-        WHERE tr2.asic = tr.asic
-    ), 0))::INTEGER AS total_atenciones_semanales
-FROM public.transito_reportes tr
-LEFT JOIN public."TASIC" a ON a.id = tr.asic OR a.cod_asic = tr.asic
-LEFT JOIN public."TEjes" e ON e.cod_eje = a.cod_eje
-GROUP BY tr.asic, e.nombre_eje, tr.eje_geografico;
+-- La vista agregada semanal requerida por los paneles de Sala Situacional (Creada dinámicamente en el bloque DO anterior)
 
 
 -- 12. TRIGGERS SÉCURE DE RETENCIÓN DE 7 DÍAS NOMINALES Y CREACIÓN DE USUARIO DESDE AUTH
