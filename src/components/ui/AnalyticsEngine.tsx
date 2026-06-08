@@ -21,9 +21,11 @@ import {
   RefreshCw,
   Search,
   ShieldCheck,
-  Award
+  Award,
+  FileSpreadsheet
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { supabase } from '../../lib/supabase';
 import { DashboardAssignment } from '../../types/dashboard';
 
 // --- DATA STRUCTURES FOR WEBHOOK DATA & ANALYTICS ---
@@ -154,6 +156,10 @@ const GENERATE_FALLBACK_NOMINALS = (): NominalRecord[] => {
 export default function AnalyticsEngine() {
   const { profile } = useAuth();
   
+  const [customWebhookUrl, setCustomWebhookUrl] = useState<string>(() => localStorage.getItem('VITE_GOOGLE_SCRIPT_URL') || '');
+  const [emulateData, setEmulateData] = useState<boolean>(() => localStorage.getItem('EMULATE_NOMINAL_DATA') !== 'false');
+  const [showIntegrationGuide, setShowIntegrationGuide] = useState<boolean>(false);
+
   // --- STATES ---
   const [dashboards, setDashboards] = useState<DashboardAssignment[]>([]);
   const [selectedDashboardId, setSelectedDashboardId] = useState<string>('');
@@ -220,10 +226,12 @@ export default function AnalyticsEngine() {
       setInteractiveWeeklyMeta(assigned[0].meta_semanal);
       setFilterEje(assigned[0].eje_geografico || 'Todos');
     }
-
-    // 3. Generar / Obtener datos nominales
-    fetchNominalData();
   }, [profile]);
+
+  useEffect(() => {
+    // Generar / Obtener datos nominales cada vez que cambien los estados de emulación u origen
+    fetchNominalData();
+  }, [profile, emulateData, customWebhookUrl]);
 
   // Actualizar meta interactiva cuando cambia de dashboard
   useEffect(() => {
@@ -244,15 +252,27 @@ export default function AnalyticsEngine() {
     setIsLoading(true);
     let success = false;
     
-    const nominalWebhook = 'https://script.google.com/macros/s/AKfycbzEbs37sq8l16OxQqG7JGPfYcfjauzblhSASY9TMwqNdEd0ly7rZlkW7V8V7mExaL9d/exec';
+    // Obtener webhook personalizado de local storage o usar el preestablecido
+    const savedWebhook = localStorage.getItem('VITE_GOOGLE_SCRIPT_URL') || '';
+    const nominalWebhook = savedWebhook || 'https://script.google.com/macros/s/AKfycbzEbs37sq8l16OxQqG7JGPfYcfjauzblhSASY9TMwqNdEd0ly7rZlkW7V8V7mExaL9d/exec';
     
+    // Si emulación está activa por elección del operador
+    if (emulateData) {
+      const simulated = GENERATE_FALLBACK_NOMINALS();
+      setNominalData(simulated);
+      setUseSimulatedData(true);
+      setIsLoading(false);
+      setNotification({ type: 'info', text: 'Visualizando con Tubería Nominal Local de Resguardo (Modo Simulado / Demostración)' });
+      return;
+    }
+
     try {
-      // Intentamos llamar al proxy /api/run-script o fetch directo
+      // Intentamos llamar al proxy /api/run-script con la URL configurada
       const res = await fetch(`/api/run-script`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'getNominalesDataset', // hipotético endpoint nominal catalogado
+          action: 'getNominalesDataset',
           scriptUrl: nominalWebhook
         })
       });
@@ -279,19 +299,51 @@ export default function AnalyticsEngine() {
         setUseSimulatedData(false);
         success = true;
         logWebhookCall(nominalWebhook, 'success');
-        setNotification({ type: 'success', text: '¡Datos nominales en tiempo real cargados exitosamente del Webhook!' });
+        setNotification({ type: 'success', text: '¡Datos nominales en tiempo real cargados exitosamente de su Webhook de Google Sheets!' });
       }
     } catch (e) {
-      console.warn('Fallo al conectar con el webhook nominal de GAS, recurriendo a cálculos nominales matemáticos:', e);
+      console.warn('Fallo al conectar con el webhook nominal de GAS:', e);
       logWebhookCall(nominalWebhook, 'error');
     }
 
+    // Nivel 2 de recuperación: Cargar de la base de datos Supabase real en la nube si está vacía la hoja
     if (!success) {
-      // Fallback local robusto
+      if (supabase) {
+        try {
+          const { data, error } = await supabase.from('nominales').select('*').limit(200);
+          if (!error && data && data.length > 0) {
+            const formatted: NominalRecord[] = data.map((item: any, i: number) => {
+              const d = item.datos || {};
+              return {
+                id: item.id || `db-${i}`,
+                fecha: d.fecha || item.fecha_creacion?.split('T')[0] || new Date().toISOString().split('T')[0],
+                nombre: `${d.nombre_paciente || d.nombre_madre || d.nombre_fallecido || 'PACIENTE'} ${d.apellido_paciente || d.apellido_madre || d.apellido_fallecido || ''}`.toUpperCase().trim(),
+                cedula: d.cedula_paciente || d.cedula_madre || d.cedula_fallecido || item.cedula_principal || 'S/CI',
+                edad: parseInt(d.edad_paciente || d.edad_madre || d.edad_fallecido || d.edad) || 30,
+                genero: (d.sexo_paciente || d.sexo_fallecido || d.sexo || (d.cedula_madre ? 'FEMENINO' : 'FEMENINO')).toUpperCase() === 'MASCULINO' ? 'MASCULINO' : 'FEMENINO',
+                eje_geografico: item.eje_geografico || detectEjeByAsic(item.centro_salud || d.centro_salud),
+                asic: d.asic || 'ASIC CENTRAL',
+                centro_salud: item.centro_salud || d.centro_salud || 'CDI CENTRAL',
+                tipo_planilla: (item.tipo_registro || 'quirurgica').toUpperCase(),
+                diagnostico: d.patologia || d.especialidad_quirurgica || d.tipo_parto || 'Evaluación médica registrada'
+              };
+            });
+            setNominalData(formatted);
+            setUseSimulatedData(false);
+            success = true;
+            setNotification({ type: 'success', text: '¡Se cargaron registros nominales en tiempo real desde la plataforma Supabase!' });
+          }
+        } catch (dbErr) {
+          console.warn('Fallo al conectar con la base de datos Supabase:', dbErr);
+        }
+      }
+    }
+
+    if (!success) {
       const simulated = GENERATE_FALLBACK_NOMINALS();
       setNominalData(simulated);
       setUseSimulatedData(true);
-      setNotification({ type: 'info', text: 'Visualizando con Tubería Nominal Local de Resguardo SSPA (Offline Seguro)' });
+      setNotification({ type: 'info', text: 'No se dectectaron registros en la hoja de Google Sheets. Visualizando en modo local.' });
     }
     setIsLoading(false);
   };
@@ -546,7 +598,20 @@ export default function AnalyticsEngine() {
         </div>
 
         {/* ACCIONES DEL DOCK */}
-        <div className="flex items-center gap-2 self-stretch lg:self-auto shrink-0">
+        <div className="flex items-center gap-2 self-stretch lg:self-auto shrink-0 animate-fade-in">
+          <button
+            onClick={() => setShowIntegrationGuide(!showIntegrationGuide)}
+            className={`flex items-center gap-1.5 px-3 py-2 border rounded-xl text-[9.5px] font-black uppercase tracking-wider cursor-pointer transition h-[38px] ${
+              emulateData
+                ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                : 'bg-emerald-50 text-emerald-800 border-emerald-250 hover:bg-emerald-100'
+            }`}
+            title="Sincronización o Simulación de Datos"
+          >
+            <FileSpreadsheet size={13} />
+            {emulateData ? 'Ver Modo Simulado' : 'Ver Datos Reales'}
+          </button>
+
           <button
             onClick={fetchNominalData}
             title="Sincronizar Webhooks"
@@ -558,7 +623,7 @@ export default function AnalyticsEngine() {
           {profile?.rol === 'admin' && (
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white hover:bg-slate-800 text-[9.5px] font-black uppercase tracking-wider rounded-xl cursor-pointer transition shadow-xs hover:shadow-sm"
+              className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white hover:bg-slate-800 text-[9.5px] font-black uppercase tracking-wider rounded-xl cursor-pointer transition shadow-xs hover:shadow-sm h-[38px]"
             >
               <Plus size={14} /> Crear Nuevo Dashboard
             </button>
@@ -568,13 +633,124 @@ export default function AnalyticsEngine() {
             <button
               onClick={() => handleDeleteDashboard(activeDashboard.id)}
               title="Eliminar Dashboard Permanente"
-              className="p-2.5 bg-rose-50 hover:bg-rose-100 border border-rose-250 border-rose-100 text-rose-600 rounded-xl transition cursor-pointer flex items-center justify-center h-[38px] w-[38px]"
+              className="p-2.5 bg-rose-50 hover:bg-rose-100 border border-rose-100 text-rose-600 rounded-xl transition cursor-pointer flex items-center justify-center h-[38px] w-[38px]"
             >
               <Trash2 size={13} />
             </button>
           )}
         </div>
       </div>
+
+      {/* PANEL DE INTEGRACIÓN CON GOOGLE SHEETS / SUPABASE REAL */}
+      <AnimatePresence>
+        {showIntegrationGuide && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4 font-sans"
+          >
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-100 pb-3 gap-2">
+              <div>
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                  <span className="p-1 bg-[#0B3D5C] text-white rounded-md text-[10px]">REAL</span>
+                  Enlace y Acoplamiento de Datos Reales (Google Sheets)
+                </h3>
+                <p className="text-[10px] text-slate-450 text-slate-400 mt-1">
+                  Configure su Google Web App URL para sincronizar registros en vivo desde sus planillas SSPA / GAS.
+                </p>
+              </div>
+              
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <span className="text-[9px] font-black uppercase text-slate-500 tracking-wider">Activar Simulación:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextVal = !emulateData;
+                    setEmulateData(nextVal);
+                    localStorage.setItem('EMULATE_NOMINAL_DATA', String(nextVal));
+                  }}
+                  className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${emulateData ? 'bg-amber-500' : 'bg-slate-200'}`}
+                >
+                  <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${emulateData ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* PROCEDIMIENTO */}
+              <div className="space-y-3">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Instrucciones de Despliegue Real</span>
+                <div className="space-y-2 text-[10px] text-slate-600 leading-relaxed font-semibold">
+                  <div className="flex gap-2">
+                    <span className="text-[#0B3D5C] font-black">1.</span>
+                    <p>Abra el panel de Google Apps Script en <a href="https://script.google.com" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">script.google.com</a>.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-[#0B3D5C] font-black">2.</span>
+                    <p>Copie el código fuente consolidado provisto en el archivo <code className="bg-slate-100 text-[#092F47] px-1 py-0.5 rounded font-mono text-[9px]">google_apps_script_code.gs</code>.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-[#0B3D5C] font-black">3.</span>
+                    <p>Cree una nueva implementación tipo <strong className="text-slate-800">"Aplicación Web"</strong> y dé acceso a <strong className="text-slate-800">"Cualquier Persona" (Anyone)</strong>.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-[#0B3D5C] font-black">4.</span>
+                    <p>Pegue la URL obtenida en el campo de la derecha, guarde el acoplamiento y desactive "Activar Simulación" para ver datos reales.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* ENTRADA DE CONFIGURACIÓN */}
+              <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col justify-between">
+                <div className="space-y-1.5 col-span-1">
+                  <span className="text-[8.5px] font-black text-slate-500 uppercase tracking-widest block">Dirección URL del Webhook Real (GAS Web App)</span>
+                  <input
+                    type="text"
+                    value={customWebhookUrl}
+                    onChange={(e) => setCustomWebhookUrl(e.target.value)}
+                    placeholder="https://script.google.com/macros/s/..."
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-slate-800 placeholder-slate-400 font-mono"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between gap-3 pt-2">
+                  <span className="text-[9px] text-slate-400 font-bold block uppercase tracking-wide">
+                    {useSimulatedData ? '⚠️ Visualizando Modo Simulado' : '⚡ Conectado con Datos Reales'}
+                  </span>
+                  
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        localStorage.setItem('VITE_GOOGLE_SCRIPT_URL', customWebhookUrl);
+                        fetchNominalData();
+                        setNotification({ type: 'success', text: 'Sincronizador Google Webhook actualizado.' });
+                      }}
+                      className="px-3.5 py-1.5 bg-slate-900 border border-slate-800 text-white hover:bg-slate-800 rounded-lg text-[9px] font-black uppercase tracking-wider cursor-pointer transition"
+                    >
+                      Guardar URL
+                    </button>
+                    {customWebhookUrl && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomWebhookUrl('');
+                          localStorage.removeItem('VITE_GOOGLE_SCRIPT_URL');
+                          setNotification({ type: 'info', text: 'Reiniciado al Webhook por defecto.' });
+                        }}
+                        className="px-3.5 py-1.5 bg-white border border-slate-200 text-slate-500 hover:text-slate-800 rounded-lg text-[9px] font-bold uppercase tracking-wider cursor-pointer transition"
+                      >
+                        Reiniciar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
         

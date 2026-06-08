@@ -140,11 +140,7 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickNominalLogin = () => {
-    setEmail('nominal@mirandasalud.com');
-    setPassword('nominal2026');
-    setErrorStatus(null);
-  };
+
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-slate-50 flex flex-col justify-between relative">
@@ -187,26 +183,7 @@ export default function LoginPage() {
               Ingreso Controlado de Operadores
             </h2>
 
-            {/* Credenciales de Prueba Rápida */}
-            <div className="bg-amber-50/50 border border-amber-500/20 rounded-2xl p-3 text-center space-y-1.5">
-              <p className="text-[8.5px] font-black text-amber-800 uppercase tracking-wider">
-                Credencial Operador Nominal Autorizado
-              </p>
-              <div className="flex flex-col xs:flex-row items-center justify-center gap-1 font-mono text-[9px] text-slate-600">
-                <span>Usuario: <strong className="text-slate-800">nominal@mirandasalud.com</strong></span>
-                <span className="hidden xs:inline">•</span>
-                <span>Contraseña: <strong className="text-slate-800">nominal2026</strong></span>
-              </div>
-              <button
-                type="button"
-                onClick={handleQuickNominalLogin}
-                className="mt-1 px-3 py-1 bg-amber-500 hover:bg-amber-600 text-[#062438] text-[8px] font-black uppercase tracking-wider rounded-lg transition-all"
-                id="btn-quick-fill-nominal"
-              >
-                Cargar Credenciales Automáticamente
-              </button>
-            </div>
-
+            {/* Formulario de Ingreso */}
             <form onSubmit={handleLogin} className="space-y-3">
               <div className="space-y-1">
                 <label className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">

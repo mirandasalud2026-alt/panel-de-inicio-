@@ -178,7 +178,7 @@ export default function AdminPortal() {
 
     setNewUser({ nombre: '', email: '', rol: 'nominal', estado: 'aprobado', id_centro: '', cod_eje: '' });
     setShowCreateUserForm(false);
-    showNotification('Usuario creado exitosamente. Puede ingresar offline usando su correo y la clave "nominal2026"');
+    showNotification('Usuario creado exitosamente. Puede ingresar de forma segura usando su correo y contraseña autorizada');
     fetchUsers();
   };
 
