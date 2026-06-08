@@ -14,7 +14,6 @@ export default function InformativoPage() {
         <div className="flex-1 bg-[#FFD700]"></div> {/* Yellow */}
         <div className="flex-1 bg-[#002F6C]"></div> {/* Blue */}
         <div className="flex-1 bg-[#CF0921]"></div> {/* Red */}
-        <div className="flex-1 bg-[#008751]"></div> {/* Green */}
       </div>
 
       {/* Header Compacto Profesional */}
@@ -68,7 +67,6 @@ export default function InformativoPage() {
             <div className="w-2 h-2 rounded-full bg-[#FFD700]/60"></div>
             <div className="w-2 h-2 rounded-full bg-[#002F6C]/60"></div>
             <div className="w-2 h-2 rounded-full bg-[#CF0921]/60"></div>
-            <div className="w-2 h-2 rounded-full bg-[#008751]/60"></div>
          </div>
       </footer>
     </div>
