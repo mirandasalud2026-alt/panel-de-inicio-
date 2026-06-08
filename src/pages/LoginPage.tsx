@@ -115,7 +115,7 @@ export default function LoginPage() {
         setTimeout(() => {
           window.location.href = '/admin/dashboard';
         }, 1000);
-      } else if (matchedVirtual && targetPassword === 'nominal2026') {
+      } else if (matchedVirtual && targetPassword === (localStorage.getItem(`sim_pass_${targetEmail.toLowerCase()}`) || 'nominal2026')) {
         if (matchedVirtual.rol === 'admin') {
           localStorage.setItem('sim_demo_admin', 'true');
           setSuccessStatus(`¡Acceso admin autorizado para ${matchedVirtual.nombre}!`);

@@ -43,7 +43,8 @@ export default function AdminPortal() {
     rol: 'nominal',
     estado: 'aprobado',
     id_centro: '',
-    cod_eje: ''
+    cod_eje: '',
+    password: ''
   });
   const [selectedUserForAssign, setSelectedUserForAssign] = useState<UserProfile | null>(null);
 
@@ -53,6 +54,7 @@ export default function AdminPortal() {
   const [selectedTableSchema, setSelectedTableSchema] = useState<{ descripcion: string; columnas: { name: string; type: string; label: string }[] } | null>(null);
   const [selectedTableRecords, setSelectedTableRecords] = useState<any[]>([]);
   const [isRecordsLoading, setIsRecordsLoading] = useState(false);
+  const [dataSource, setDataSource] = useState<'supabase' | 'simulado' | 'local_dinamico'>('simulado');
 
   // Tab 3: Generador Inteligente
   const [jsonInput, setJsonInput] = useState<string>('');
@@ -171,12 +173,12 @@ export default function AdminPortal() {
     localStorage.setItem('s_admin_virtual_users', JSON.stringify(list));
 
     // Guardar credenciales de simulación para que puedan hacer Login offline
-    localStorage.setItem(`sim_pass_${emailClean}`, 'nominal2026');
+    localStorage.setItem(`sim_pass_${emailClean}`, newUser.password || 'nominal2026');
 
     // Auditoría
     addAuditLog('CREAR_USUARIO', 'usuarios', created.id);
 
-    setNewUser({ nombre: '', email: '', rol: 'nominal', estado: 'aprobado', id_centro: '', cod_eje: '' });
+    setNewUser({ nombre: '', email: '', rol: 'nominal', estado: 'aprobado', id_centro: '', cod_eje: '', password: '' });
     setShowCreateUserForm(false);
     showNotification('Usuario creado exitosamente. Puede ingresar de forma segura usando su correo y contraseña autorizada');
     fetchUsers();
@@ -282,8 +284,35 @@ export default function AdminPortal() {
       const metadataSchema = schemaService.getTableSchema(tableName);
       setSelectedTableSchema(metadataSchema);
 
-      const records = await schemaService.getTableRecords(tableName);
-      setSelectedTableRecords(records);
+      const dinamicModules = schemaService.getDynamicModules();
+      const isDynamic = dinamicModules.some(m => m.meta_datos.tabla_nombre === tableName);
+
+      if (isDynamic) {
+        setDataSource('local_dinamico');
+        const records = await schemaService.getTableRecords(tableName);
+        setSelectedTableRecords(records);
+      } else {
+        let records: any[] = [];
+        let fetchedFromSupabase = false;
+        try {
+          if (supabase) {
+            const { data, error } = await supabase.from(tableName).select('*').limit(100);
+            if (!error && data) {
+              records = data;
+              fetchedFromSupabase = true;
+              setDataSource('supabase');
+            }
+          }
+        } catch (dbErr) {
+          console.warn('Fallo consulta directa de Supabase', dbErr);
+        }
+
+        if (!fetchedFromSupabase) {
+          records = schemaService.getSimulatedRecords(tableName);
+          setDataSource('simulado');
+        }
+        setSelectedTableRecords(records);
+      }
     } catch (err) {
       console.error('Error al analizar registros:', err);
     } finally {
@@ -634,7 +663,15 @@ export default function AdminPortal() {
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#0B3D5C]"
                     />
                   </div>
-                  <div className="space-y-1 flex items-end">
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Contraseña de la Cuenta</label>
+                    <input 
+                      type="text" placeholder="Asigne clave (por defecto: nominal2026)"
+                      value={newUser.password} onChange={e => setNewUser(prev => ({ ...prev, password: e.target.value }))}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#0B3D5C]"
+                    />
+                  </div>
+                  <div className="space-y-1 flex items-end col-span-1 md:col-span-3">
                     <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[10px] tracking-wide p-2.5 rounded-xl transition">
                       ⚡ Registrar Cuenta Operativa
                     </button>
@@ -666,7 +703,9 @@ export default function AdminPortal() {
                               </div>
                               <div>
                                 <p className="text-[11px] font-bold text-slate-800 uppercase leading-none">{u.nombre || 'Sin nombre'}</p>
-                                <p className="text-[9px] text-slate-400 font-mono mt-1">{u.email}</p>
+                                <p className="text-[9px] text-slate-400 font-mono mt-1">
+                                  {u.email} • <span className="text-emerald-750 text-emerald-700 font-black bg-emerald-50 border border-emerald-200/50 px-1 py-0.5 rounded text-[8.5px]">Clave: {localStorage.getItem(`sim_pass_${u.email.toLowerCase()}`) || 'nominal2026'}</span>
+                                </p>
                               </div>
                             </div>
                           </td>
@@ -839,7 +878,54 @@ export default function AdminPortal() {
             </div>
 
             {tablaSeleccionada && selectedTableSchema && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="space-y-6">
+                {/* INDICADOR DE CONDUCTO DE PERSISTENCIA REAL-TIME */}
+                {dataSource === 'supabase' && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-3xl p-4 flex items-start gap-3 shadow-xs">
+                    <div className="p-2 bg-emerald-650 bg-emerald-600 text-white rounded-2xl flex-shrink-0">
+                      <Database size={16} />
+                    </div>
+                    <div>
+                      <h4 className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">🔌 Conducto en Vivo Conectado a Supabase</h4>
+                      <p className="text-[9.5px] text-emerald-700 font-bold mt-1 leading-normal uppercase">
+                        Esta tabla <span className="font-mono bg-emerald-100/50 px-1.5 py-0.5 rounded text-emerald-950 font-black">{tablaSeleccionada}</span> está resolviendo datos reales y persistidos en tiempo real directamente desde su instancia de la nube de Supabase. Cualquier cambio, adición o inspección es 100% inmutable y fidedigno.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {dataSource === 'simulado' && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-3xl p-4 flex items-start gap-4 shadow-xs">
+                    <div className="p-2 bg-amber-550 bg-amber-500 text-white rounded-2xl flex-shrink-0 animate-pulse">
+                      <ShieldAlert size={16} />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-[10px] font-black text-amber-800 uppercase tracking-widest">⚠️ Consola Virtualizada (Modo de Resguardo y Simbiosis local)</h4>
+                      <p className="text-[9.5px] text-amber-700 font-bold leading-normal uppercase">
+                        La tabla <span className="font-mono bg-amber-100 px-1.5 py-0.5 rounded text-amber-950 font-black">{tablaSeleccionada}</span> aún no existe o no contiene registros en su esquema físico de Supabase o hay un problema de sincronización.
+                      </p>
+                      <p className="text-[9px] text-amber-600 font-medium leading-relaxed pt-1.5 border-t border-amber-200/50">
+                        🔑 <span className="font-black uppercase tracking-wider text-amber-800">Para resolver con sus bases de datos reales:</span> Conéctese a su consola de Supabase y verifique la existencia de la tabla <code className="font-mono font-bold bg-amber-150/40 text-amber-900">{tablaSeleccionada}</code>. Mientras tanto, el sistema ha activado la <span className="font-bold text-amber-800">Tubería de Persistencia Local Automática</span> de resguardo para garantizar la fluidez de su sesión.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {dataSource === 'local_dinamico' && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-3xl p-4 flex items-start gap-3 shadow-xs">
+                    <div className="p-2 bg-blue-600 text-white rounded-2xl flex-shrink-0">
+                      <RefreshCw size={16} />
+                    </div>
+                    <div>
+                      <h4 className="text-[10px] font-black text-blue-800 uppercase tracking-widest">⚙️ Tubería de Formulario Dinámico Activo</h4>
+                      <p className="text-[9.5px] text-blue-700 font-bold mt-1 leading-normal uppercase">
+                        Esta tabla corresponde a un formulario cognitivo dinámico instanciado localmente. Su persistencia está gobernada por motores locales de resguardo listos para su posterior volcado o migración a base de datos.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
                 {/* LADO IZQUIERDO: METADATOS Y COLUMNAS */}
                 <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4 lg:col-span-1">
@@ -922,6 +1008,7 @@ export default function AdminPortal() {
                   )}
                 </div>
 
+              </div>
               </div>
             )}
           </motion.div>

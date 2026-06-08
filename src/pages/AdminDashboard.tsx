@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { LogOut, Home } from 'lucide-react';
 import FloatingBackButton from '../components/ui/FloatingBackButton';
 import AdminPortal from '../components/ui/AdminPortal';
 
 export default function AdminDashboard() {
-  const { profile } = useAuth();
+  const { profile, signOut } = useAuth();
 
   useEffect(() => {
     if (profile && profile.rol !== 'admin') {
@@ -38,9 +39,27 @@ export default function AdminDashboard() {
               </h2>
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-[11px] font-black uppercase text-[#FFD700]">Sesión Administrativa Autorizada</p>
-            <p className="text-[9px] text-slate-300 font-mono mt-0.5">{profile.nombre} • Rol: {profile.rol}</p>
+          <div className="flex flex-col items-end gap-2 text-right">
+            <div>
+              <p className="text-[11px] font-black uppercase text-[#FFD700]">Sesión Administrativa Autorizada</p>
+              <p className="text-[9px] text-slate-350 text-slate-300 font-mono mt-0.5">{profile.nombre} • Rol: {profile.rol}</p>
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <button
+                onClick={() => window.location.href = '/'}
+                className="flex items-center gap-1 px-2.5 py-1 bg-white/10 hover:bg-white/20 active:scale-95 transition text-[9px] font-black uppercase tracking-widest rounded-lg cursor-pointer"
+                title="Volver al Portal de Carga"
+              >
+                <Home size={11} /> Volver al Portal
+              </button>
+              <button
+                onClick={signOut}
+                className="flex items-center gap-1 px-2.5 py-1 bg-rose-600 hover:bg-rose-700 active:scale-95 transition text-white text-[9px] font-black uppercase tracking-widest rounded-lg cursor-pointer"
+                title="Cerrar sesión de Miranda Salud"
+              >
+                <LogOut size={11} /> Cerrar Sesión
+              </button>
+            </div>
           </div>
         </div>
       </div>
