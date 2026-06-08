@@ -869,6 +869,725 @@ INSERT INTO public."TClinicas_populares" (nombre_establecimiento, cod_asic) VALU
 ON CONFLICT DO NOTHING;
 
 
+-- 17.5. MÓDULOS DE AUDITORÍA, ADMINISTRACIÓN DE USUARIOS Y GESTIÓN NOMINAL AVANZADA
+-- Diseñado e integrado resilientemente bajo control dinámico de regclass y compatibilidad
+
+-- 17.5.1. TABLA DE AUDITORÍA REGIONAL DE SUCESOS
+CREATE TABLE IF NOT EXISTS public.logs_auditoria (
+    id SERIAL PRIMARY KEY,
+    usuario_id UUID,                     -- ID en auth.users / public.usuarios
+    usuario_email TEXT,                  -- Email del ejecutor
+    accion TEXT NOT NULL,                -- 'CREAR_USUARIO', 'EDITAR_USUARIO', 'ELIMINAR_USUARIO', 'REGISTRO_NOMINAL_CREAR', 'REGISTRO_NOMINAL_PURGA'
+    tabla_afectada TEXT,                 -- Tabla sobre la que se actuó
+    registro_id TEXT,                    -- ID físico del registro afectado
+    detalles JSONB DEFAULT '{}'::jsonb,  -- Detalles estructurados de la operación
+    fecha TIMESTAMPTZ DEFAULT NOW()      -- Sello temporal perpetuo
+);
+
+-- Habilitar RLS en auditoría
+ALTER TABLE public.logs_auditoria ENABLE ROW LEVEL SECURITY;
+
+-- 17.5.2. ALTERACIÓN ADAPTATIVA Y COMPATIBILIDAD RETROACTIVA DE NOMINALES
+-- Garantiza que todas las vistas (incluso legacy) que dependen de nominales funcionen sin error
+DO $$
+BEGIN
+    -- Añadir columna cedula_paciente para compatibilidad si no existe
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='nominales' AND column_name='cedula_paciente') THEN
+        ALTER TABLE public.nominales ADD COLUMN cedula_paciente VARCHAR(50);
+    END IF;
+
+    -- Añadir columna nombre_paciente para compatibilidad si no existe
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='nominales' AND column_name='nombre_paciente') THEN
+        ALTER TABLE public.nominales ADD COLUMN nombre_paciente VARCHAR(255);
+    END IF;
+
+    -- Añadir columna medico_tratante para compatibilidad si no existe
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='nominales' AND column_name='medico_tratante') THEN
+        ALTER TABLE public.nominales ADD COLUMN medico_tratante VARCHAR(255);
+    END IF;
+
+    -- Añadir columna fecha_registro para compatibilidad si no existe
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='nominales' AND column_name='fecha_registro') THEN
+        ALTER TABLE public.nominales ADD COLUMN fecha_registro TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+    END IF;
+
+    -- Añadir columna registros_quirurgicos_id para compatibilidad si no existe
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='nominales' AND column_name='registros_quirurgicos_id') THEN
+        ALTER TABLE public.nominales ADD COLUMN registros_quirurgicos_id INTEGER;
+    END IF;
+
+    -- Rellenar retroactivamente datos vacíos de migración si existiesen filas
+    UPDATE public.nominales 
+    SET 
+        cedula_paciente = COALESCE(cedula_paciente, cedula_principal),
+        fecha_registro = COALESCE(fecha_registro, fecha_creacion),
+        nombre_paciente = COALESCE(nombre_paciente, datos->>'nombre_paciente', datos->> 'nombre_madre', datos->>'nombre_fallecido', 'Paciente'),
+        medico_tratante = COALESCE(medico_tratante, datos->>'nombre_medico', 'No Especificado')
+    WHERE cedula_paciente IS NULL OR nombre_paciente IS NULL;
+
+END $$;
+
+-- 17.5.3. FUNCIONES RPC DE ADMINISTRACIÓN DE USUARIOS
+
+-- RPC: Listado de usuarios con filtros y conteo total integrado para paginación precisa
+CREATE OR REPLACE FUNCTION public.listar_usuarios(
+    p_rol TEXT DEFAULT NULL,
+    p_estado TEXT DEFAULT NULL,
+    p_eje TEXT DEFAULT NULL,
+    p_limit INT DEFAULT 20,
+    p_offset INT DEFAULT 0
+)
+RETURNS TABLE (
+    id UUID,
+    nombre TEXT,
+    email TEXT,
+    rol TEXT,
+    estado TEXT,
+    id_centro TEXT,
+    cod_eje TEXT,
+    created_at TIMESTAMPTZ,
+    total_count BIGINT
+) AS $$
+DECLARE
+    v_total_count BIGINT;
+BEGIN
+    SELECT COUNT(*) INTO v_total_count
+    FROM public.usuarios u
+    WHERE (p_rol IS NULL OR u.rol = p_rol)
+      AND (p_estado IS NULL OR u.estado = p_estado)
+      AND (p_eje IS NULL OR u.cod_eje = p_eje);
+
+    RETURN QUERY
+    SELECT 
+        u.id,
+        u.nombre,
+        u.email,
+        u.rol,
+        u.estado,
+        u.id_centro,
+        u.cod_eje,
+        u.created_at,
+        v_total_count
+    FROM public.usuarios u
+    WHERE (p_rol IS NULL OR u.rol = p_rol)
+      AND (p_estado IS NULL OR u.estado = p_estado)
+      AND (p_eje IS NULL OR u.cod_eje = p_eje)
+    ORDER BY u.created_at DESC
+    LIMIT p_limit OFFSET p_offset;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- RPC: Crear o invitar usuario desde la administración (con validación de rol operador)
+CREATE OR REPLACE FUNCTION public.crear_usuario_admin(
+    p_id UUID,
+    p_nombre TEXT,
+    p_email TEXT,
+    p_rol TEXT,
+    p_estado TEXT DEFAULT 'aprobado',
+    p_id_centro TEXT DEFAULT NULL,
+    p_cod_eje TEXT DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+    v_operador_rol TEXT;
+    v_operador_email TEXT;
+    v_response JSONB;
+BEGIN
+    -- Validamos si el usuario administrador actual tiene permisos
+    SELECT rol, email INTO v_operador_rol, v_operador_email
+    FROM public.usuarios
+    WHERE id = auth.uid();
+
+    IF COALESCE(v_operador_rol, '') NOT IN ('admin', 'directivo') AND auth.role() <> 'service_role' THEN
+        RAISE EXCEPTION 'Acceso denegado. Solo administradores o supervisores pueden registrar usuarios.';
+    END IF;
+
+    IF p_id IS NULL OR p_nombre IS NULL OR p_email IS NULL OR p_rol IS NULL THEN
+        RAISE EXCEPTION 'Parámetros obligatorios faltantes (id, nombre, email, rol).';
+    END IF;
+
+    IF p_rol NOT IN ('admin', 'directivo', 'oficina', 'nominal') THEN
+        RAISE EXCEPTION 'Rol inválido. Debe ser: admin, directivo, oficina o nominal.';
+    END IF;
+
+    INSERT INTO public.usuarios (id, nombre, email, rol, estado, id_centro, cod_eje)
+    VALUES (p_id, p_nombre, p_email, p_rol, p_estado, p_id_centro, p_cod_eje)
+    ON CONFLICT (id) DO UPDATE SET
+        nombre = EXCLUDED.nombre,
+        email = EXCLUDED.email,
+        rol = EXCLUDED.rol,
+        estado = EXCLUDED.estado,
+        id_centro = EXCLUDED.id_centro,
+        cod_eje = EXCLUDED.cod_eje;
+
+    INSERT INTO public.logs_auditoria (usuario_id, usuario_email, accion, tabla_afectada, registro_id, detalles)
+    VALUES (
+        auth.uid(),
+        v_operador_email,
+        'CREAR_USUARIO',
+        'usuarios',
+        p_id::TEXT,
+        jsonb_build_object(
+            'id', p_id,
+            'nombre', p_nombre,
+            'email', p_email,
+            'rol', p_rol,
+            'estado', p_estado,
+            'id_centro', p_id_centro,
+            'cod_eje', p_cod_eje
+        )
+    );
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'message', 'Usuario registrado y perfil sincronizado exitosamente.',
+        'usuario_id', p_id
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- RPC: Editar rol, estado y adscripción de usuario de forma segura
+CREATE OR REPLACE FUNCTION public.editar_usuario(
+    p_id UUID,
+    p_nombre TEXT DEFAULT NULL,
+    p_rol TEXT DEFAULT NULL,
+    p_estado TEXT DEFAULT NULL,
+    p_id_centro TEXT DEFAULT NULL,
+    p_cod_eje TEXT DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+    v_operador_rol TEXT;
+    v_operador_email TEXT;
+    v_old_usuario RECORD;
+BEGIN
+    SELECT rol, email INTO v_operador_rol, v_operador_email
+    FROM public.usuarios
+    WHERE id = auth.uid();
+
+    IF COALESCE(v_operador_rol, '') NOT IN ('admin') AND auth.role() <> 'service_role' THEN
+        RAISE EXCEPTION 'Acceso denegado. Solo administradores pueden modificar perfiles.';
+    END IF;
+
+    SELECT * INTO v_old_usuario FROM public.usuarios WHERE id = p_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Usuario con ID % no encontrado.', p_id;
+    END IF;
+
+    UPDATE public.usuarios SET
+        nombre = COALESCE(p_nombre, nombre),
+        rol = COALESCE(p_rol, rol),
+        estado = COALESCE(p_estado, estado),
+        id_centro = CASE WHEN p_id_centro IS NOT NULL THEN p_id_centro ELSE id_centro END,
+        cod_eje = CASE WHEN p_cod_eje IS NOT NULL THEN p_cod_eje ELSE cod_eje END
+    WHERE id = p_id;
+
+    INSERT INTO public.logs_auditoria (usuario_id, usuario_email, accion, tabla_afectada, registro_id, detalles)
+    VALUES (
+        auth.uid(),
+        v_operador_email,
+        'EDITAR_USUARIO',
+        'usuarios',
+        p_id::TEXT,
+        jsonb_build_object(
+            'id_usuario_editado', p_id,
+            'modificaciones', jsonb_build_object(
+                'nombre', p_nombre,
+                'rol', p_rol,
+                'estado', p_estado,
+                'id_centro', p_id_centro,
+                'cod_eje', p_cod_eje
+            ),
+            'valores_anteriores', jsonb_build_object(
+                'nombre', v_old_usuario.nombre,
+                'rol', v_old_usuario.rol,
+                'estado', v_old_usuario.estado,
+                'id_centro', v_old_usuario.id_centro,
+                'cod_eje', v_old_usuario.cod_eje
+            )
+        )
+    );
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'message', 'Usuario modificado exitosamente.'
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- RPC: Eliminar físicamente un perfil de usuario (restringido a administradores)
+CREATE OR REPLACE FUNCTION public.eliminar_usuario(
+    p_id UUID
+)
+RETURNS JSONB AS $$
+DECLARE
+    v_operador_rol TEXT;
+    v_operador_email TEXT;
+    v_old_usuario RECORD;
+BEGIN
+    SELECT rol, email INTO v_operador_rol, v_operador_email
+    FROM public.usuarios
+    WHERE id = auth.uid();
+
+    IF COALESCE(v_operador_rol, '') NOT IN ('admin') AND auth.role() <> 'service_role' THEN
+        RAISE EXCEPTION 'Acceso denegado. Solo administradores pueden eliminar usuarios.';
+    END IF;
+
+    SELECT * INTO v_old_usuario FROM public.usuarios WHERE id = p_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Usuario con ID % no encontrado.', p_id;
+    END IF;
+
+    DELETE FROM public.usuarios WHERE id = p_id;
+
+    INSERT INTO public.logs_auditoria (usuario_id, usuario_email, accion, tabla_afectada, registro_id, detalles)
+    VALUES (
+        auth.uid(),
+        v_operador_email,
+        'ELIMINAR_USUARIO',
+        'usuarios',
+        p_id::TEXT,
+        jsonb_build_object(
+            'id_usuario_eliminado', p_id,
+            'nombre', v_old_usuario.nombre,
+            'email', v_old_usuario.email,
+            'rol', v_old_usuario.rol
+        )
+    );
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'message', 'Perfil eliminado correctamente.'
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- 17.5.4. FUNCIONES RPC DEL MÓDULO NOMINAL (PACIENTES Y ATENCIONES)
+
+-- RPC: Búsqueda incremental por cédula (Autocomplete)
+CREATE OR REPLACE FUNCTION public.pacientes_autocomplete_cedula(
+    p_prefix TEXT,
+    p_lim INTEGER DEFAULT 10
+)
+RETURNS TABLE (
+    cedula VARCHAR,
+    nombre VARCHAR,
+    apellido VARCHAR,
+    edad INTEGER,
+    sexo VARCHAR,
+    telefono VARCHAR
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        p.cedula,
+        p.nombre,
+        p.apellido,
+        p.edad,
+        p.sexo,
+        p.telefono
+    FROM public.pacientes p
+    WHERE p.cedula ILIKE trim(p_prefix) || '%'
+    ORDER BY p.cedula ASC
+    LIMIT p_lim;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- RPC: Validación de existencia del Médico Tratante (Contra tabla principal de médicos)
+CREATE OR REPLACE FUNCTION public.validar_medico_tratante(
+    p_cedula TEXT
+)
+RETURNS TABLE (
+    existe BOOLEAN,
+    nombre VARCHAR,
+    apellido VARCHAR,
+    telefono VARCHAR
+) AS $$
+DECLARE
+    v_nombre VARCHAR;
+    v_apellido VARCHAR;
+    v_telefono VARCHAR;
+    v_existe BOOLEAN := FALSE;
+    v_table_name TEXT;
+BEGIN
+    -- Detección dinámica de la tabla de médicos por seguridad y resiliencia
+    SELECT relname INTO v_table_name
+    FROM pg_class
+    WHERE relkind = 'r'
+      AND relnamespace = 'public'::regnamespace
+      AND lower(relname) IN ('datos_del_medico_tratante', 'medicos', 'ppersonal');
+
+    IF v_table_name IS NOT NULL THEN
+        EXECUTE format('
+            SELECT TRUE, nombre, apellido, telefono 
+            FROM public.%I 
+            WHERE cedula = $1 
+            LIMIT 1', v_table_name)
+        USING trim(p_cedula)
+        INTO v_existe, v_nombre, v_apellido, v_telefono;
+    END IF;
+
+    RETURN QUERY SELECT COALESCE(v_existe, FALSE), v_nombre, v_apellido, v_telefono;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- RPC: Inserción Atómica y Transaccional de Registros Nominales
+CREATE OR REPLACE FUNCTION public.insertar_registro_nominal(
+    p_tipo_registro TEXT,             -- 'quirurgica', 'obstetrica', 'defuncion'
+    p_centro_salud TEXT,              -- Centro de adscripción
+    
+    -- Información del paciente
+    p_cedula_paciente TEXT,
+    p_nombre_paciente TEXT,
+    p_apellido_paciente TEXT,
+    p_edad_paciente INTEGER,
+    p_sexo_paciente TEXT,
+    p_telefono_paciente TEXT DEFAULT NULL,
+    
+    -- Información del médico tratante
+    p_cedula_medico TEXT DEFAULT NULL,
+    p_nombre_medico TEXT DEFAULT NULL,
+    p_apellido_medico TEXT DEFAULT NULL,
+    p_telefono_medico TEXT DEFAULT NULL,
+    
+    -- Carga dinámica JSON para atributos específicos
+    p_datos_registro JSONB DEFAULT '{}'::jsonb
+)
+RETURNS JSONB AS $$
+DECLARE
+    v_operador_rol TEXT;
+    v_operador_email TEXT;
+    v_registro_id INTEGER;
+    v_nominal_id INTEGER;
+    v_combined_data JSONB;
+    v_medico_table TEXT;
+BEGIN
+    -- Validamos permisos del reportero ordinario
+    SELECT rol, email INTO v_operador_rol, v_operador_email
+    FROM public.usuarios
+    WHERE id = auth.uid();
+
+    IF v_operador_rol IS NULL AND auth.role() <> 'service_role' THEN
+        RAISE EXCEPTION 'Acceso denegado. No tiene un perfil activo asignado.';
+    END IF;
+
+    -- Asegurar resiliencia y sanitización de texto
+    p_cedula_paciente   := trim(p_cedula_paciente);
+    p_nombre_paciente   := upper(trim(p_nombre_paciente));
+    p_apellido_paciente := upper(trim(p_apellido_paciente));
+    p_cedula_medico     := trim(p_cedula_medico);
+
+    -- 1. Insertar / Actualizar paciente de forma no destructiva
+    INSERT INTO public.pacientes (cedula, nombre, apellido, edad, sexo, telefono)
+    VALUES (p_cedula_paciente, p_nombre_paciente, p_apellido_paciente, p_edad_paciente, p_sexo_paciente, trim(p_telefono_paciente))
+    ON CONFLICT (cedula) DO UPDATE SET
+        nombre = EXCLUDED.nombre,
+        apellido = EXCLUDED.apellido,
+        edad = EXCLUDED.edad,
+        sexo = EXCLUDED.sexo,
+        telefono = COALESCE(trim(EXCLUDED.telefono), pacientes.telefono);
+
+    -- 2. Detectar dinámicamente tabla de médicos tratantes e insertar/actualizar
+    SELECT relname INTO v_medico_table
+    FROM pg_class
+    WHERE relkind = 'r' AND relnamespace = 'public'::regnamespace AND lower(relname) = 'datos_del_medico_tratante';
+
+    IF p_cedula_medico IS NOT NULL AND p_cedula_medico <> '' THEN
+        IF v_medico_table IS NOT NULL THEN
+            EXECUTE format('
+                INSERT INTO public.%I (cedula, nombre, apellido, telefono)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (cedula) DO UPDATE SET
+                    nombre = EXCLUDED.nombre,
+                    apellido = EXCLUDED.apellido,
+                    telefono = COALESCE(EXCLUDED.telefono, public.%I.telefono)
+            ', v_medico_table, v_medico_table)
+            USING 
+                p_cedula_medico, 
+                upper(trim(COALESCE(p_nombre_medico, 'MÉDICO'))), 
+                upper(trim(COALESCE(p_apellido_medico, 'TRATANTE'))), 
+                trim(p_telefono_medico);
+        ELSE
+            -- Fallback si solo existe el alias public.medicos
+            INSERT INTO public.medicos (cedula, nombre, apellido, telefono)
+            VALUES (p_cedula_medico, upper(trim(COALESCE(p_nombre_medico, 'MÉDICO'))), upper(trim(COALESCE(p_apellido_medico, 'TRATANTE'))), trim(p_telefono_medico))
+            ON CONFLICT (cedula) DO UPDATE SET
+                nombre = EXCLUDED.nombre,
+                apellido = EXCLUDED.apellido,
+                telefono = COALESCE(trim(EXCLUDED.telefono), medicos.telefono);
+        END IF;
+    END IF;
+
+    -- 3. Inserciones transaccionales por rama médica
+    IF p_tipo_registro = 'quirurgica' THEN
+        INSERT INTO public.registros_quirurgicos (
+            centro_salud, cedula_paciente, nombre_paciente, apellido_paciente, edad_paciente, sexo_paciente, telefono_paciente,
+            especialidad_quirurgica, tipo_intervencion, urgente_electiva, cantidad_intervencion,
+            nombre_medico, apellido_medico, cedula_medico, telefono_medico
+        ) 
+        VALUES (
+            p_centro_salud, p_cedula_paciente, p_nombre_paciente, p_apellido_paciente, p_edad_paciente, p_sexo_paciente, trim(p_telefono_paciente),
+            COALESCE(p_datos_registro->>'especialidad_quirurgica', 'General'),
+            COALESCE(p_datos_registro->>'tipo_intervencion', 'Cirugía General'),
+            COALESCE(p_datos_registro->>'urgente_electiva', 'Electiva'),
+            COALESCE((p_datos_registro->>'cantidad_intervencion')::INTEGER, 1),
+            upper(trim(p_nombre_medico)), upper(trim(p_apellido_medico)), p_cedula_medico, trim(p_telefono_medico)
+        )
+        RETURNING id INTO v_registro_id;
+
+        v_combined_data := jsonb_build_object(
+            'tipo', 'Intervención Quirúrgica',
+            'descripcion', COALESCE(p_datos_registro->>'tipo_intervencion', 'Procedimiento Quirúrgico'),
+            'paciente', jsonb_build_object('cedula', p_cedula_paciente, 'nombre', p_nombre_paciente, 'apellido', p_apellido_paciente, 'edad', p_edad_paciente, 'sexo', p_sexo_paciente),
+            'medico', jsonb_build_object('cedula', p_cedula_medico, 'nombre', p_nombre_medico, 'apellido', p_apellido_medico),
+            'detalles', p_datos_registro
+        );
+
+    ELSIF p_tipo_registro = 'obstetrica' THEN
+        INSERT INTO public.registros_obstetricos (
+            centro_salud, cedula_madre, nombre_madre, apellido_madre, edad_madre, telefono_madre,
+            nombre_infante, sexo_infante, tipo_parto, tipo_intervencion,
+            nombre_medico, apellido_medico, cedula_medico, telefono_medico
+        )
+        VALUES (
+            p_centro_salud, p_cedula_paciente, p_nombre_paciente, p_apellido_paciente, p_edad_paciente, trim(p_telefono_paciente),
+            COALESCE(p_datos_registro->>'nombre_infante', 'Recién Nacido'),
+            COALESCE(p_datos_registro->>'sexo_infante', 'Sin Definir'),
+            COALESCE(p_datos_registro->>'tipo_parto', 'Eutócico'),
+            COALESCE(p_datos_registro->>'tipo_intervencion', 'Parto'),
+            upper(trim(p_nombre_medico)), upper(trim(p_apellido_medico)), p_cedula_medico, trim(p_telefono_medico)
+        )
+        RETURNING id INTO v_registro_id;
+
+        v_combined_data := jsonb_build_object(
+            'tipo', 'Atención Obstétrica',
+            'descripcion', COALESCE(p_datos_registro->>'tipo_parto', 'Parto'),
+            'paciente', jsonb_build_object('cedula', p_cedula_paciente, 'nombre', p_nombre_paciente, 'apellido', p_apellido_paciente, 'edad', p_edad_paciente),
+            'medico', jsonb_build_object('cedula', p_cedula_medico, 'nombre', p_nombre_medico, 'apellido', p_apellido_medico),
+            'detalles', p_datos_registro
+        );
+
+    ELSIF p_tipo_registro = 'defuncion' THEN
+        INSERT INTO public.registros_defunciones (
+            centro_salud, cedula_fallecido, nombre_fallecido, apellido_fallecido, edad_fallecido, sexo_fallecido,
+            hora_fallecimiento, patologia, observacion,
+            nombre_medico, apellido_medico, cedula_medico, telefono_medico
+        )
+        VALUES (
+            p_centro_salud, p_cedula_paciente, p_nombre_paciente, p_apellido_paciente, p_edad_paciente, p_sexo_paciente,
+            COALESCE(p_datos_registro->>'hora_fallecimiento', '12:00 PM'),
+            COALESCE(p_datos_registro->>'patologia', 'No Informada'),
+            COALESCE(p_datos_registro->>'observacion', ''),
+            upper(trim(p_nombre_medico)), upper(trim(p_apellido_medico)), p_cedula_medico, trim(p_telefono_medico)
+        )
+        RETURNING id INTO v_registro_id;
+
+        v_combined_data := jsonb_build_object(
+            'tipo', 'Registro de Defunción',
+            'descripcion', COALESCE(p_datos_registro->>'patologia', 'Fallecimiento'),
+            'paciente', jsonb_build_object('cedula', p_cedula_paciente, 'nombre', p_nombre_paciente, 'apellido', p_apellido_paciente, 'edad', p_edad_paciente),
+            'medico', jsonb_build_object('cedula', p_cedula_medico, 'nombre', p_nombre_medico, 'apellido', p_apellido_medico),
+            'detalles', p_datos_registro
+        );
+    ELSE
+        RAISE EXCEPTION 'Tipo de registro % inválido. Use quirurgica, obstetrica o defuncion.', p_tipo_registro;
+    END IF;
+
+    -- 4. Registro atómico consolidado en la tabla de 7 días
+    INSERT INTO public.nominales (
+        tipo_registro,
+        registro_id,
+        registros_quirurgicos_id, -- Compatibilidad legacy
+        cedula_principal,
+        cedula_paciente,
+        nombre_paciente,
+        medico_tratante,
+        centro_salud,
+        fecha_registro,
+        fecha_creacion,
+        datos
+    )
+    VALUES (
+        p_tipo_registro,
+        v_registro_id,
+        CASE WHEN p_tipo_registro = 'quirurgica' THEN v_registro_id ELSE NULL END,
+        p_cedula_paciente,
+        p_cedula_paciente,
+        p_nombre_paciente || ' ' || p_apellido_paciente,
+        COALESCE(p_nombre_medico || ' ' || p_apellido_medico, 'No Especificado'),
+        p_centro_salud,
+        NOW(),
+        NOW(),
+        v_combined_data
+    )
+    RETURNING id INTO v_nominal_id;
+
+    -- 5. Logguear en auditorías
+    INSERT INTO public.logs_auditoria (usuario_id, usuario_email, accion, tabla_afectada, registro_id, detalles)
+    VALUES (
+        auth.uid(),
+        v_operador_email,
+        'REGISTRO_NOMINAL_CREAR',
+        p_tipo_registro,
+        v_registro_id::TEXT,
+        jsonb_build_object(
+            'nominal_id', v_nominal_id,
+            'paciente', p_cedula_paciente,
+            'centro_salud', p_centro_salud
+        )
+    );
+
+    RETURN jsonb_build_object(
+         'success', true,
+         'message', 'Registro nominal guardado de forma atómica regional exitosamente.',
+         'registro_id', v_registro_id,
+         'nominal_id', v_nominal_id
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- RPC: Purga Manual y Registro de Auditorías de Expedientes Caducados
+CREATE OR REPLACE FUNCTION public.purga_automatica_nominales(
+    p_dias_retencion INT DEFAULT 7
+)
+RETURNS JSONB AS $$
+DECLARE
+    v_operador_rol TEXT;
+    v_operador_email TEXT;
+    v_filas_afectadas INTEGER;
+BEGIN
+    IF auth.role() <> 'service_role' THEN
+        SELECT rol, email INTO v_operador_rol, v_operador_email
+        FROM public.usuarios
+        WHERE id = auth.uid();
+
+        IF COALESCE(v_operador_rol, '') <> 'admin' THEN
+            RAISE EXCEPTION 'Acceso denegado. Solo administradores pueden realizar purgas manuales.';
+        END IF;
+    ELSE
+        v_operador_email := 'SYSTEM/SERVICE';
+    END IF;
+
+    DELETE FROM public.nominales
+    WHERE fecha_creacion < (NOW() - (p_dias_retencion || ' days')::INTERVAL);
+
+    GET DIAGNOSTICS v_filas_afectadas = ROW_COUNT;
+
+    IF v_filas_afectadas > 0 THEN
+        INSERT INTO public.logs_auditoria (usuario_id, usuario_email, accion, tabla_afectada, detalles)
+        VALUES (
+            auth.uid(),
+            v_operador_email,
+            'REGISTRO_NOMINAL_PURGA',
+            'nominales',
+            jsonb_build_object(
+                'filas_afectadas', v_filas_afectadas,
+                'dias_retencion', p_dias_retencion
+            )
+        );
+    END IF;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'filas_purgadas', v_filas_afectadas,
+        'fecha_corte', (NOW() - (p_dias_retencion || ' days')::INTERVAL)
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- 17.5.5. VISTA DE CONEXIÓN NOMINAL DETALLADA PARA ADMINISTRADORES (Cruce con ejes, parroquias y ASICs)
+CREATE OR REPLACE VIEW public.v_nominales_detallado AS
+SELECT
+    n.id AS nominal_id,
+    n.tipo_registro,
+    n.registro_id,
+    n.cedula_principal,
+    n.cedula_paciente,
+    n.nombre_paciente,
+    n.medico_tratante,
+    n.centro_salud,
+    n.fecha_registro,
+    n.fecha_creacion,
+    n.datos,
+    v.eje_id,
+    v.eje_geografico,
+    v.nombre_asic,
+    v.centro_asic_cod,
+    v.nombre_municipio,
+    v.municipio_id,
+    v.nombre_parroquia,
+    v.parroquia_id,
+    v.estado_semaforo AS centro_status,
+    v.horas_retraso AS centro_retraso
+FROM public.nominales n
+LEFT JOIN public.vista_unificada_territorial v ON v.nombre_centro = n.centro_salud
+ORDER BY n.fecha_creacion DESC;
+
+
+-- 17.5.6. POLÍTICAS DE ROW LEVEL SECURITY REFORZADAS PARA CUMPLIMIENTO CON ROLES
+
+-- Habilitar RLS en la tabla de auditorías de forma explícita
+ALTER TABLE public.logs_auditoria ENABLE ROW LEVEL SECURITY;
+
+-- Políticas de Auditoría: Solo Admins y Supervisores leen logs, todos insertan (con service_role o rpc)
+DROP POLICY IF EXISTS "Lectura de auditoria para admins" ON public.logs_auditoria;
+CREATE POLICY "Lectura de auditoria para admins" ON public.logs_auditoria
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.usuarios 
+            WHERE id = auth.uid() AND rol IN ('admin', 'directivo')
+        )
+    );
+
+DROP POLICY IF EXISTS "Escritura universal logs" ON public.logs_auditoria;
+CREATE POLICY "Escritura universal logs" ON public.logs_auditoria
+    FOR INSERT WITH CHECK (true);
+
+-- Actualizar las políticas en registros_quirurgicos, obstetricos y defunciones
+-- Los administradores (rol='admin') gestionan todo. Los operadores (rol='nominal', 'oficina') insertan y ven solo lo que ellos u otros de su mismo centro reportan.
+
+DROP POLICY IF EXISTS "Operadores pueden ver de su centro" ON public.registros_quirurgicos;
+CREATE POLICY "Operadores pueden ver de su centro" ON public.registros_quirurgicos
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.usuarios u
+            WHERE u.id = auth.uid() 
+              AND (
+                u.rol IN ('admin', 'directivo') 
+                OR registros_quirurgicos.centro_salud = (SELECT id_centro FROM public.usuarios WHERE id = auth.uid())
+              )
+        )
+    );
+
+DROP POLICY IF EXISTS "Operadores pueden ver de su centro_obs" ON public.registros_obstetricos;
+CREATE POLICY "Operadores pueden ver de su centro_obs" ON public.registros_obstetricos
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.usuarios u
+            WHERE u.id = auth.uid() 
+              AND (
+                u.rol IN ('admin', 'directivo') 
+                OR registros_obstetricos.centro_salud = (SELECT id_centro FROM public.usuarios WHERE id = auth.uid())
+              )
+        )
+    );
+
+DROP POLICY IF EXISTS "Operadores pueden ver de su centro_def" ON public.registros_defunciones;
+CREATE POLICY "Operadores pueden ver de su centro_def" ON public.registros_defunciones
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.usuarios u
+            WHERE u.id = auth.uid() 
+              AND (
+                u.rol IN ('admin', 'directivo') 
+                OR registros_defunciones.centro_salud = (SELECT id_centro FROM public.usuarios WHERE id = auth.uid())
+              )
+        )
+    );
+
+
 -- 18. NOTIFICACIÓN DE REFRESCO DE ESQUEMA PARA POSTGREST
 NOTIFY pgrst, 'reload schema';
 

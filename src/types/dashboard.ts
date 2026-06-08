@@ -26,3 +26,16 @@ export interface EjeGeograficoAgregado {
   promedio_retraso: number;
   asics: AsicAgregado[];
 }
+
+export interface DashboardAssignment {
+  id: string;
+  nombre: string;
+  descripcion?: string;
+  roles_permitidos: string[]; // e.g. ['admin', 'nominal', 'oficina', 'directivo']
+  usuarios_permitidos: string[]; // e.g. ['miranda.salud2026@gmail.com', 'nominal@mirandasalud.com']
+  eje_geografico?: string; // Filtro predeterminado de eje territorial (ej: 'Valles del Tuy' o 'Todos')
+  meta_semanal: number; // Meta de registros semanal
+  fecha_creacion: string;
+  activo: boolean;
+}
+

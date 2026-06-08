@@ -125,9 +125,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       const isDemo = localStorage.getItem('sim_demo_admin') === 'true';
       if (isDemo) {
-        setUser({ id: 'demo-user-id', email: 'demo@test.com' } as any);
+        setUser({ id: 'demo-user-id', email: 'miranda.salud2026@gmail.com' } as any);
         setProfile({
-          id: 'demo-user-id', nombre: 'DEMO', email: 'demo@test.com',
+          id: 'demo-user-id', nombre: 'DRA. MARÍA ALBARRÁN', email: 'miranda.salud2026@gmail.com',
           rol: 'admin', estado: 'aprobado',
         });
         setLoading(false);
@@ -135,10 +135,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       const isNominalDemo = localStorage.getItem('sim_demo_nominal') === 'true';
       if (isNominalDemo) {
-        setUser({ id: 'demo-nominal-id', email: 'nominal@mirandasalud.com' } as any);
+        const customEmail = localStorage.getItem('sim_logged_user_email') || 'nominal@mirandasalud.com';
+        const customName = localStorage.getItem('sim_logged_user_name') || 'OPERADOR NOMINAL';
+        const customRole = localStorage.getItem('sim_logged_user_role') || 'nominal';
+        setUser({ id: 'demo-nominal-id', email: customEmail } as any);
         setProfile({
-          id: 'demo-nominal-id', nombre: 'OPERADOR NOMINAL', email: 'nominal@mirandasalud.com',
-          rol: 'nominal', estado: 'aprobado',
+          id: 'demo-nominal-id', nombre: customName.toUpperCase(), email: customEmail,
+          rol: customRole as any, estado: 'aprobado',
           id_centro: null,
           cod_eje: null,
         });

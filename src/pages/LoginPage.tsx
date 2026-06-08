@@ -96,8 +96,15 @@ export default function LoginPage() {
       }
     } catch (err: any) {
       // Offline fallback check for requested credentials
+      const virtualUsersStr = localStorage.getItem('s_admin_virtual_users');
+      const virtualUsers = virtualUsersStr ? JSON.parse(virtualUsersStr) : [];
+      const matchedVirtual = virtualUsers.find((vu: any) => vu.email.toLowerCase() === targetEmail.toLowerCase());
+
       if (targetEmail.toLowerCase() === 'nominal@mirandasalud.com' && targetPassword === 'nominal2026') {
         localStorage.setItem('sim_demo_nominal', 'true');
+        localStorage.setItem('sim_logged_user_email', 'nominal@mirandasalud.com');
+        localStorage.setItem('sim_logged_user_name', 'OPERADOR NOMINAL');
+        localStorage.setItem('sim_logged_user_role', 'nominal');
         setSuccessStatus('¡Acceso nominal autorizado (Modo Desconectado)!');
         setTimeout(() => {
           window.location.href = '/nominal';
@@ -108,6 +115,23 @@ export default function LoginPage() {
         setTimeout(() => {
           window.location.href = '/admin/dashboard';
         }, 1000);
+      } else if (matchedVirtual && targetPassword === 'nominal2026') {
+        if (matchedVirtual.rol === 'admin') {
+          localStorage.setItem('sim_demo_admin', 'true');
+          setSuccessStatus(`¡Acceso admin autorizado para ${matchedVirtual.nombre}!`);
+          setTimeout(() => {
+            window.location.href = '/admin/dashboard';
+          }, 1000);
+        } else {
+          localStorage.setItem('sim_demo_nominal', 'true');
+          localStorage.setItem('sim_logged_user_email', matchedVirtual.email);
+          localStorage.setItem('sim_logged_user_name', matchedVirtual.nombre);
+          localStorage.setItem('sim_logged_user_role', matchedVirtual.rol);
+          setSuccessStatus(`¡Acceso nominal autorizado para ${matchedVirtual.nombre}!`);
+          setTimeout(() => {
+            window.location.href = '/nominal';
+          }, 1000);
+        }
       } else {
         setErrorStatus(err.message || 'Error al autenticar credenciales.');
       }
