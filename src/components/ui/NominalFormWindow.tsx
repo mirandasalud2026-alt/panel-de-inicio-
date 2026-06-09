@@ -59,10 +59,10 @@ export default function NominalFormWindow() {
     if (data) {
       setFormData(prev => ({
         ...prev,
-        nombre_paciente: data.nombre,
-        apellido_paciente: data.apellido,
-        edad: data.edad.toString(),
-        sexo: data.sexo,
+        nombre_paciente: data.nombre || '',
+        apellido_paciente: data.apellido || '',
+        edad: data.edad ? data.edad.toString() : '',
+        sexo: data.sexo || 'FEMENINO',
         telefono: data.telefono || '',
       }));
       setPacienteStatus('✓ Encontrado');
@@ -78,8 +78,8 @@ export default function NominalFormWindow() {
     if (data) {
       setFormData(prev => ({
         ...prev,
-        nombre_medico: data.nombre,
-        apellido_medico: data.apellido,
+        nombre_medico: data.nombre || '',
+        apellido_medico: data.apellido || '',
       }));
       setMedicoStatus('✓ Encontrado');
     } else {

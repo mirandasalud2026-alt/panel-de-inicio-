@@ -4,35 +4,25 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Users, 
   Database, 
-  Layers, 
   RefreshCw, 
-  PlusCircle, 
   Trash2, 
-  Key, 
   UserPlus, 
-  Terminal, 
-  Clock, 
-  FileSpreadsheet, 
-  CheckCircle, 
-  ShieldAlert, 
   Download, 
   Sparkles,
-  Award,
-  Sliders,
-  CheckSquare,
-  BarChart3
+  AlertTriangle,
+  CheckCircle,
+  Building,
+  MapPin,
+  Clock,
+  Check,
+  X
 } from 'lucide-react';
 import { supabase, UserProfile } from '../../lib/supabase';
 import { schemaService } from '../../services/schemaService';
-import { pipelineService } from '../../services/pipelineService';
-import { ConfiguracionModulo, CampoEstructura } from '../../types/admin';
-import { DynamicForm } from '../DynamicForm';
-import AnalyticsEngine from './AnalyticsEngine';
 
 export default function AdminPortal() {
-  const [activeTab, setActiveTab] = useState<'usuarios' | 'tablas' | 'generador' | 'respaldos' | 'analisis'>('analisis'); // Defaults to 'analisis' for immediate display of user requested features
+  const [activeTab, setActiveTab] = useState<'usuarios' | 'tablas'>('usuarios');
 
-  
   // Tab 1: Usuarios
   const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
   const [isUsersLoading, setIsUsersLoading] = useState(false);
@@ -46,31 +36,26 @@ export default function AdminPortal() {
     cod_eje: '',
     password: ''
   });
-  const [selectedUserForAssign, setSelectedUserForAssign] = useState<UserProfile | null>(null);
 
   // Tab 2: Explorador de Base de Datos
   const [listaTablas, setListaTablas] = useState<string[]>([]);
-  const [tablaSeleccionada, setTablaSeleccionada] = useState<string>('');
+  const [tablaSeleccionada, setTablaSeleccionada] = useState<string>('nominales');
   const [selectedTableSchema, setSelectedTableSchema] = useState<{ descripcion: string; columnas: { name: string; type: string; label: string }[] } | null>(null);
   const [selectedTableRecords, setSelectedTableRecords] = useState<any[]>([]);
   const [isRecordsLoading, setIsRecordsLoading] = useState(false);
-  const [dataSource, setDataSource] = useState<'supabase' | 'simulado' | 'local_dinamico'>('simulado');
+  const [dataSource, setDataSource] = useState<'supabase' | 'simulado'>('simulado');
 
-  // Tab 3: Generador Inteligente
-  const [jsonInput, setJsonInput] = useState<string>('');
-  const [moduloPreview, setModuloPreview] = useState<ConfiguracionModulo | null>(null);
-  const [availableModules, setAvailableModules] = useState<ConfiguracionModulo[]>([]);
+  // Sistema de Alertas de Onboarding Reciente
+  const [onboardingAlerts, setOnboardingAlerts] = useState<any[]>([]);
+  const [quickAssignData, setQuickAssignData] = useState<Record<string, { cod_eje: string; id_centro: string }>>({});
 
-  // Tab 4: Políticas de Resguardo
-  const [sheetsSyncLogs, setSheetsSyncLogs] = useState<any[]>([]);
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'err'; text: string } | null>(null);
 
-  // 1. Cargar datos iniciales
+  // Cargar datos iniciales
   useEffect(() => {
     fetchUsers();
     loadTablesList();
-    loadModules();
-    loadSheetsLogs();
+    fetchOnboardingAlerts();
   }, []);
 
   useEffect(() => {
@@ -79,23 +64,25 @@ export default function AdminPortal() {
     }
   }, [tablaSeleccionada]);
 
-  // Cargar módulos configurados
-  const loadModules = () => {
-    const modules = schemaService.getDynamicModules();
-    setAvailableModules(modules);
-  };
-
   const loadTablesList = async () => {
-    const tables = await schemaService.getTables();
-    setListaTablas(tables);
+    // Filtrar para mostrar solo las tablas maestras reales del sistema nominal requeridas por el usuario
+    const masterTables = ['nominales', 'pacientes', 'registros_quirurgicos', 'registros_obstetricos', 'registros_defunciones', 'usuarios'];
+    setListaTablas(masterTables);
   };
 
-  const loadSheetsLogs = () => {
-    const logs = localStorage.getItem('s_admin_google_sheets_sync');
-    setSheetsSyncLogs(logs ? JSON.parse(logs) : [
-      { id: 'sh-1092', tabla: 'registros_quirurgicos', fijo_fecha: new Date().toISOString(), columnas_conteo: 8, estado: 'Exitoso 🟢' },
-      { id: 'sh-4055', tabla: 'registros_defunciones', fijo_fecha: new Date().toISOString(), columnas_conteo: 7, estado: 'Exitoso 🟢' }
-    ]);
+  const fetchOnboardingAlerts = () => {
+    const alertsStr = localStorage.getItem('s_admin_onboarding_alerts') || '[]';
+    const parsedAlerts = JSON.parse(alertsStr);
+    // Filtrar las que no han sido atendidas aún
+    const pending = parsedAlerts.filter((a: any) => !a.atendida);
+    setOnboardingAlerts(pending);
+    
+    // Inicializar datos para asignación rápida
+    const initialConfig: Record<string, { cod_eje: string; id_centro: string }> = {};
+    pending.forEach((alert: any) => {
+      initialConfig[alert.id] = { cod_eje: 'MET-01', id_centro: '' };
+    });
+    setQuickAssignData(prev => ({ ...prev, ...initialConfig }));
   };
 
   // Cargar usuarios de Supabase + Virtuales locales
@@ -103,7 +90,6 @@ export default function AdminPortal() {
     setIsUsersLoading(true);
     let dbUsers: UserProfile[] = [];
     
-    // 1. Cargar desde Supabase si está disponible
     try {
       if (supabase) {
         const { data, error } = await supabase.from('usuarios').select('*').order('nombre');
@@ -115,11 +101,9 @@ export default function AdminPortal() {
       console.warn('Error al cargar usuarios de Supabase, utilizando modo contingencia:', err);
     }
 
-    // 2. Cargar virtuales locales
     const localVirtualUsers = localStorage.getItem('s_admin_virtual_users');
     const parsedVirtuals = localVirtualUsers ? JSON.parse(localVirtualUsers) : [];
     
-    // Unir sin duplicar por email
     const merged = [...dbUsers];
     parsedVirtuals.forEach((vu: UserProfile) => {
       if (!merged.some(u => u.email.toLowerCase() === vu.email.toLowerCase())) {
@@ -127,7 +111,6 @@ export default function AdminPortal() {
       }
     });
 
-    // Si no hay ninguno, colocar por defecto
     if (merged.length === 0) {
       const presets = schemaService.getSimulatedRecords('usuarios');
       setSystemUsers(presets);
@@ -156,31 +139,27 @@ export default function AdminPortal() {
       cod_eje: newUser.cod_eje ? newUser.cod_eje.toUpperCase() : null
     };
 
-    // Registrar en Supabase
     try {
       if (supabase) {
-        // Guardar perfil en base de datos
         await supabase.from('usuarios').insert(created);
       }
     } catch (err) {
       console.warn('Sincronización online fallida al crear el usuario. Se almacenará en la bitácora local.', err);
     }
 
-    // Encolar localmente para consistencia garantizada
     const localVirtualUsers = localStorage.getItem('s_admin_virtual_users');
     const list = localVirtualUsers ? JSON.parse(localVirtualUsers) : [];
     list.unshift(created);
     localStorage.setItem('s_admin_virtual_users', JSON.stringify(list));
 
-    // Guardar credenciales de simulación para que puedan hacer Login offline
+    // Clave es su cédula o password proveída (por defecto nominal2026)
     localStorage.setItem(`sim_pass_${emailClean}`, newUser.password || 'nominal2026');
 
-    // Auditoría
     addAuditLog('CREAR_USUARIO', 'usuarios', created.id);
 
     setNewUser({ nombre: '', email: '', rol: 'nominal', estado: 'aprobado', id_centro: '', cod_eje: '', password: '' });
     setShowCreateUserForm(false);
-    showNotification('Usuario creado exitosamente. Puede ingresar de forma segura usando su correo y contraseña autorizada');
+    showNotification('Usuario creado exitosamente. Puede ingresar usando su correo y clave asignada.');
     fetchUsers();
   };
 
@@ -196,7 +175,6 @@ export default function AdminPortal() {
       console.warn('Error al guardar el rol en la nube:', e);
     }
 
-    // Actualizar virtuales si aplica
     const localVirtualUsers = localStorage.getItem('s_admin_virtual_users');
     if (localVirtualUsers) {
       const list = JSON.parse(localVirtualUsers);
@@ -220,7 +198,6 @@ export default function AdminPortal() {
       console.warn('Error al guardar estado de aprobación en la nube:', e);
     }
 
-    // Actualizar virtuales si aplica
     const localVirtualUsers = localStorage.getItem('s_admin_virtual_users');
     if (localVirtualUsers) {
       const list = JSON.parse(localVirtualUsers);
@@ -244,7 +221,6 @@ export default function AdminPortal() {
       console.warn('Error al borrar usuario de Supabase. Removiendo de la sesión local.');
     }
 
-    // Remover de virtuales
     const localVirtualUsers = localStorage.getItem('s_admin_virtual_users');
     if (localVirtualUsers) {
       const list = JSON.parse(localVirtualUsers);
@@ -257,26 +233,6 @@ export default function AdminPortal() {
     showNotification('Usuario removido del sistema');
   };
 
-  // Asignación de módulos dinámicos a un usuario específico
-  const getAssignedModules = (userEmail: string): string[] => {
-    const saved = localStorage.getItem(`assigned_modules_user_${userEmail.toLowerCase()}`);
-    return saved ? JSON.parse(saved) : [];
-  };
-
-  const handleToggleModuleAssignment = (userEmail: string, moduleId: string) => {
-    const current = getAssignedModules(userEmail);
-    let updated: string[];
-    if (current.includes(moduleId)) {
-      updated = current.filter(id => id !== moduleId);
-    } else {
-      updated = [...current, moduleId];
-    }
-    localStorage.setItem(`assigned_modules_user_${userEmail.toLowerCase()}`, JSON.stringify(updated));
-    addAuditLog('ASIGNAR_MODULO', 'usuario_modulos', userEmail);
-    // Forzar re-render
-    setSelectedUserForAssign(prev => prev ? { ...prev } : null);
-  };
-
   // Cargar datos del Explorador de base de datos
   const loadTableData = async (tableName: string) => {
     setIsRecordsLoading(true);
@@ -284,40 +240,142 @@ export default function AdminPortal() {
       const metadataSchema = schemaService.getTableSchema(tableName);
       setSelectedTableSchema(metadataSchema);
 
-      const dinamicModules = schemaService.getDynamicModules();
-      const isDynamic = dinamicModules.some(m => m.meta_datos.tabla_nombre === tableName);
-
-      if (isDynamic) {
-        setDataSource('local_dinamico');
-        const records = await schemaService.getTableRecords(tableName);
-        setSelectedTableRecords(records);
-      } else {
-        let records: any[] = [];
-        let fetchedFromSupabase = false;
-        try {
-          if (supabase) {
-            const { data, error } = await supabase.from(tableName).select('*').limit(100);
-            if (!error && data) {
-              records = data;
-              fetchedFromSupabase = true;
-              setDataSource('supabase');
-            }
+      let records: any[] = [];
+      let fetchedFromSupabase = false;
+      try {
+        if (supabase) {
+          const { data, error } = await supabase.from(tableName).select('*').limit(100);
+          if (!error && data) {
+            records = data;
+            fetchedFromSupabase = true;
+            setDataSource('supabase');
           }
-        } catch (dbErr) {
-          console.warn('Fallo consulta directa de Supabase', dbErr);
         }
-
-        if (!fetchedFromSupabase) {
-          records = schemaService.getSimulatedRecords(tableName);
-          setDataSource('simulado');
-        }
-        setSelectedTableRecords(records);
+      } catch (dbErr) {
+        console.warn('Fallo consulta de Supabase, recurriendo a simulación:', dbErr);
       }
+
+      if (!fetchedFromSupabase) {
+        records = schemaService.getSimulatedRecords(tableName);
+        setDataSource('simulado');
+      }
+      setSelectedTableRecords(records);
     } catch (err) {
       console.error('Error al analizar registros:', err);
     } finally {
       setIsRecordsLoading(false);
     }
+  };
+
+  // Atender alerta de onboarding (Aprobación rápida de personal)
+  const handleApproveOnboarding = (alertId: string, alertData: any) => {
+    const config = quickAssignData[alertId] || { cod_eje: 'MET-01', id_centro: 'CDI-01' };
+    
+    if (!config.id_centro) {
+      alert('Por favor especifique o asigne el Establecimiento / Centro de adscripción departamental.');
+      return;
+    }
+
+    setIsUsersLoading(true);
+
+    setTimeout(async () => {
+      try {
+        const cleanEmail = alertData.email.toLowerCase();
+        
+        // 1. Buscar el usuario virtual y colocarlo en estado aprobado con eje y centro
+        const localVirtualUsers = localStorage.getItem('s_admin_virtual_users');
+        let list = localVirtualUsers ? JSON.parse(localVirtualUsers) : [];
+        
+        list = list.map((u: any) => {
+          if (u.email.toLowerCase() === cleanEmail) {
+            return {
+              ...u,
+              estado: 'aprobado',
+              id_centro: config.id_centro.toUpperCase(),
+              cod_eje: config.cod_eje.toUpperCase()
+            };
+          }
+          return u;
+        });
+        localStorage.setItem('s_admin_virtual_users', JSON.stringify(list));
+
+        // Actualizar en Supabase si está disponible
+        if (supabase) {
+          try {
+            await supabase
+              .from('usuarios')
+              .update({
+                estado: 'aprobado',
+                id_centro: config.id_centro.toUpperCase(),
+                cod_eje: config.cod_eje.toUpperCase()
+              })
+              .eq('email', cleanEmail);
+          } catch (e) {
+            console.warn('Sincronización Supabase omitida:', e);
+          }
+        }
+
+        // 2. Marcar la alerta como atendida en el listado histórico de alertas
+        const alertsStr = localStorage.getItem('s_admin_onboarding_alerts') || '[]';
+        const parsedAlerts = JSON.parse(alertsStr);
+        const updatedAlerts = parsedAlerts.map((a: any) => {
+          if (a.id === alertId) {
+            return { ...a, atendida: true };
+          }
+          return a;
+        });
+        localStorage.setItem('s_admin_onboarding_alerts', JSON.stringify(updatedAlerts));
+
+        // Auditoría
+        addAuditLog('APROBAR_ONBOARDING', 'usuarios', alertData.cedula);
+
+        showNotification(`Onboarding aprobado para ${alertData.nombre}. Cuenta activa asignada a ${config.id_centro}.`);
+        fetchUsers();
+        fetchOnboardingAlerts();
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsUsersLoading(false);
+      }
+    }, 600);
+  };
+
+  const handleDenyOnboarding = (alertId: string, alertData: any) => {
+    if (!confirm(`¿Desea denegar el acceso a la solicitud de ${alertData.nombre}?`)) return;
+
+    setIsUsersLoading(true);
+
+    setTimeout(() => {
+      const cleanEmail = alertData.email.toLowerCase();
+      
+      // Colocar usuario en rechazado o eliminarlo
+      const localVirtualUsers = localStorage.getItem('s_admin_virtual_users');
+      let list = localVirtualUsers ? JSON.parse(localVirtualUsers) : [];
+      list = list.map((u: any) => {
+        if (u.email.toLowerCase() === cleanEmail) {
+          return { ...u, estado: 'rechazado' };
+        }
+        return u;
+      });
+      localStorage.setItem('s_admin_virtual_users', JSON.stringify(list));
+
+      // Marcar alerta como atendida
+      const alertsStr = localStorage.getItem('s_admin_onboarding_alerts') || '[]';
+      const parsedAlerts = JSON.parse(alertsStr);
+      const updatedAlerts = parsedAlerts.map((a: any) => {
+        if (a.id === alertId) {
+          return { ...a, atendida: true };
+        }
+        return a;
+      });
+      localStorage.setItem('s_admin_onboarding_alerts', JSON.stringify(updatedAlerts));
+
+      addAuditLog('RECHAZAR_ONBOARDING', 'usuarios', alertData.cedula);
+      showNotification(`Acceso denegado para ${alertData.nombre}.`);
+      fetchUsers();
+      fetchOnboardingAlerts();
+      setIsUsersLoading(false);
+    }, 400);
   };
 
   // Agregar registro sim en auditoría local
@@ -335,152 +393,17 @@ export default function AdminPortal() {
     localStorage.setItem('s_admin_audit_logs', JSON.stringify(list));
   };
 
-  // Procesar e Instanciar JSON Cognitivo AI
-  const handleCompileJSON = () => {
-    try {
-      if (!jsonInput.trim()) {
-        alert('Por favor ingrese el JSON del Generador Inteligente.');
-        return;
-      }
-      const parsed = JSON.parse(jsonInput) as ConfiguracionModulo;
-      
-      if (!parsed.comando || !parsed.meta_datos || !parsed.estructura) {
-        alert('Estructura JSON inválida para el motor Super-Admin. Faltan propiedades esenciales.');
-        return;
-      }
-
-      // Colocar un ID único si no viene asignado
-      const id = parsed.id || `mod-${parsed.meta_datos.tabla_nombre}`;
-      const finalModule: ConfiguracionModulo = {
-        ...parsed,
-        id
-      };
-
-      // Guardar el módulo en la base estructurada local
-      schemaService.saveDynamicModule(finalModule);
-      setModuloPreview(finalModule);
-      
-      // Actualizar listado y base de datos de explorador
-      loadModules();
-      loadTablesList();
-      
-      addAuditLog('GENERAR_FORMULARIO', finalModule.meta_datos.tabla_nombre, finalModule.id);
-      showNotification(`Módulo de Reporte "${finalModule.meta_datos.descripcion}" compilado e instanciado. ¡Formulario activo!`);
-    } catch (e: any) {
-      alert(`Error de compilación de sintaxis: ${e.message}`);
-    }
-  };
-
-  // Eliminar módulo dinámico
-  const handleDeleteModule = (moduleId: string, tabName: string) => {
-    if (!confirm('¿Desea desvincular este módulo dinámico y todas sus plantillas asociadas?')) return;
-    schemaService.deleteDynamicModule(moduleId);
-    
-    // Quitar registros
-    localStorage.removeItem(`dynamic_data_${tabName}`);
-    
-    loadModules();
-    loadTablesList();
-    if (moduloPreview?.id === moduleId) setModuloPreview(null);
-    if (tablaSeleccionada === tabName) setTablaSeleccionada('');
-    
-    addAuditLog('ELIMINAR_MODULO', tabName, moduleId);
-    showNotification('Módulo dinamico purgado');
-  };
-
-  // Ejercicio de prueba predeterminado (Cargar JSON Fallas de Agua)
-  const handleLoadWaterTemplate = () => {
-    const fallbackTemplate: ConfiguracionModulo = {
-      id: "mod-monitoreo_agua_asic",
-      comando: "CREAR_TABLA",
-      meta_datos: {
-        tabla_nombre: "monitoreo_agua_asic",
-        descripcion: "Reporte de disponibilidad y fallas críticas de suministro de agua potable en los ASIC municipales.",
-        icono: "🚰"
-      },
-      estructura: [
-        {
-          campo_id: "municipio_nombre",
-          tipo_dato: "select",
-          requerido: true,
-          opciones: ["Chacao", "Baruta", "Sucre", "Guaicaipuro", "Plaza", "Zamora", "Cristóbal Rojas"],
-          etiqueta: "Municipio del Estado Miranda"
-        },
-        {
-          campo_id: "asic_reportado",
-          tipo_dato: "text",
-          requerido: true,
-          etiqueta: "Área de Salud Integral Comunitaria (ASIC)"
-        },
-        {
-          campo_id: "disponibilidad_servicio",
-          tipo_dato: "select",
-          requerido: true,
-          opciones: ["Flujo Continuo", "Horario Racionado (Por Guardia)", "Sin Servicio Directo (Suministro Camión)", "Falla Absoluta Crítica"],
-          etiqueta: "Estado del Suministro de Agua"
-        },
-        {
-          campo_id: "dias_sin_agua",
-          tipo_dato: "number",
-          requerido: true,
-          etiqueta: "Días de interrupción acumulados"
-        },
-        {
-          campo_id: "afectacion_quirofano",
-          tipo_dato: "boolean",
-          requerido: false,
-          etiqueta: "Inoperancia / Afectación de Quirófanos Activos"
-        },
-        {
-          campo_id: "observacion_tecnica",
-          tipo_dato: "text",
-          requerido: false,
-          etiqueta: "Diagnóstico técnico de falla (Bombas, Hidrológico o Tuberías)"
-        }
-      ],
-      politica_respaldo: {
-        sincronizar_sheets: true,
-        tiempo_retencion_supabase_meses: 6,
-        destino_archivo_muerto: "local_server_csv"
-      }
-    };
-    setJsonInput(JSON.stringify(fallbackTemplate, null, 2));
-    showNotification('Fórmula de JSON de carga aplicada con éxito');
-  };
-
-  // Ejecutar purga de retención (N-Tiempo)
-  const handleTriggerRetentionPurge = (modulo: ConfiguracionModulo) => {
-    setIsUsersLoading(true);
-    const result = pipelineService.ejecutarPurgaSAdmin(modulo);
-    setIsUsersLoading(false);
-    
-    addAuditLog('PURGAR_RETENCION', modulo.meta_datos.tabla_nombre, modulo.id);
-    
-    setFeedbackMsg({
-      type: 'success',
-      text: `Purga N-Tiempo ejecutada de manera exitosa para ${modulo.meta_datos.tabla_nombre}: Se depuraron ${result.filas_borradas} registros históricos que superaban el límite de retención de ${modulo.politica_respaldo.tiempo_retencion_supabase_meses} meses.`
-    });
-    
-    if (tablaSeleccionada === modulo.meta_datos.tabla_nombre) {
-      loadTableData(tablaSeleccionada);
-    }
-    
-    setTimeout(() => setFeedbackMsg(null), 8500);
-  };
-
-  // Exportar datos a CSV
   const handleExportCSV = (tableName: string) => {
     if (selectedTableRecords.length === 0) {
-      alert('No hay registros históricos en esta vista para compilar.');
+      alert('No hay registros en esta vista para descargar.');
       return;
     }
     
-    // Obtener campos de los registros
     const headers = Object.keys(selectedTableRecords[0]).join(',');
     const rows = selectedTableRecords.map(row => 
       Object.values(row)
         .map(val => {
-          const stringVal = typeof val === 'object' ? JSON.stringify(val) : String(val);
+          const stringVal = typeof val === 'object' ? JSON.stringify(val) : String(val === null || val === undefined ? '' : val);
           return `"${stringVal.replace(/"/g, '""')}"`;
         })
         .join(',')
@@ -490,16 +413,15 @@ export default function AdminPortal() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `archivo_muerto_miranda_salud_${tableName}_2026.csv`);
+    link.setAttribute("download", `miranda_salud_${tableName}_2026.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     
     addAuditLog('EXPORTAR_CSV', tableName, 'CSV_DOWNLOAD');
-    showNotification('Archivo CSV exportado exitosamente. Descarga iniciada.');
+    showNotification('Archivo CSV exportado exitosamente.');
   };
 
-  // Auxiliares de alerta visual
   const showNotification = (message: string) => {
     setFeedbackMsg({ type: 'success', text: message });
     setTimeout(() => setFeedbackMsg(null), 4500);
@@ -513,77 +435,44 @@ export default function AdminPortal() {
         <div>
           <div className="flex items-center gap-1.5 text-blue-600">
             <Sparkles size={16} />
-            <span className="text-[10px] font-black uppercase tracking-widest font-mono">Panel Inteligente Cognitivo</span>
+            <span className="text-[10px] font-black uppercase tracking-widest font-mono">Consola Administrativa Depurada</span>
           </div>
           <h2 className="text-xl font-black uppercase text-slate-800 tracking-tight leading-none mt-1">
-            Plataforma Super-Administración v2.0
+            Plataforma SSPA Miranda v2.0
           </h2>
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
-            Arquitectura Motorizada por Datos (Data-Driven) • Resguardo Multi-Tubería SSPA
+            Control de Acceso Operativo • Datos Nominales y Fidedignos
           </p>
         </div>
 
-        {/* SELECTOR DE PESTAÑAS (Mapeado directo a los objetivos del usuario) */}
-        <div className="flex flex-wrap bg-slate-100 p-1 rounded-2xl border border-slate-200">
+        {/* SELECTOR DE PESTAÑAS (Limitado solo a requerimientos reales del usuario) */}
+        <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200">
           <button
             onClick={() => setActiveTab('usuarios')}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
               activeTab === 'usuarios' 
                 ? 'bg-[#0B3D5C] text-white shadow-xs' 
                 : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
             }`}
           >
-            <Users size={12} /> Control de Usuarios
+            <Users size={13} /> Control de Usuarios
           </button>
           
           <button
             onClick={() => setActiveTab('tablas')}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
               activeTab === 'tablas' 
                 ? 'bg-[#0B3D5C] text-white shadow-xs' 
                 : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
             }`}
           >
-            <Database size={12} /> Explorador de BD
-          </button>
-          
-          <button
-            onClick={() => setActiveTab('generador')}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-              activeTab === 'generador' 
-                ? 'bg-[#0B3D5C] text-white shadow-xs' 
-                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            <Terminal size={12} /> Generador Inteligente
-          </button>
-          
-          <button
-            onClick={() => setActiveTab('respaldos')}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-              activeTab === 'respaldos' 
-                ? 'bg-[#0B3D5C] text-white shadow-xs' 
-                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            <Clock size={12} /> Políticas de Resguardo
-          </button>
-
-          <button
-            onClick={() => setActiveTab('analisis')}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-              activeTab === 'analisis' 
-                ? 'bg-[#0B3D5C] text-white shadow-xs' 
-                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            <BarChart3 size={12} /> Sala de Análisis
+            <Database size={13} /> Datos Nominales
           </button>
         </div>
       </div>
 
       {feedbackMsg && (
-        <div className={`p-3 rounded-2xl flex items-center gap-2 text-xs font-bold leading-relaxed border ${
+        <div className={`p-3 rounded-2xl flex items-center gap-2 text-xs font-bold border ${
           feedbackMsg.type === 'success' 
             ? 'bg-emerald-50 border-emerald-100 text-emerald-800' 
             : 'bg-rose-50 border-rose-100 text-rose-800'
@@ -596,24 +485,102 @@ export default function AdminPortal() {
       {/* ÁREA EN PANTALLA DINÁMICA */}
       <AnimatePresence mode="wait">
         
-        {/* TAB 1: CONTROL DE USUARIOS Y ASIGNACIÓN DE REPORTES COGNITIVOS */}
+        {/* TAB 1: CONTROL DE USUARIOS Y ALERTAS DE ONBOARDING */}
         {activeTab === 'usuarios' && (
           <motion.div 
             key="usuarios" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             className="space-y-6"
           >
+            {/* PANEL DE ALERTAS DE ONBOARDING ACTIVO */}
+            {onboardingAlerts.length > 0 && (
+              <div className="bg-amber-50 border border-amber-250 border-amber-200 rounded-3xl p-5 space-y-4 shadow-sm animate-pulse-slow">
+                <div className="flex items-center gap-2 border-b border-amber-200/60 pb-2">
+                  <span className="p-1.5 bg-amber-200 text-amber-900 rounded-lg animate-bounce">
+                    <AlertTriangle size={15} />
+                  </span>
+                  <div>
+                    <h3 className="text-xs font-black uppercase text-amber-900 tracking-wider">🚨 Alertas de Nuevos Registros de Personal (Onboarding en Espera)</h3>
+                    <p className="text-[8.5px] text-amber-700 font-bold uppercase tracking-widest mt-0.5">Se han detectado {onboardingAlerts.length} nuevos operadores registrados sin asignación departamental.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {onboardingAlerts.map(alert => (
+                    <div key={alert.id} className="bg-white p-4 rounded-2xl border border-amber-200/50 shadow-inner space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-xs font-black text-slate-800 uppercase font-display">{alert.nombre}</p>
+                          <p className="text-[9.5px] font-mono text-slate-500 font-bold mt-0.5">{alert.email}</p>
+                          <p className="text-[8.5px] text-slate-400 font-mono mt-1 uppercase">Cédula: {alert.cedula}</p>
+                        </div>
+                        <span className="px-2 py-0.5 bg-yellow-105 bg-yellow-100 text-yellow-800 text-[8px] font-black uppercase rounded border border-yellow-200/50">Por Aprobar</span>
+                      </div>
+
+                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block">Eje Geográfico</label>
+                          <select
+                            value={quickAssignData[alert.id]?.cod_eje || 'MET-01'}
+                            onChange={e => setQuickAssignData(prev => ({
+                              ...prev,
+                              [alert.id]: { ...(prev[alert.id] || { cod_eje: 'MET-01', id_centro: '' }), cod_eje: e.target.value }
+                            }))}
+                            className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[9px] font-bold focus:outline-none"
+                          >
+                            <option value="MET-01">Metropolitano</option>
+                            <option value="AMI-01">Altos Mirandinos</option>
+                            <option value="VTY-01">Valles del Tuy</option>
+                            <option value="GGU-01">Guarenas Guatire</option>
+                            <option value="BAX-01">Barlovento</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block">Centro de Salud (ID)</label>
+                          <input
+                            type="text"
+                            placeholder="Ej: CDI Guarenas"
+                            value={quickAssignData[alert.id]?.id_centro || ''}
+                            onChange={e => setQuickAssignData(prev => ({
+                              ...prev,
+                              [alert.id]: { ...(prev[alert.id] || { cod_eje: 'MET-01', id_centro: '' }), id_centro: e.target.value }
+                            }))}
+                            className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[9px] font-bold focus:outline-none placeholder-slate-350"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+                        <button
+                          onClick={() => handleDenyOnboarding(alert.id, alert)}
+                          className="flex items-center justify-center gap-1 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 font-black uppercase text-[8.5px] tracking-wider rounded-lg cursor-pointer transition-colors"
+                        >
+                          <X size={11} /> Denegar
+                        </button>
+                        <button
+                          onClick={() => handleApproveOnboarding(alert.id, alert)}
+                          className="flex items-center justify-center gap-1 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700 font-black uppercase text-[8.5px] tracking-wider rounded-lg cursor-pointer transition-colors"
+                        >
+                          <Check size={11} /> Aprobar y Asignar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* CREADOR DE USUARIO */}
             <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
               <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                 <div>
-                  <h3 className="text-sm font-black text-[#0B3D5C] uppercase tracking-wider">Creador y Gestor de Cuenta Operativa</h3>
-                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Invite operadores clínico-nominales o directores de ASIC</p>
+                  <h3 className="text-sm font-black text-[#0B3D5C] uppercase tracking-wider">Directiva y Control de Cuentas</h3>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Registre o modifique credenciales y adscripción a centros de salud</p>
                 </div>
                 <button 
                   onClick={() => setShowCreateUserForm(!showCreateUserForm)}
                   className="flex items-center gap-1 px-3 py-1.5 bg-[#0B3D5C] text-white hover:bg-[#072437] transition text-[9px] font-black uppercase tracking-widest rounded-xl"
                 >
-                  <UserPlus size={12} /> {showCreateUserForm ? 'Ocultar Formulario' : 'Nuevo Operador'}
+                  <UserPlus size={12} /> {showCreateUserForm ? 'Ocultar Creador' : 'Crear Operador'}
                 </button>
               </div>
 
@@ -658,21 +625,21 @@ export default function AdminPortal() {
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Código de Eje Geográfico</label>
                     <input 
-                      type="text" placeholder="Ej: MET-01 (Metropolitano)"
-                      value={newUser.cod_eje} onChange={e => setNewUser(prev => ({ ...prev, cod_eje: e.target.value }))}
+                      type="text" placeholder="Ej: MET-01"
+                      value={newUser.cod_eje || ''} onChange={e => setNewUser(prev => ({ ...prev, cod_eje: e.target.value }))}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#0B3D5C]"
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Contraseña de la Cuenta</label>
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Contraseña / Cédula</label>
                     <input 
-                      type="text" placeholder="Asigne clave (por defecto: nominal2026)"
-                      value={newUser.password} onChange={e => setNewUser(prev => ({ ...prev, password: e.target.value }))}
+                      type="text" placeholder="Asigne clave o Cédula"
+                      value={newUser.password || ''} onChange={e => setNewUser(prev => ({ ...prev, password: e.target.value }))}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#0B3D5C]"
                     />
                   </div>
                   <div className="space-y-1 flex items-end col-span-1 md:col-span-3">
-                    <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[10px] tracking-wide p-2.5 rounded-xl transition">
+                    <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[10px] tracking-wide p-2.5 rounded-xl transition cursor-pointer">
                       ⚡ Registrar Cuenta Operativa
                     </button>
                   </div>
@@ -681,30 +648,33 @@ export default function AdminPortal() {
 
               {/* LISTADO DE USUARIOS Y DIRECTIVAS DE ACCESO */}
               <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-100 text-[9px] font-black text-slate-400 uppercase tracking-wider">
-                      <th className="px-4 py-3">Operador Institucional</th>
-                      <th className="px-4 py-3">Rol Carga</th>
-                      <th className="px-4 py-3">Estado Cuenta</th>
-                      <th className="px-4 py-3">Reportes Formularios Asignados</th>
-                      <th className="px-4 py-3 text-right">Mantenimiento</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {systemUsers.map(u => {
-                      const userMods = getAssignedModules(u.email);
-                      return (
+                {isUsersLoading ? (
+                  <div className="py-12 text-center text-slate-400 text-xs font-black uppercase tracking-widest">
+                    Cargando nómina de operadores...
+                  </div>
+                ) : (
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100 text-[9px] font-black text-slate-400 uppercase tracking-wider">
+                        <th className="px-4 py-3">Operador Institucional</th>
+                        <th className="px-4 py-3">Rol Carga</th>
+                        <th className="px-4 py-3">Adscripción Eje / Centro</th>
+                        <th className="px-4 py-3">Estado Cuenta</th>
+                        <th className="px-4 py-3 text-right">Mantenimiento</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {systemUsers.map(u => (
                         <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-xl bg-[#0B3D5C]/10 flex items-center justify-center text-[11px] font-black text-[#0B3D5C]">
+                              <div className="w-8 h-8 rounded-xl bg-[#0B3D5C]/15 flex items-center justify-center text-[11px] font-black text-[#0B3D5C]">
                                 {u.nombre ? u.nombre.charAt(0) : 'U'}
                               </div>
                               <div>
-                                <p className="text-[11px] font-bold text-slate-800 uppercase leading-none">{u.nombre || 'Sin nombre'}</p>
-                                <p className="text-[9px] text-slate-400 font-mono mt-1">
-                                  {u.email} • <span className="text-emerald-750 text-emerald-700 font-black bg-emerald-50 border border-emerald-200/50 px-1 py-0.5 rounded text-[8.5px]">Clave: {localStorage.getItem(`sim_pass_${u.email.toLowerCase()}`) || 'nominal2026'}</span>
+                                <p className="text-[11px] font-black text-slate-800 uppercase leading-none">{u.nombre || 'Sin nombre'}</p>
+                                <p className="text-[9px] text-slate-450 text-slate-500 font-mono mt-1">
+                                  {u.email} • <span className="text-emerald-700 font-black bg-emerald-50 border border-emerald-100 px-1 py-0.5 rounded text-[8.5px]">Clave: {localStorage.getItem(`sim_pass_${u.email.toLowerCase()}`) || 'nominal2026'}</span>
                                 </p>
                               </div>
                             </div>
@@ -712,13 +682,21 @@ export default function AdminPortal() {
                           <td className="px-4 py-3">
                             <select 
                               value={u.rol} onChange={e => handleUserRoleChange(u.id, e.target.value)}
-                              className="text-[9px] font-black px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white shadow-xs focus:outline-none-style focus:border-blue-500"
+                              className="text-[9px] font-black px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white"
                             >
                               <option value="admin">Administrador</option>
                               <option value="directivo">Directivo SSPA</option>
                               <option value="oficina">Inspector Oficina</option>
                               <option value="nominal">Operador Carga Nominal</option>
                             </select>
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="text-[10px] font-black text-slate-700 uppercase flex items-center gap-1">
+                              <MapPin size={10} className="text-[#0B3D5C]" /> {u.cod_eje || 'SIN ASIGNAR'}
+                            </p>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase mt-0.5 flex items-center gap-1">
+                              <Building size={10} /> {u.id_centro || 'Sin centro adscrito'}
+                            </p>
                           </td>
                           <td className="px-4 py-3">
                             <select 
@@ -733,29 +711,6 @@ export default function AdminPortal() {
                               <option value="rechazado">Rechazado</option>
                             </select>
                           </td>
-                          <td className="px-4 py-3">
-                            <div className="flex flex-col gap-1 items-start">
-                              <div className="flex flex-wrap gap-1">
-                                <span className="bg-slate-100 text-slate-650 text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Quirúrgicas</span>
-                                <span className="bg-slate-100 text-slate-650 text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Obstétricas</span>
-                                <span className="bg-slate-100 text-slate-650 text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Defunciones</span>
-                                {userMods.map(mId => {
-                                  const mod = availableModules.find(am => am.id === mId);
-                                  return (
-                                    <span key={mId} className="bg-blue-50 text-blue-800 text-[8px] font-black px-1.5 py-0.5 rounded border border-blue-100 uppercase">
-                                      {mod ? mod.meta_datos.tabla_nombre : mId}
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                              <button 
-                                onClick={() => setSelectedUserForAssign(u)}
-                                className="text-[8.5px] font-black text-blue-600 hover:text-blue-800 uppercase tracking-widest mt-1 cursor-pointer"
-                              >
-                                ⚙️ Asignar Módulos Dinámicos
-                              </button>
-                            </div>
-                          </td>
                           <td className="px-4 py-3 text-right">
                             <button 
                               onClick={() => handleDeleteUser(u.id)}
@@ -765,65 +720,12 @@ export default function AdminPortal() {
                             </button>
                           </td>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* MODAL / SECTOR DE ASIGNACIÓN */}
-            {selectedUserForAssign && (
-              <div className="bg-blue-50/50 rounded-3xl border border-blue-250 border-blue-100 p-6 space-y-4">
-                <div className="flex justify-between items-center border-b border-blue-100 pb-2">
-                  <div>
-                    <h3 className="text-xs font-black text-[#0B3D5C] uppercase tracking-wide">
-                      Asignar Módulos Dinámicos a: <span className="text-blue-700 font-display font-extrabold">{selectedUserForAssign.nombre} ( {selectedUserForAssign.email} )</span>
-                    </h3>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Define qué formularios dinámicos podrá reportar y visualizar el operador en su dashboard principal.</p>
-                  </div>
-                  <button 
-                    onClick={() => setSelectedUserForAssign(null)}
-                    className="text-xs font-bold text-slate-500 hover:text-slate-800 uppercase tracking-wider"
-                  >
-                    cerrar ×
-                  </button>
-                </div>
-
-                {availableModules.length === 0 ? (
-                  <p className="text-[10px] text-slate-400 italic">No hay módulos de reporte dinámicos compilados bajo "Generador Inteligente". Compila uno para asignarlo.</p>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {availableModules.map(m => {
-                      const isAssigned = getAssignedModules(selectedUserForAssign.email).includes(m.id);
-                      return (
-                        <div 
-                          key={m.id} 
-                          onClick={() => handleToggleModuleAssignment(selectedUserForAssign.email, m.id)}
-                          className={`p-3 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${
-                            isAssigned 
-                              ? 'bg-blue-600 border-blue-750 text-white shadow-sm' 
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                          }`}
-                        >
-                          <span className="text-lg">{m.meta_datos.icono || '📋'}</span>
-                          <div className="flex-grow">
-                            <h4 className="text-[10.5px] font-black uppercase tracking-tight line-clamp-1">{m.meta_datos.tabla_nombre}</h4>
-                            <p className={`text-[8.5px] leading-tight ${isAssigned ? 'text-blue-105 text-blue-100' : 'text-slate-400'} line-clamp-1`}>{m.meta_datos.descripcion}</p>
-                          </div>
-                          <div>
-                            <input 
-                              type="checkbox" checked={isAssigned} readOnly
-                              className="rounded border-slate-200 text-blue-600 focus:ring-0" 
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
               </div>
-            )}
+            </div>
           </motion.div>
         )}
 
@@ -835,22 +737,21 @@ export default function AdminPortal() {
           >
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
               <div>
-                <h3 className="text-sm font-black text-[#0B3D5C] uppercase tracking-wider">Explorador de Tablas del Estado Miranda</h3>
-                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Audite e inspecte en tiempo real las tuberías de persistencia asociadas.</p>
+                <h3 className="text-sm font-black text-[#0B3D5C] uppercase tracking-wider">Explorador Clínico de Reportes Nominales</h3>
+                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Audite las planillas de atenciones cargadas por los operadores regionales.</p>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4 items-end">
                 <div className="flex-grow max-w-md space-y-1">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Seleccionar Estructura o Tabla de Datos</label>
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Seleccionar Estructura o Planilla de Datos</label>
                   <select 
                     value={tablaSeleccionada}
                     onChange={(e) => setTablaSeleccionada(e.target.value)}
                     className="w-full p-2.5 border border-slate-200 rounded-xl bg-white text-xs font-bold focus:outline-none focus:border-[#0B3D5C] shadow-xs"
                   >
-                    <option value="">-- Selecciona una Tabla en Supabase --</option>
                     {listaTablas.map(tabla => (
                       <option key={tabla} value={tabla}>
-                        {schemaService.getDynamicModules().some(dm => dm.meta_datos.tabla_nombre === tabla) ? `🚰 [Dinámico] ${tabla}` : `📊 [Maestra] ${tabla}`}
+                        📋 [Planilla] {tabla.toUpperCase().replace('_', ' ')}
                       </option>
                     ))}
                   </select>
@@ -871,7 +772,7 @@ export default function AdminPortal() {
                     onClick={() => handleExportCSV(tablaSeleccionada)}
                     className="flex items-center gap-1.5 px-4 py-2.5 bg-[#0B3D5C] text-white hover:bg-slate-800 rounded-xl font-black text-[9.5px] uppercase tracking-wider transition cursor-pointer h-[38px]"
                   >
-                    <Download size={12} /> Exportar como CSV (Archivo Muerto)
+                    <Download size={12} /> Exportar como CSV
                   </button>
                 )}
               </div>
@@ -879,390 +780,119 @@ export default function AdminPortal() {
 
             {tablaSeleccionada && selectedTableSchema && (
               <div className="space-y-6">
-                {/* INDICADOR DE CONDUCTO DE PERSISTENCIA REAL-TIME */}
-                {dataSource === 'supabase' && (
+                {/* INDICADOR DE CONDUCTO DE PERSISTENCIA */}
+                {dataSource === 'supabase' ? (
                   <div className="bg-emerald-50 border border-emerald-200 rounded-3xl p-4 flex items-start gap-3 shadow-xs">
                     <div className="p-2 bg-emerald-650 bg-emerald-600 text-white rounded-2xl flex-shrink-0">
                       <Database size={16} />
                     </div>
                     <div>
-                      <h4 className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">🔌 Conducto en Vivo Conectado a Supabase</h4>
+                      <h4 className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">🔌 Conducto Conectado a la Base de Datos Histórica</h4>
                       <p className="text-[9.5px] text-emerald-700 font-bold mt-1 leading-normal uppercase">
-                        Esta tabla <span className="font-mono bg-emerald-100/50 px-1.5 py-0.5 rounded text-emerald-950 font-black">{tablaSeleccionada}</span> está resolviendo datos reales y persistidos en tiempo real directamente desde su instancia de la nube de Supabase. Cualquier cambio, adición o inspección es 100% inmutable y fidedigno.
+                        La planilla <span className="font-mono bg-emerald-100/50 px-1.5 py-0.5 rounded text-emerald-950 font-black">{tablaSeleccionada}</span> está sincronizada con Supabase de manera persistente e inmutable.
                       </p>
                     </div>
                   </div>
-                )}
-
-                {dataSource === 'simulado' && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-3xl p-4 flex items-start gap-4 shadow-xs">
-                    <div className="p-2 bg-amber-550 bg-amber-500 text-white rounded-2xl flex-shrink-0 animate-pulse">
-                      <ShieldAlert size={16} />
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="text-[10px] font-black text-amber-800 uppercase tracking-widest">⚠️ Consola Virtualizada (Modo de Resguardo y Simbiosis local)</h4>
-                      <p className="text-[9.5px] text-amber-700 font-bold leading-normal uppercase">
-                        La tabla <span className="font-mono bg-amber-100 px-1.5 py-0.5 rounded text-amber-950 font-black">{tablaSeleccionada}</span> aún no existe o no contiene registros en su esquema físico de Supabase o hay un problema de sincronización.
-                      </p>
-                      <p className="text-[9px] text-amber-600 font-medium leading-relaxed pt-1.5 border-t border-amber-200/50">
-                        🔑 <span className="font-black uppercase tracking-wider text-amber-800">Para resolver con sus bases de datos reales:</span> Conéctese a su consola de Supabase y verifique la existencia de la tabla <code className="font-mono font-bold bg-amber-150/40 text-amber-900">{tablaSeleccionada}</code>. Mientras tanto, el sistema ha activado la <span className="font-bold text-amber-800">Tubería de Persistencia Local Automática</span> de resguardo para garantizar la fluidez de su sesión.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {dataSource === 'local_dinamico' && (
+                ) : (
                   <div className="bg-blue-50 border border-blue-200 rounded-3xl p-4 flex items-start gap-3 shadow-xs">
                     <div className="p-2 bg-blue-600 text-white rounded-2xl flex-shrink-0">
-                      <RefreshCw size={16} />
+                      <Clock size={16} />
                     </div>
                     <div>
-                      <h4 className="text-[10px] font-black text-blue-800 uppercase tracking-widest">⚙️ Tubería de Formulario Dinámico Activo</h4>
+                      <h4 className="text-[10px] font-black text-blue-800 uppercase tracking-widest">📦 Conducto de Resguardo Desconectado Activo</h4>
                       <p className="text-[9.5px] text-blue-700 font-bold mt-1 leading-normal uppercase">
-                        Esta tabla corresponde a un formulario cognitivo dinámico instanciado localmente. Su persistencia está gobernada por motores locales de resguardo listos para su posterior volcado o migración a base de datos.
+                        La planilla <span className="font-mono bg-blue-100 px-1.5 py-0.5 rounded text-blue-950 font-black">{tablaSeleccionada}</span> está resolviendo registros a través de la tubería local de resguardo SIM Miranda.
                       </p>
                     </div>
                   </div>
                 )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* LADO IZQUIERDO: METADATOS Y COLUMNAS */}
-                <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4 lg:col-span-1">
-                  <div>
-                    <h4 className="text-xs font-black text-[#0B3D5C] uppercase tracking-wider">Esquema Reflexivo</h4>
-                    <p className="text-[9.5px] text-slate-400 mt-1 uppercase font-bold tracking-wide">{selectedTableSchema.descripcion}</p>
-                  </div>
+                  
+                  {/* LADO IZQUIERDO: METADATOS Y COLUMNAS */}
+                  <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4 lg:col-span-1">
+                    <div>
+                      <h4 className="text-xs font-black text-[#0B3D5C] uppercase tracking-wider">Esquema Reflexivo</h4>
+                      <p className="text-[9.5px] text-slate-400 mt-1 uppercase font-bold tracking-wide">{selectedTableSchema.descripcion}</p>
+                    </div>
 
-                  <div className="border-t border-slate-100 pt-3 space-y-2">
-                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Columnas de datos (Detección Auto)</span>
-                    <div className="divide-y divide-slate-150 divide-slate-100 max-h-[380px] overflow-y-auto">
-                      {selectedTableSchema.columnas.map(col => (
-                        <div key={col.name} className="py-2 flex items-center justify-between text-xs font-medium">
-                          <span className="font-mono text-blue-600 text-[10.5px]">{col.name}</span>
-                          <div className="text-right">
-                            <span className="text-slate-800 block text-[10px] font-bold">{col.label}</span>
-                            <span className="text-[8px] font-mono text-slate-400 bg-slate-50 border px-1 rounded uppercase tracking-wide">{col.type}</span>
+                    <div className="border-t border-slate-100 pt-3 space-y-2">
+                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Columnas estructuradas</span>
+                      <div className="divide-y divide-slate-100 max-h-[380px] overflow-y-auto">
+                        {selectedTableSchema.columnas.map(col => (
+                          <div key={col.name} className="py-2 flex items-center justify-between text-xs font-medium">
+                            <span className="font-mono text-blue-650 text-blue-600 font-bold text-[10.5px]">{col.name}</span>
+                            <div className="text-right">
+                              <span className="text-slate-800 block text-[10px] font-bold">{col.label}</span>
+                              <span className="text-[8px] font-mono text-slate-400 bg-slate-50 border px-1 rounded uppercase tracking-wide">{col.type}</span>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* LADO DERECHO: REGISTROS CARGADOS */}
-                <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4 lg:col-span-2">
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                    <h4 className="text-xs font-black text-[#0B3D5C] uppercase tracking-wider">
-                      Registros de la tabla: <span className="font-mono text-blue-600 lowercase">{tablaSeleccionada}</span>
-                    </h4>
-                    <span className="bg-[#0B3D5C]/10 text-[#0B3D5C] text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider font-mono">
-                      Muestra: {selectedTableRecords.length} filas
-                    </span>
-                  </div>
+                  {/* LADO DERECHO: REGISTROS CARGADOS */}
+                  <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4 lg:col-span-2">
+                    <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                      <h4 className="text-xs font-black text-[#0B3D5C] uppercase tracking-wider">
+                        Registros de la tabla: <span className="font-mono text-blue-600 lowercase">{tablaSeleccionada}</span>
+                      </h4>
+                      <span className="bg-[#0B3D5C]/10 text-[#0B3D5C] text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider font-mono">
+                        Muestra: {selectedTableRecords.length} filas
+                      </span>
+                    </div>
 
-                  {isRecordsLoading ? (
-                    <div className="py-16 text-center text-slate-400 text-xs font-black uppercase tracking-widest">
-                      Consultando Supabase...
-                    </div>
-                  ) : selectedTableRecords.length === 0 ? (
-                    <div className="py-16 text-center text-slate-450 text-slate-400 text-xs italic font-medium">
-                      Esta tabla no contiene registros ni atenciones cargadas aún.
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto max-h-[480px]">
-                      <table className="w-full text-left font-sans text-[10px]">
-                        <thead>
-                          <tr className="bg-slate-50 text-[8.5px] font-black text-slate-400 uppercase border-b border-slate-100">
-                            {selectedTableSchema.columnas.slice(0, 5).map(col => (
-                              <th key={col.name} className="px-3 py-2.5">{col.label}</th>
-                            ))}
-                            <th className="px-3 py-2.5 text-right">Detalle</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {selectedTableRecords.map((rec, rIdx) => (
-                            <tr key={rec.id || rec.cedula || rIdx} className="hover:bg-slate-50/50 transition-colors">
-                              {selectedTableSchema.columnas.slice(0, 5).map(col => {
-                                const val = rec[col.name];
-                                const stringVal = typeof val === 'object' ? JSON.stringify(val) : String(val === undefined || val === null ? '' : val);
-                                return (
-                                  <td key={col.name} className="px-3 py-2 font-semibold text-slate-700 max-w-[150px] truncate uppercase">
-                                    {stringVal}
-                                  </td>
-                                );
-                              })}
-                              <td className="px-3 py-2 text-right">
-                                <button 
-                                  onClick={() => alert(`Detallado Completo Fila:\n\n${JSON.stringify(rec, null, 2)}`)}
-                                  className="text-blue-600 font-extrabold hover:underline uppercase text-[9px] tracking-wide"
-                                >
-                                  Inspeccionar
-                                </button>
-                              </td>
+                    {isRecordsLoading ? (
+                      <div className="py-16 text-center text-slate-400 text-xs font-black uppercase tracking-widest">
+                        Consultando registros...
+                      </div>
+                    ) : selectedTableRecords.length === 0 ? (
+                      <div className="py-16 text-center text-slate-400 text-xs italic font-medium">
+                        Esta planilla no contiene atenciones cargadas aún.
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto max-h-[480px]">
+                        <table className="w-full text-left font-sans text-[10px]">
+                          <thead>
+                            <tr className="bg-slate-50 text-[8.5px] font-black text-slate-400 uppercase border-b border-slate-100">
+                              {selectedTableSchema.columnas.slice(0, 5).map(col => (
+                                <th key={col.name} className="px-3 py-2.5">{col.label}</th>
+                              ))}
+                              <th className="px-3 py-2.5 text-right">Detalle</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {selectedTableRecords.map((rec, rIdx) => (
+                              <tr key={rec.id || rec.cedula || rIdx} className="hover:bg-slate-50/50 transition-colors">
+                                {selectedTableSchema.columnas.slice(0, 5).map(col => {
+                                  const val = rec[col.name];
+                                  const stringVal = typeof val === 'object' ? JSON.stringify(val) : String(val === undefined || val === null ? '' : val);
+                                  return (
+                                    <td key={col.name} className="px-3 py-2 font-semibold text-slate-700 max-w-[150px] truncate uppercase">
+                                      {stringVal}
+                                    </td>
+                                  );
+                                })}
+                                <td className="px-3 py-2 text-right">
+                                  <button 
+                                    onClick={() => alert(`Detalle Integral de la Fila:\n\n${JSON.stringify(rec, null, 2)}`)}
+                                    className="text-blue-600 font-black hover:underline uppercase text-[9px] tracking-wide cursor-pointer"
+                                  >
+                                    Inspeccionar
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
 
-              </div>
+                </div>
               </div>
             )}
-          </motion.div>
-        )}
-
-        {/* TAB 3: GENERADOR INTELIGENTE (PASTADOR DE JSON Y LIVE PREVIEW) */}
-        {activeTab === 'generador' && (
-          <motion.div 
-            key="generador" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            className="grid grid-cols-1 lg:grid-cols-2 gap-8"
-          >
-            {/* ENTRADA DEL JSON */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col gap-4">
-              <div>
-                <div className="flex justify-between items-center">
-                  <h3 className="text-sm font-black text-[#0B3D5C] uppercase tracking-wider">Cerebro Cognitivo (Google AI Studio)</h3>
-                  <button 
-                    onClick={handleLoadWaterTemplate}
-                    className="text-[8.5px] font-black text-[#0B3D5C] hover:text-blue-800 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-lg uppercase tracking-wide cursor-pointer transition-colors"
-                  >
-                    💡 Cargar Plantilla de Prueba (Servicio Agua)
-                  </button>
-                </div>
-                <p className="text-[9.5px] text-slate-400 mt-1">Pegue el JSON estructurado de políticas y esquemas de resguardo derivado de la instrucción para instanciar la interfaz de inmediato.</p>
-              </div>
-
-              <textarea
-                value={jsonInput}
-                onChange={(e) => setJsonInput(e.target.value)}
-                placeholder='Pega el JSON estructurado aquí y haz clic en construir...'
-                className="w-full flex-1 min-h-[350px] p-4 font-mono text-[10.5px] bg-slate-900 text-emerald-400 rounded-2xl border border-slate-700 shadow-inner focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-              />
-
-              <button 
-                onClick={handleCompileJSON}
-                className="w-full bg-[#0B3D5C] hover:bg-[#072437] text-white font-black py-3 rounded-2xl uppercase text-xs tracking-wider transition shadow-sm hover:shadow-md cursor-pointer flex items-center justify-center gap-2"
-              >
-                <Sparkles size={14} /> Construir Formulario Dinámico
-              </button>
-            </div>
-
-            {/* LIVE PREVIEW */}
-            <div className="space-y-6">
-              {moduloPreview ? (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span> Vista Previa Activa
-                    </h4>
-                    <button 
-                      onClick={() => setModuloPreview(null)}
-                      className="text-[9px] font-bold text-slate-400 hover:text-slate-650 uppercase"
-                    >
-                      Limpiar
-                    </button>
-                  </div>
-                  <DynamicForm 
-                    config={moduloPreview} 
-                    onSubmit={async (datos) => {
-                      const res = await pipelineService.procesarRegistro(moduloPreview, datos);
-                      if (res.success) {
-                        loadSheetsLogs();
-                        if (tablaSeleccionada === moduloPreview.meta_datos.tabla_nombre) {
-                          loadTableData(tablaSeleccionada);
-                        }
-                      }
-                    }} 
-                  />
-                </div>
-              ) : (
-                <div className="h-full min-h-[440px] flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-3xl bg-slate-50/55 p-6 text-center text-slate-400">
-                  <span className="text-4xl mb-3">📥</span>
-                  <p className="font-black text-slate-800 text-xs uppercase tracking-wider">Esperando estructura del JSON Cognitivo</p>
-                  <p className="text-[10px] text-slate-400 max-w-xs mt-1 leading-relaxed">Pega la estructura del ejercicio bajo el cerebro cognitivo o carga el ejemplo del servicio de agua y haz clic en "Construir" para ver el formulario generándose automáticamente.</p>
-                </div>
-              )}
-
-              {/* LISTADO DE MÓDULOS ACTIVOS */}
-              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-3">
-                <h4 className="text-xs font-black text-[#0B3D5C] uppercase tracking-wider">Módulos Dinámicos Activos</h4>
-                {availableModules.length === 0 ? (
-                  <p className="text-[9.5px] text-slate-410 text-slate-400 italic">No hay formularios dinámicos cargados en la bitácora activa.</p>
-                ) : (
-                  <div className="divide-y divide-slate-100">
-                    {availableModules.map(m => (
-                      <div key={m.id} className="py-2.5 flex items-center justify-between text-xs font-medium">
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">{m.meta_datos.icono || '📋'}</span>
-                          <div>
-                            <span className="font-bold text-slate-800 block uppercase">{m.meta_datos.tabla_nombre}</span>
-                            <span className="text-[8px] text-slate-400 block max-w-[280px] truncate leading-none mt-1">{m.meta_datos.descripcion}</span>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <button 
-                            onClick={() => {
-                              setModuloPreview(m);
-                              setJsonInput(JSON.stringify(m, null, 2));
-                            }}
-                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[8.5px] font-black uppercase px-2 py-1 rounded"
-                          >
-                            Probar
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteModule(m.id, m.meta_datos.tabla_nombre)}
-                            className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[8.5px] font-black uppercase px-2 py-1 rounded"
-                          >
-                            Purgar
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* TAB 4: POLÍTICAS DE RESGUARDO Y RETENCIÓN (N-TIEMPO) */}
-        {activeTab === 'respaldos' && (
-          <motion.div 
-            key="respaldos" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            className="space-y-6"
-          >
-            {/* DIAGRAMA RETENCIÓN */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-              <div>
-                <h3 className="text-sm font-black text-[#0B3D5C] uppercase tracking-wider">Políticas de Retención de Datos (N-Tiempo)</h3>
-                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Controla y audita el ciclo de vida de cada reporte del sistema.</p>
-              </div>
-
-              {availableModules.length === 0 ? (
-                <div className="py-8 text-center text-slate-400 text-xs italic font-semibold">
-                  No hay módulos dinámicos configurados para auditar políticas de tiempo.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100 text-[9px] font-black text-slate-400 uppercase tracking-wider">
-                        <th className="px-4 py-3">Estructura / Tabla</th>
-                        <th className="px-4 py-3">Espejo Google Sheets</th>
-                        <th className="px-4 py-3">Límite de Retención Supabase</th>
-                        <th className="px-4 py-3">Destino Archivo Muerto</th>
-                        <th className="px-4 py-3 text-right">Ejecutador de Ciclo</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
-                      {availableModules.map(m => (
-                        <tr key={m.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-4 py-3">
-                            <span className="font-mono text-blue-600 block">{m.meta_datos.tabla_nombre}</span>
-                            <span className="text-[8px] text-slate-400 block uppercase leading-none mt-1">{m.meta_datos.descripcion}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            {m.politica_respaldo.sincronizar_sheets ? (
-                              <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[10px] uppercase font-black">
-                                🟢 Activo (Espejo)
-                              </span>
-                            ) : (
-                              <span className="text-slate-400 text-[10px] uppercase">🔴 Inactivo</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            {m.politica_respaldo.tiempo_retencion_supabase_meses === 0 ? (
-                              <span className="text-[#0B3D5C] block">ILIMITADO / INDEFINIDO</span>
-                            ) : (
-                              <span>{m.politica_respaldo.tiempo_retencion_supabase_meses} Meses</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="bg-amber-50 text-amber-800 border border-amber-100 px-2 py-0.5 rounded font-mono text-[9px] uppercase font-black">
-                              {m.politica_respaldo.destino_archivo_muerto}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <button
-                              onClick={() => handleTriggerRetentionPurge(m)}
-                              className="inline-flex items-center gap-1 text-rose-700 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 border border-rose-100 rounded-xl text-[9px] font-black uppercase tracking-wider cursor-pointer"
-                            >
-                              <ShieldAlert size={12} /> Ejecutar Purga N-Tiempo
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {/* SECCIÓN ESPEJO DE GOOGLE SHEETS */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              
-              {/* HISTORIAL SINCRONIZACIÓN SHEETS */}
-              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-                <div className="flex items-center gap-1.5 text-emerald-700 border-b border-slate-100 pb-3">
-                  <FileSpreadsheet size={16} />
-                  <h4 className="text-xs font-black uppercase tracking-wider">Historial de Sincronización Google Sheets</h4>
-                </div>
-
-                <div className="space-y-3 max-h-[300px] overflow-y-auto divide-y divide-slate-100">
-                  {sheetsSyncLogs.map((log, index) => (
-                    <div key={index} className="pt-2.5 flex items-center justify-between text-xs font-semibold">
-                      <div>
-                        <span className="font-mono text-blue-600 block text-[10px]">{log.tabla}</span>
-                        <span className="text-[8px] text-slate-400 block font-mono leading-none mt-1">{new Date(log.fijo_fecha).toLocaleTimeString()} • ID: {log.id}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[9px] font-mono text-slate-500 block">Espejo completo ({log.columnas_conteo} col)</span>
-                        <span className="text-[10px] font-extrabold">{log.estado}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* AUDITORÍA GENERAL */}
-              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-                <div className="flex items-center gap-1.5 text-[#0B3D5C] border-b border-slate-100 pb-3">
-                  <Terminal size={16} />
-                  <h4 className="text-xs font-black uppercase tracking-wider">Logs Históricos de Auditoría SSPA</h4>
-                </div>
-
-                <div className="space-y-2 max-h-[300px] overflow-y-auto divide-y divide-slate-100">
-                  {(localStorage.getItem('s_admin_audit_logs') ? JSON.parse(localStorage.getItem('s_admin_audit_logs')!) : [
-                    { id: 'AU-05', usuario_email: 'miranda.salud2026@gmail.com', accion: 'INSTANCIAR_MODULO', tabla_afectada: 'monitoreo_agua_asic', registro_id: 'SYSTEM', fecha: new Date().toISOString() },
-                    { id: 'AU-04', usuario_email: 'miranda.salud2026@gmail.com', accion: 'APROBAR_OPERADOR', tabla_afectada: 'usuarios', registro_id: 'user-900', fecha: new Date().toISOString() }
-                  ]).map((aud: any) => (
-                    <div key={aud.id} className="pt-2 flex items-center justify-between text-xs font-semibold">
-                      <div>
-                        <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-[8px] font-mono font-black uppercase">{aud.accion}</span>
-                        <span className="text-[8px] font-mono text-slate-400 block mt-1">Ref: {aud.tabla_afectada} • ID: {aud.registro_id}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[9px] text-[#0B3D5C] block font-mono">{aud.usuario_email}</span>
-                        <span className="text-[8px] text-slate-400 font-mono mt-0.5 block">{new Date(aud.fecha).toLocaleTimeString()}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-            </div>
-          </motion.div>
-        )}
-
-        {/* TAB 5: SALA DE ANÁLISIS */}
-        {activeTab === 'analisis' && (
-          <motion.div 
-            key="analisis" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-          >
-            <AnalyticsEngine />
           </motion.div>
         )}
 
