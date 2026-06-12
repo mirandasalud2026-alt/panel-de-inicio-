@@ -745,180 +745,6 @@ export default function AdminPortal() {
           </p>
         </div>
 
-        {/* SELECTOR DE PESTAÑAS (Limitado solo a requerimientos reales del usuario) */}
-        <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200">
-          <button
-            onClick={() => setActiveTab('usuarios')}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-              activeTab === 'usuarios' 
-                ? 'bg-[#0B3D5C] text-white shadow-xs' 
-                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            <Users size={13} /> Control de Usuarios
-          </button>
-          
-          <button
-            onClick={() => setActiveTab('tablas')}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-              activeTab === 'tablas' 
-                ? 'bg-[#0B3D5C] text-white shadow-xs' 
-                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            <Database size={13} /> Datos Nominales
-          </button>
-
-          <button
-            onClick={() => setActiveTab('pacientes')}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-              activeTab === 'pacientes' 
-                ? 'bg-[#0B3D5C] text-white shadow-xs' 
-                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            <Search size={13} /> Buscador de Pacientes
-          </button>
-        </div>
-      </div>
-
-      {/* COMPONENTE SUMATORIA REGISTROS CLÍNICOS EN TIEMPO REAL */}
-      <DashboardSummaryWidget />
-
-      {/* TARJETAS DE INDICADORES / WIDGETS DE NOMINALES EN TIEMPO REAL */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* WIDGET 1: NOMINAL QUIRÚRGICO */}
-        <motion.div 
-          whileHover={{ y: -3, scale: 1.015 }}
-          whileTap={{ scale: 0.985 }}
-          onClick={() => handleWidgetClick('registros_quirurgicos')}
-          className="bg-white border border-slate-200 hover:border-emerald-500/50 rounded-3xl p-5 shadow-xs cursor-pointer transition-all duration-300 relative overflow-hidden group select-none flex flex-col justify-between"
-          id="widget-nominal-quirurgico"
-        >
-          {/* Subtle colored background flash on hover */}
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-50/10 to-teal-50/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-          
-          <div className="relative space-y-4">
-            <div className="flex justify-between items-start">
-              <span className="p-2.5 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:bg-emerald-100 group-hover:text-emerald-700 transition-colors">
-                <Scissors size={18} className="stroke-[2.5]" />
-              </span>
-              <span className="text-[8px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded-full">
-                Quirúrgico
-              </span>
-            </div>
-            
-            <div className="space-y-1">
-              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-none">Carga Nominalizada</p>
-              <h3 className="text-sm font-black uppercase text-slate-800 tracking-tight">Intervenciones Quirúrgicas</h3>
-              <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">Sistematización de urgencias y cirugías electivas.</p>
-            </div>
-          </div>
-
-          <div className="relative pt-4 border-t border-slate-100 mt-4 flex justify-between items-end">
-            <div>
-              <p className="text-[8px] font-black uppercase tracking-wider text-slate-400">Total Expedientes</p>
-              {countsLoading ? (
-                <div className="h-5 w-12 bg-slate-100 animate-pulse rounded-md mt-0.5" />
-              ) : (
-                <span className="text-xl font-black text-slate-800 leading-none font-mono">
-                  {counts.quirurgicos}
-                </span>
-              )}
-            </div>
-            <span className="text-[8.5px] font-black uppercase text-emerald-600 group-hover:underline flex items-center gap-1">
-              Auditar Planilla →
-            </span>
-          </div>
-        </motion.div>
-
-        {/* WIDGET 2: NOMINAL MATERNO / OBSTÉTRICA */}
-        <motion.div 
-          whileHover={{ y: -3, scale: 1.015 }}
-          whileTap={{ scale: 0.985 }}
-          onClick={() => handleWidgetClick('registros_obstetricos')}
-          className="bg-white border border-slate-200 hover:border-violet-500/50 rounded-3xl p-5 shadow-xs cursor-pointer transition-all duration-300 relative overflow-hidden group select-none flex flex-col justify-between"
-          id="widget-nominal-obstetrico"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-violet-50/10 to-indigo-50/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-          
-          <div className="relative space-y-4">
-            <div className="flex justify-between items-start">
-              <span className="p-2.5 bg-violet-50 text-violet-600 rounded-2xl group-hover:bg-violet-100 group-hover:text-violet-700 transition-colors">
-                <Baby size={18} className="stroke-[2.5]" />
-              </span>
-              <span className="text-[8px] font-black uppercase tracking-widest text-violet-700 bg-violet-100/60 px-2 py-0.5 rounded-full">
-                Materno • Obstétrico
-              </span>
-            </div>
-            
-            <div className="space-y-1">
-              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-none">Cifra de Maternidad</p>
-              <h3 className="text-sm font-black uppercase text-slate-800 tracking-tight">Fichas Obstétricas</h3>
-              <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">Partos, recién nacidos, cesáreas y binomio madre-hijo.</p>
-            </div>
-          </div>
-
-          <div className="relative pt-4 border-t border-slate-100 mt-4 flex justify-between items-end">
-            <div>
-              <p className="text-[8px] font-black uppercase tracking-wider text-slate-400">Madres & Neonatos</p>
-              {countsLoading ? (
-                <div className="h-5 w-12 bg-slate-100 animate-pulse rounded-md mt-0.5" />
-              ) : (
-                <span className="text-xl font-black text-slate-800 leading-none font-mono">
-                  {counts.obstetricos}
-                </span>
-              )}
-            </div>
-            <span className="text-[8.5px] font-black uppercase text-violet-600 group-hover:underline flex items-center gap-1">
-              Auditar Planilla →
-            </span>
-          </div>
-        </motion.div>
-
-        {/* WIDGET 3: NOMINAL DEFUNCIÓN */}
-        <motion.div 
-          whileHover={{ y: -3, scale: 1.015 }}
-          whileTap={{ scale: 0.985 }}
-          onClick={() => handleWidgetClick('registros_defunciones')}
-          className="bg-white border border-slate-200 hover:border-slate-500 rounded-3xl p-5 shadow-xs cursor-pointer transition-all duration-300 relative overflow-hidden group select-none flex flex-col justify-between"
-          id="widget-nominal-defuncion"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-slate-100/20 to-slate-200/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-          
-          <div className="relative space-y-4">
-            <div className="flex justify-between items-start">
-              <span className="p-2.5 bg-slate-100 text-slate-600 rounded-2xl group-hover:bg-slate-200 group-hover:text-slate-700 transition-colors">
-                <HeartOff size={18} className="stroke-[2.5]" />
-              </span>
-              <span className="text-[8px] font-black uppercase tracking-widest text-slate-700 bg-slate-200 px-2 py-0.5 rounded-full">
-                Defunciones
-              </span>
-            </div>
-            
-            <div className="space-y-1">
-              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-none">Control de Decesos</p>
-              <h3 className="text-sm font-black uppercase text-slate-800 tracking-tight">Registro de Defunciones</h3>
-              <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">Causas de decesos, patologías básicas y certificación oficial.</p>
-            </div>
-          </div>
-
-          <div className="relative pt-4 border-t border-slate-100 mt-4 flex justify-between items-end">
-            <div>
-              <p className="text-[8px] font-black uppercase tracking-wider text-slate-400">Sistematizados</p>
-              {countsLoading ? (
-                <div className="h-5 w-12 bg-slate-100 animate-pulse rounded-md mt-0.5" />
-              ) : (
-                <span className="text-xl font-black text-slate-800 leading-none font-mono">
-                  {counts.defunciones}
-                </span>
-              )}
-            </div>
-            <span className="text-[8.5px] font-black uppercase text-slate-600 group-hover:underline flex items-center gap-1">
-              Auditar Planilla →
-            </span>
-          </div>
-        </motion.div>
       </div>
 
       {feedbackMsg && (
@@ -1239,7 +1065,7 @@ export default function AdminPortal() {
         )}
 
         {/* TAB 2: EXPLORADOR DE BASE DE DATOS ACTIVA - CON ENLACES DIRECTOS A LOS LIBROS NOMINALES EN GOOGLE SHEETS */}
-        {activeTab === 'tablas' && (
+        {false && (
           <motion.div 
             key="tablas" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             className="space-y-6"
@@ -1339,6 +1165,87 @@ export default function AdminPortal() {
                     <option value="https://docs.google.com/spreadsheets/d/1mwA2Z1ncghe4-w46BkEwbUC8Bdn_7uAWMaUND-3TB3w/edit" className="text-slate-800 font-bold">Barlovento (Eje)</option>
                     <option value="https://docs.google.com/spreadsheets/d/1n9eFrM_CvbrP_b7uxIEb2Qm42u6X9byrRugIed_ehO0/edit" className="text-slate-800 font-bold">Metropolitano (Eje)</option>
                   </select>
+                </div>
+              </div>
+            </div>
+
+            {/* WIDGET DE ACCESO DIRECTO INDEPENDIENTE A LAS HOJAS NOMINALES */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-widest text-[#0B3D5C] flex items-center gap-2">
+                  <FileSpreadsheet size={15} className="text-[#0B3D5C]" />
+                  Acceso Directo e Independiente por Nómina (Cargas Activas en Vivo)
+                </h3>
+                <p className="text-[10px] text-slate-405 text-slate-400 font-bold uppercase tracking-widest mt-0.5">
+                  Abra directamente cada hoja de cálculo individual de Google Sheets o asigne registros nominales de forma unificada.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Quirúrgica */}
+                <div className="border border-blue-100 bg-blue-50/15 p-5 rounded-2xl flex flex-col justify-between space-y-4">
+                  <div>
+                    <span className="text-[8px] font-black bg-blue-100 text-blue-800 px-2 py-0.5 rounded uppercase tracking-wider font-mono">Pestaña: Nominas Quirurgicas</span>
+                    <h4 className="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5 mt-2">
+                      <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                      Planilla Quirúrgica
+                    </h4>
+                    <p className="text-[9.5px] text-slate-500 font-bold uppercase tracking-tight mt-1 leading-normal text-left">
+                      Intervenciones quirúrgicas programadas, cirujanos certificantes y centros de salud activos en todo el estado.
+                    </p>
+                  </div>
+                  <a 
+                    href="https://docs.google.com/spreadsheets/d/1WeJ4q40PcNrIi6e2Odi_LtiOq4LWx4qdYRwdE1RGTL0/edit" 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="w-full text-center py-2.5 bg-[#0B3D5C] hover:bg-[#072437] text-white rounded-xl text-[9.5px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer shadow-xs decoration-transparent"
+                  >
+                    Abrir Nómina Quirúrgica <ExternalLink size={11} />
+                  </a>
+                </div>
+
+                {/* Materna/Obstétrica */}
+                <div className="border border-purple-100 bg-purple-50/15 p-5 rounded-2xl flex flex-col justify-between space-y-4">
+                  <div>
+                    <span className="text-[8px] font-black bg-purple-100 text-purple-800 px-2 py-0.5 rounded uppercase tracking-wider font-mono">Pestaña: Nominas Obstetricas</span>
+                    <h4 className="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5 mt-2">
+                      <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                      Carga Obstétrica / Materna
+                    </h4>
+                    <p className="text-[9.5px] text-slate-500 font-bold uppercase tracking-tight mt-1 leading-normal text-left">
+                      Plan materno regional: partos, cesáreas registradas y datos de niños nacidos vivos o fallecidos.
+                    </p>
+                  </div>
+                  <a 
+                    href="https://docs.google.com/spreadsheets/d/1WeJ4q40PcNrIi6e2Odi_LtiOq4LWx4qdYRwdE1RGTL0/edit" 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="w-full text-center py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[9.5px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer shadow-xs decoration-transparent"
+                  >
+                    Abrir Nómina Obstétrica <ExternalLink size={11} />
+                  </a>
+                </div>
+
+                {/* Defunciones */}
+                <div className="border border-rose-100 bg-rose-50/15 p-5 rounded-2xl flex flex-col justify-between space-y-4">
+                  <div>
+                    <span className="text-[8px] font-black bg-rose-100 text-rose-800 px-2 py-0.5 rounded uppercase tracking-wider font-mono">Pestaña: Nominas Defunciones</span>
+                    <h4 className="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5 mt-2">
+                      <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                      Registro de Defunciones
+                    </h4>
+                    <p className="text-[9.5px] text-slate-500 font-bold uppercase tracking-tight mt-1 leading-normal text-left">
+                      Casos de mortalidad intrahospitalarios, etiologías patológicas y certificaciones médicas asociadas.
+                    </p>
+                  </div>
+                  <a 
+                    href="https://docs.google.com/spreadsheets/d/1WeJ4q40PcNrIi6e2Odi_LtiOq4LWx4qdYRwdE1RGTL0/edit" 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="w-full text-center py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[9.5px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer shadow-xs decoration-transparent"
+                  >
+                    Abrir Nómina de Defunciones <ExternalLink size={11} />
+                  </a>
                 </div>
               </div>
             </div>
@@ -1505,7 +1412,7 @@ export default function AdminPortal() {
         )}
 
         {/* TAB 3: BUSCADOR INTEGRAL DE EXPEDIENTES DE PACIENTES */}
-        {activeTab === 'pacientes' && (
+        {false && (
           <motion.div 
             key="pacientes" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             className="space-y-6"

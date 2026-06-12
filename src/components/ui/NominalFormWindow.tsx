@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { ArrowLeft, Save, RefreshCw, AlertCircle, CheckCircle, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
+import { nominalService } from '../../services/nominalService';
 
 type FormType = 'QUIRURGICA' | 'OBSTETRICA' | 'DEFUNCION';
 
@@ -110,18 +111,23 @@ export default function NominalFormWindow() {
   const buscarPaciente = async () => {
     if (!formData.cedula_paciente) return;
     setPacienteStatus('Buscando...');
-    const { data, error } = await supabase.from('pacientes').select('*').eq('cedula', formData.cedula_paciente.trim()).maybeSingle();
-    if (data) {
-      setFormData(prev => ({
-        ...prev,
-        nombre_paciente: data.nombre || '',
-        apellido_paciente: data.apellido || '',
-        edad: data.edad ? data.edad.toString() : '',
-        sexo: data.sexo || 'FEMENINO',
-        telefono: data.telefono || '',
-      }));
-      setPacienteStatus('✓ Encontrado');
-    } else {
+    try {
+      const data = await nominalService.buscarPaciente(formData.cedula_paciente);
+      if (data) {
+        setFormData(prev => ({
+          ...prev,
+          nombre_paciente: data.nombre || '',
+          apellido_paciente: data.apellido || '',
+          edad: data.edad ? data.edad.toString() : '',
+          sexo: data.sexo || 'FEMENINO',
+          telefono: data.telefono || '',
+        }));
+        setPacienteStatus('✓ Encontrado');
+      } else {
+        setPacienteStatus('Nuevo paciente');
+      }
+    } catch (err) {
+      console.warn('Error al buscar paciente:', err);
       setPacienteStatus('Nuevo paciente');
     }
   };
@@ -129,15 +135,20 @@ export default function NominalFormWindow() {
   const buscarMedico = async () => {
     if (!formData.cedula_medico) return;
     setMedicoStatus('Buscando...');
-    const { data, error } = await supabase.from('medicos').select('*').eq('cedula', formData.cedula_medico.trim()).maybeSingle();
-    if (data) {
-      setFormData(prev => ({
-        ...prev,
-        nombre_medico: data.nombre || '',
-        apellido_medico: data.apellido || '',
-      }));
-      setMedicoStatus('✓ Encontrado');
-    } else {
+    try {
+      const data = await nominalService.buscarMedico(formData.cedula_medico);
+      if (data) {
+        setFormData(prev => ({
+          ...prev,
+          nombre_medico: data.nombre || '',
+          apellido_medico: data.apellido || '',
+        }));
+        setMedicoStatus('✓ Encontrado');
+      } else {
+        setMedicoStatus('Nuevo médico');
+      }
+    } catch (err) {
+      console.warn('Error al buscar medico:', err);
       setMedicoStatus('Nuevo médico');
     }
   };

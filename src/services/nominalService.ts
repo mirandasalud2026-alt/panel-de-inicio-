@@ -75,6 +75,24 @@ if (!localStorage.getItem(L_KEY_CENTROS_SALUD)) {
   ]);
 }
 
+function splitNombreCompleto(fullName: string) {
+  const parts = (fullName || '').trim().replace(/\s+/g, ' ').split(' ');
+  if (parts.length <= 1) {
+    return { nombres: fullName || '', apellidos: '' };
+  } else if (parts.length === 2) {
+    return { nombres: parts[0], apellidos: parts[1] };
+  } else if (parts.length === 3) {
+    // e.g. "JUAN JOSE TOVAR" -> "JUAN", "JOSE TOVAR" or "JUAN JOSE", "TOVAR"
+    return { nombres: parts[0], apellidos: parts.slice(1).join(' ') };
+  } else {
+    // e.g. "JUAN JOSE TOVAR VILLANUEVA"
+    const mid = Math.ceil(parts.length / 2);
+    const nombres = parts.slice(0, mid).join(' ');
+    const apellidos = parts.slice(mid).join(' ');
+    return { nombres, apellidos };
+  }
+}
+
 export const nominalService = {
   // BÚSQUEDA MULTI-CRITERIO DE PACIENTES (Cédula, Nombre, Apellido, Teléfono)
   async buscarPacientesMultiples(query: string): Promise<Paciente[]> {
@@ -86,11 +104,21 @@ export const nominalService = {
         const { data, error } = await supabase
           .from('pacientes')
           .select('*')
-          .or(`cedula.ilike.%${term}%,nombre.ilike.%${term}%,apellido.ilike.%${term}%,telefono.ilike.%${term}%`)
+          .or(`cedula.ilike.%${term}%,nombre_y_apellido.ilike.%${term}%,movil01.ilike.%${term}%`)
           .limit(40);
         
         if (!error && data) {
-          return data as Paciente[];
+          return data.map((raw: any) => {
+            const { nombres, apellidos } = splitNombreCompleto(raw.nombre_y_apellido || '');
+            return {
+              cedula: raw.cedula,
+              nombre: nombres,
+              apellido: apellidos,
+              edad: parseInt(raw.edad) || 0,
+              sexo: raw.sexo || 'FEMENINO',
+              telefono: raw.movil01 || ''
+            };
+          });
         }
       } catch (err) {
         console.warn('Error al buscar pacientes multi-criterio en Supabase, reintentando con fallback local:', err);
@@ -133,7 +161,25 @@ export const nominalService = {
           .maybeSingle();
         
         if (!pError && pData) {
-          return pData as Paciente;
+          const raw = pData as any;
+          const { nombres, apellidos } = splitNombreCompleto(raw.nombre_y_apellido || raw.nombre || '');
+          let sexoMapeado = 'FEMENINO';
+          if (raw.sexo) {
+            const s = raw.sexo.toUpperCase().trim();
+            if (s === 'M' || s === 'MASCULINO') {
+              sexoMapeado = 'MASCULINO';
+            } else if (s === 'F' || s === 'FEMENINO') {
+              sexoMapeado = 'FEMENINO';
+            }
+          }
+          return {
+            cedula: raw.cedula,
+            nombre: nombres,
+            apellido: apellidos,
+            edad: parseInt(raw.edad) || 0,
+            sexo: sexoMapeado,
+            telefono: raw.movil01 || raw.telefono || ''
+          };
         }
 
         // 2. Si no, buscar en registros quirúrgicos
@@ -231,7 +277,14 @@ export const nominalService = {
           .maybeSingle();
         
         if (!mError && mData) {
-          return mData as Medico;
+          const raw = mData as any;
+          const { nombres, apellidos } = splitNombreCompleto(raw.nombre_medico || raw.nombre || '');
+          return {
+            cedula: raw.cedula,
+            nombre: nombres,
+            apellido: apellidos,
+            telefono: raw.movil01 || raw.telefono || ''
+          };
         }
 
         // 2. Buscar en registros quirúrgicos para autocompletar médico

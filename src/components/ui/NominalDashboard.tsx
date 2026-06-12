@@ -113,58 +113,6 @@ export default function NominalDashboard() {
 
       <div className="max-w-6xl mx-auto p-4 sm:p-6 pb-24 space-y-8">
         
-        {/* INTERACTIVE VIEW MODE SWITCHER */}
-        <div className="flex justify-start bg-slate-100 p-1 rounded-2xl border border-slate-200 w-fit">
-          <button
-            onClick={() => {
-              if (profile?.estado === 'aprobado' || profile?.rol === 'admin') {
-                setActiveTab('carga');
-              }
-            }}
-            disabled={profile?.estado !== 'aprobado' && profile?.rol !== 'admin'}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all ${
-              profile?.estado !== 'aprobado' && profile?.rol !== 'admin'
-                ? 'opacity-50 cursor-not-allowed text-slate-400' 
-                : 'cursor-pointer'
-            } ${
-              activeTab === 'carga' 
-                ? 'bg-[#0B3D5C] text-white shadow-xs' 
-                : 'text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            {profile?.estado !== 'aprobado' && profile?.rol !== 'admin' && <span className="mr-0.5">🔒</span>} Cargar Planillas
-          </button>
-          <button
-            onClick={() => {
-              if (profile?.estado === 'aprobado' || profile?.rol === 'admin') {
-                setActiveTab('analisis');
-              }
-            }}
-            disabled={profile?.estado !== 'aprobado' && profile?.rol !== 'admin'}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all ${
-              profile?.estado !== 'aprobado' && profile?.rol !== 'admin'
-                ? 'opacity-50 cursor-not-allowed text-slate-400' 
-                : 'cursor-pointer'
-            } ${
-              activeTab === 'analisis' 
-                ? 'bg-[#0B3D5C] text-white shadow-xs' 
-                : 'text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            {profile?.estado !== 'aprobado' && profile?.rol !== 'admin' && <span className="mr-0.5">🔒</span>} <BarChart3 size={14} /> Sala de Análisis
-          </button>
-          <button
-            onClick={() => setActiveTab('ficha')}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-              activeTab === 'ficha' 
-                ? 'bg-[#0B3D5C] text-white shadow-xs' 
-                : 'text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            <User size={13} /> Mi Ficha de Personal
-          </button>
-        </div>
-
         {profile?.estado !== 'aprobado' && profile?.rol !== 'admin' && (
           <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-3xl p-5 mb-2 text-center shadow-xs">
             <h3 className="text-sm font-black uppercase tracking-wider text-amber-850 flex items-center justify-center gap-2 font-display">
@@ -175,35 +123,6 @@ export default function NominalDashboard() {
             </p>
           </div>
         )}
-
-        {activeTab === 'analisis' ? (
-          <AnalyticsEngine />
-        ) : activeTab === 'ficha' ? (
-          <MiFichaPersonal />
-        ) : (
-          <>
-            {/* BANNER IDENTIDAD DEL OPERADOR */}
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-[#0B3D5C]/10 text-[#0B3D5C] rounded-2xl flex items-center justify-center font-display text-lg font-black uppercase">
-              {profile?.nombre ? profile.nombre.charAt(0) : 'U'}
-            </div>
-            <div>
-              <h3 className="text-base font-black text-[#0B3D5C] uppercase tracking-tight font-display">
-                ¡Bienvenido al Portal de Carga, {profile?.nombre || 'Operador'}!
-              </h3>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
-                Utiliza las siguientes planillas certificadas para reportar las atenciones diarias.
-              </p>
-            </div>
-          </div>
-          
-          <div>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-150 border-emerald-100">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-550 bg-emerald-500 animate-pulse"></span> Sistema de Registro Activo
-            </span>
-          </div>
-        </div>
 
         {/* REPORTE NOMINAL MAESTRO */}
         <div className="space-y-4">
@@ -256,106 +175,7 @@ export default function NominalDashboard() {
           </div>
         </div>
 
-        {/* REPORTE DINÁMICO ASIGNADO COGNITIVAMENTE */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-1.5 border-b border-slate-200 pb-2">
-            <Sparkles size={14} className="text-blue-600" />
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-800">
-              🚰 Reportes Especiales Asignados (Data-Driven)
-            </h3>
-          </div>
-
-          {assignedModules.length === 0 ? (
-            <div className="bg-slate-100/50 rounded-3xl border border-slate-200 p-10 text-center text-slate-400 italic text-xs font-semibold leading-relaxed max-w-lg">
-              <ClipboardList size={28} className="mx-auto mb-3 text-slate-350" />
-              <span>No tienes formularios dinámicos especiales asignados a tu cuenta por ahora.</span>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-2">Visita al administrador si requieres carga adicional para tu ASIC (Ej: Registro fallas de Agua).</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {assignedModules.map(m => (
-                <button 
-                  key={m.id}
-                  onClick={() => {
-                    setSelectedModule(m);
-                    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-                  }}
-                  className={`bg-white p-6 rounded-3xl shadow-xs text-left hover:shadow-md transition-all border ${
-                    selectedModule?.id === m.id ? 'border-blue-500 ring-2 ring-blue-500/15' : 'border-slate-200'
-                  } flex flex-col justify-between h-[180px] hover:-translate-y-0.5 cursor-pointer`}
-                >
-                  <div className="p-3 bg-blue-50 text-blue-600 font-display rounded-2xl w-fit text-xl">
-                    {m.meta_datos.icono || '📋'}
-                  </div>
-                  <div>
-                    <span className="px-2 py-0.5 rounded text-[8.5px] font-black bg-blue-100 text-blue-800 uppercase tracking-widest block w-fit mb-1">Dynamic SSPA Form</span>
-                    <h2 className="font-black text-slate-800 text-sm uppercase">{m.meta_datos.tabla_nombre}</h2>
-                    <p className="text-[10px] text-slate-410 text-slate-400 mt-1 line-clamp-2">{m.meta_datos.descripcion}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* CARGA ACTIVA DEL FORMULARIO COGNITIVO */}
-        {selectedModule && (
-          <motion.div 
-            initial={{ opacity: 0, y: 15 }} 
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-4 max-w-2xl"
-          >
-            <div className="flex justify-between items-center bg-slate-100 px-4 py-2 rounded-2xl border">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Ejecución del Reporte Especial</span>
-              <button 
-                onClick={() => setSelectedModule(null)}
-                className="text-xs font-black text-rose-500 hover:text-rose-700 uppercase"
-              >
-                cerrar planilla ×
-              </button>
-            </div>
-            
-            <DynamicForm 
-              config={selectedModule}
-              onSubmit={async (datos) => {
-                const res = await pipelineService.procesarRegistro(selectedModule, datos);
-                if (res.success) {
-                  loadRecentActivity();
-                }
-              }}
-            />
-          </motion.div>
-        )}
-
-        {/* ACTIVIDAD RECIENTE */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4 max-w-2xl">
-          <h4 className="text-xs font-black uppercase tracking-widest text-[#0B3D5C] border-b border-slate-100 pb-2">
-            🕒 Tu Historial Reciente de Envíos SSPA
-          </h4>
-
-          {recentClaims.length === 0 ? (
-            <p className="text-[10.5px] text-slate-400 italic">No tienes envíos registrados en esta terminal.</p>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {recentClaims.map((claim, index) => (
-                <div key={index} className="py-2.5 flex items-center justify-between text-xs font-semibold">
-                  <div>
-                    <span className="font-mono text-blue-600 block lowercase">{claim.tabla}</span>
-                    <span className="text-[8.4px] text-slate-400 font-mono tracking-tight block mt-1">{new Date(claim.fijo_fecha).toLocaleTimeString()} • ID: {claim.id}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[9px] text-slate-400 font-mono block">Espejo Google Sheets</span>
-                    <span className="text-green-600 block text-[9px] uppercase font-black">Espejo Completo ✓</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-      </>
-    )}
-  </div>
-</div>
+      </div>
+    </div>
   );
 }
