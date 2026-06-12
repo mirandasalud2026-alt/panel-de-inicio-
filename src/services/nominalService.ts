@@ -76,6 +76,37 @@ if (!localStorage.getItem(L_KEY_CENTROS_SALUD)) {
 }
 
 export const nominalService = {
+  // BÚSQUEDA MULTI-CRITERIO DE PACIENTES (Cédula, Nombre, Apellido, Teléfono)
+  async buscarPacientesMultiples(query: string): Promise<Paciente[]> {
+    const term = query.toUpperCase().trim();
+    if (!term) return [];
+
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('pacientes')
+          .select('*')
+          .or(`cedula.ilike.%${term}%,nombre.ilike.%${term}%,apellido.ilike.%${term}%,telefono.ilike.%${term}%`)
+          .limit(40);
+        
+        if (!error && data) {
+          return data as Paciente[];
+        }
+      } catch (err) {
+        console.warn('Error al buscar pacientes multi-criterio en Supabase, reintentando con fallback local:', err);
+      }
+    }
+
+    // Fallback local
+    const local = getLocalData<Paciente[]>(L_KEY_PACIENTES, []);
+    return local.filter(p => 
+      (p.cedula || '').toUpperCase().includes(term) ||
+      (p.nombre || '').toUpperCase().includes(term) ||
+      (p.apellido || '').toUpperCase().includes(term) ||
+      (p.telefono || '').toUpperCase().includes(term)
+    );
+  },
+
   // 1. BÚSQUEDA AUTOMÁTICA DE PACIENTE
   async buscarPaciente(cedula: string): Promise<Paciente | null> {
     const sanitized = cedula.toUpperCase().trim();

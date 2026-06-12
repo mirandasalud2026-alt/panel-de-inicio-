@@ -15,13 +15,102 @@ import {
   MapPin,
   Clock,
   Check,
-  X
+  X,
+  Scissors,
+  Baby,
+  HeartOff,
+  Search,
+  FileText,
+  Phone,
+  FileSpreadsheet,
+  ExternalLink
 } from 'lucide-react';
 import { supabase, UserProfile } from '../../lib/supabase';
 import { schemaService } from '../../services/schemaService';
+import { nominalService } from '../../services/nominalService';
+import DashboardSummaryWidget from '../dashboard/DashboardSummaryWidget';
 
 export default function AdminPortal() {
-  const [activeTab, setActiveTab] = useState<'usuarios' | 'tablas'>('usuarios');
+  const [activeTab, setActiveTab] = useState<'usuarios' | 'tablas' | 'pacientes'>('usuarios');
+
+  // Tab 3: Buscador de Pacientes por Datos (Cédula, Nombre, Apellido, Teléfono)
+  const [patientSearchQuery, setPatientSearchQuery] = useState('');
+  const [patientSearchResults, setPatientSearchResults] = useState<any[]>([]);
+  const [isPatientSearching, setIsPatientSearching] = useState(false);
+  const [selectedPatientForHistory, setSelectedPatientForHistory] = useState<any | null>(null);
+  const [selectedPatientHistory, setSelectedPatientHistory] = useState<{
+    quirurgicos: any[];
+    obstetricos: any[];
+    defunciones: any[];
+  }>({ quirurgicos: [], obstetricos: [], defunciones: [] });
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+
+  const handlePatientSearchSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!patientSearchQuery.trim()) return;
+    setIsPatientSearching(true);
+    try {
+      const results = await nominalService.buscarPacientesMultiples(patientSearchQuery);
+      setPatientSearchResults(results);
+      setSelectedPatientForHistory(null); // Reiniciar visualización de historial al buscar de nuevo
+    } catch (err) {
+      console.error('Error al realizar búsqueda de pacientes:', err);
+    } finally {
+      setIsPatientSearching(false);
+    }
+  };
+
+  const loadPatientHistory = async (patient: any) => {
+    setSelectedPatientForHistory(patient);
+    setIsHistoryLoading(true);
+    let quirurgicEvents: any[] = [];
+    let obstetricEvents: any[] = [];
+    let defuncionEvents: any[] = [];
+
+    try {
+      if (supabase) {
+        // Buscar eventos quirúrgicos
+        const { data: qData } = await supabase
+          .from('CL_quirurgicos_eventos')
+          .select('*')
+          .eq('paciente_id', patient.cedula);
+        if (qData) quirurgicEvents = qData;
+
+        // Buscar eventos obstétricos
+        const { data: oData } = await supabase
+          .from('CL_obstetricos_eventos')
+          .select('*')
+          .eq('paciente_id', patient.cedula);
+        if (oData) obstetricEvents = oData;
+
+        // Buscar defunciones
+        const { data: dData } = await supabase
+          .from('CL_defunciones_eventos')
+          .select('*')
+          .eq('paciente_id', patient.cedula);
+        if (dData) defuncionEvents = dData;
+      } else {
+        // Fallback simulación local
+        const localQ = JSON.parse(localStorage.getItem('nominal_sim_quirurgica') || '[]');
+        quirurgicEvents = localQ.filter((r: any) => r.cedula_paciente === patient.cedula);
+
+        const localO = JSON.parse(localStorage.getItem('nominal_sim_obstetrica') || '[]');
+        obstetricEvents = localO.filter((r: any) => r.cedula_madre === patient.cedula);
+
+        const localD = JSON.parse(localStorage.getItem('nominal_sim_defuncion') || '[]');
+        defuncionEvents = localD.filter((r: any) => r.cedula_fallecido === patient.cedula);
+      }
+    } catch (err) {
+      console.warn('Error cargando historial del paciente:', err);
+    }
+
+    setSelectedPatientHistory({
+      quirurgicos: quirurgicEvents,
+      obstetricos: obstetricEvents,
+      defunciones: defuncionEvents
+    });
+    setIsHistoryLoading(false);
+  };
 
   // Tab 1: Usuarios
   const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
@@ -44,6 +133,7 @@ export default function AdminPortal() {
   const [selectedTableRecords, setSelectedTableRecords] = useState<any[]>([]);
   const [isRecordsLoading, setIsRecordsLoading] = useState(false);
   const [dataSource, setDataSource] = useState<'supabase' | 'simulado'>('simulado');
+  const [selectedInspectRecord, setSelectedInspectRecord] = useState<any | null>(null);
 
   // Sistema de Alertas de Onboarding Reciente
   const [onboardingAlerts, setOnboardingAlerts] = useState<any[]>([]);
@@ -77,12 +167,102 @@ export default function AdminPortal() {
     { nombre_establecimiento: 'HOSPITAL DOMINGO LUCIANI', cod_asic: 'MET-01', cod_eje: 'MET' }
   ]);
 
+  // Estados para conteos en tiempo real de planillas nominales
+  const [counts, setCounts] = useState({
+    quirurgicos: 0,
+    obstetricos: 0,
+    defunciones: 0,
+  });
+  const [countsLoading, setCountsLoading] = useState(false);
+
+  const fetchNominalCounts = async () => {
+    setCountsLoading(true);
+    let qCount = 0;
+    let oCount = 0;
+    let dCount = 0;
+
+    // 1. Cargar datos locales de localStorage como contingencia
+    try {
+      const localQ = localStorage.getItem('nominal_sim_quirurgica');
+      if (localQ) {
+        qCount = JSON.parse(localQ).length;
+      } else {
+        qCount = 2; // Default mock records
+      }
+
+      const localO = localStorage.getItem('nominal_sim_obstetrica');
+      if (localO) {
+        oCount = JSON.parse(localO).length;
+      } else {
+        oCount = 1; // Default mock records
+      }
+
+      const localD = localStorage.getItem('nominal_sim_defuncion');
+      if (localD) {
+        dCount = JSON.parse(localD).length;
+      } else {
+        dCount = 1; // Default mock records
+      }
+    } catch (e) {
+      console.warn('Error al mapear fallbacks en widgets nominales:', e);
+    }
+
+    // 2. Cargar en tiempo real desde Supabase si existe conexión activa
+    if (supabase) {
+      try {
+        const { count: sCount, error: sErr } = await supabase
+          .from('CL_quirurgicos_eventos')
+          .select('*', { count: 'exact', head: true });
+        if (!sErr && sCount !== null) {
+          qCount = sCount;
+        }
+
+        const { count: mCount, error: mErr } = await supabase
+          .from('CL_obstetricos_eventos')
+          .select('*', { count: 'exact', head: true });
+        if (!mErr && mCount !== null) {
+          oCount = mCount;
+        }
+
+        const { count: dfCount, error: dfErr } = await supabase
+          .from('CL_defunciones_eventos')
+          .select('*', { count: 'exact', head: true });
+        if (!dfErr && dfCount !== null) {
+          dCount = dfCount;
+        }
+      } catch (dbErr) {
+        console.warn('Fallo consulta count de Supabase, usando contingencia local:', dbErr);
+      }
+    }
+
+    setCounts({
+      quirurgicos: qCount,
+      obstetricos: oCount,
+      defunciones: dCount
+    });
+    setCountsLoading(false);
+  };
+
+  const handleWidgetClick = (tableName: string) => {
+    setActiveTab('tablas');
+    setTablaSeleccionada(tableName);
+    
+    // Auto Scroll suave al panel de control de bases de datos
+    setTimeout(() => {
+      const el = document.getElementById('explorador-clinico-tablas');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 150);
+  };
+
   // Cargar datos iniciales de base de datos
   useEffect(() => {
     fetchUsers();
     loadTablesList();
     fetchOnboardingAlerts();
     fetchTerritoryMetadata();
+    fetchNominalCounts();
   }, []);
 
   const fetchTerritoryMetadata = async () => {
@@ -588,7 +768,157 @@ export default function AdminPortal() {
           >
             <Database size={13} /> Datos Nominales
           </button>
+
+          <button
+            onClick={() => setActiveTab('pacientes')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+              activeTab === 'pacientes' 
+                ? 'bg-[#0B3D5C] text-white shadow-xs' 
+                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <Search size={13} /> Buscador de Pacientes
+          </button>
         </div>
+      </div>
+
+      {/* COMPONENTE SUMATORIA REGISTROS CLÍNICOS EN TIEMPO REAL */}
+      <DashboardSummaryWidget />
+
+      {/* TARJETAS DE INDICADORES / WIDGETS DE NOMINALES EN TIEMPO REAL */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* WIDGET 1: NOMINAL QUIRÚRGICO */}
+        <motion.div 
+          whileHover={{ y: -3, scale: 1.015 }}
+          whileTap={{ scale: 0.985 }}
+          onClick={() => handleWidgetClick('registros_quirurgicos')}
+          className="bg-white border border-slate-200 hover:border-emerald-500/50 rounded-3xl p-5 shadow-xs cursor-pointer transition-all duration-300 relative overflow-hidden group select-none flex flex-col justify-between"
+          id="widget-nominal-quirurgico"
+        >
+          {/* Subtle colored background flash on hover */}
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-50/10 to-teal-50/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+          
+          <div className="relative space-y-4">
+            <div className="flex justify-between items-start">
+              <span className="p-2.5 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:bg-emerald-100 group-hover:text-emerald-700 transition-colors">
+                <Scissors size={18} className="stroke-[2.5]" />
+              </span>
+              <span className="text-[8px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded-full">
+                Quirúrgico
+              </span>
+            </div>
+            
+            <div className="space-y-1">
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-none">Carga Nominalizada</p>
+              <h3 className="text-sm font-black uppercase text-slate-800 tracking-tight">Intervenciones Quirúrgicas</h3>
+              <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">Sistematización de urgencias y cirugías electivas.</p>
+            </div>
+          </div>
+
+          <div className="relative pt-4 border-t border-slate-100 mt-4 flex justify-between items-end">
+            <div>
+              <p className="text-[8px] font-black uppercase tracking-wider text-slate-400">Total Expedientes</p>
+              {countsLoading ? (
+                <div className="h-5 w-12 bg-slate-100 animate-pulse rounded-md mt-0.5" />
+              ) : (
+                <span className="text-xl font-black text-slate-800 leading-none font-mono">
+                  {counts.quirurgicos}
+                </span>
+              )}
+            </div>
+            <span className="text-[8.5px] font-black uppercase text-emerald-600 group-hover:underline flex items-center gap-1">
+              Auditar Planilla →
+            </span>
+          </div>
+        </motion.div>
+
+        {/* WIDGET 2: NOMINAL MATERNO / OBSTÉTRICA */}
+        <motion.div 
+          whileHover={{ y: -3, scale: 1.015 }}
+          whileTap={{ scale: 0.985 }}
+          onClick={() => handleWidgetClick('registros_obstetricos')}
+          className="bg-white border border-slate-200 hover:border-violet-500/50 rounded-3xl p-5 shadow-xs cursor-pointer transition-all duration-300 relative overflow-hidden group select-none flex flex-col justify-between"
+          id="widget-nominal-obstetrico"
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-violet-50/10 to-indigo-50/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+          
+          <div className="relative space-y-4">
+            <div className="flex justify-between items-start">
+              <span className="p-2.5 bg-violet-50 text-violet-600 rounded-2xl group-hover:bg-violet-100 group-hover:text-violet-700 transition-colors">
+                <Baby size={18} className="stroke-[2.5]" />
+              </span>
+              <span className="text-[8px] font-black uppercase tracking-widest text-violet-700 bg-violet-100/60 px-2 py-0.5 rounded-full">
+                Materno • Obstétrico
+              </span>
+            </div>
+            
+            <div className="space-y-1">
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-none">Cifra de Maternidad</p>
+              <h3 className="text-sm font-black uppercase text-slate-800 tracking-tight">Fichas Obstétricas</h3>
+              <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">Partos, recién nacidos, cesáreas y binomio madre-hijo.</p>
+            </div>
+          </div>
+
+          <div className="relative pt-4 border-t border-slate-100 mt-4 flex justify-between items-end">
+            <div>
+              <p className="text-[8px] font-black uppercase tracking-wider text-slate-400">Madres & Neonatos</p>
+              {countsLoading ? (
+                <div className="h-5 w-12 bg-slate-100 animate-pulse rounded-md mt-0.5" />
+              ) : (
+                <span className="text-xl font-black text-slate-800 leading-none font-mono">
+                  {counts.obstetricos}
+                </span>
+              )}
+            </div>
+            <span className="text-[8.5px] font-black uppercase text-violet-600 group-hover:underline flex items-center gap-1">
+              Auditar Planilla →
+            </span>
+          </div>
+        </motion.div>
+
+        {/* WIDGET 3: NOMINAL DEFUNCIÓN */}
+        <motion.div 
+          whileHover={{ y: -3, scale: 1.015 }}
+          whileTap={{ scale: 0.985 }}
+          onClick={() => handleWidgetClick('registros_defunciones')}
+          className="bg-white border border-slate-200 hover:border-slate-500 rounded-3xl p-5 shadow-xs cursor-pointer transition-all duration-300 relative overflow-hidden group select-none flex flex-col justify-between"
+          id="widget-nominal-defuncion"
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-100/20 to-slate-200/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+          
+          <div className="relative space-y-4">
+            <div className="flex justify-between items-start">
+              <span className="p-2.5 bg-slate-100 text-slate-600 rounded-2xl group-hover:bg-slate-200 group-hover:text-slate-700 transition-colors">
+                <HeartOff size={18} className="stroke-[2.5]" />
+              </span>
+              <span className="text-[8px] font-black uppercase tracking-widest text-slate-700 bg-slate-200 px-2 py-0.5 rounded-full">
+                Defunciones
+              </span>
+            </div>
+            
+            <div className="space-y-1">
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-none">Control de Decesos</p>
+              <h3 className="text-sm font-black uppercase text-slate-800 tracking-tight">Registro de Defunciones</h3>
+              <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">Causas de decesos, patologías básicas y certificación oficial.</p>
+            </div>
+          </div>
+
+          <div className="relative pt-4 border-t border-slate-100 mt-4 flex justify-between items-end">
+            <div>
+              <p className="text-[8px] font-black uppercase tracking-wider text-slate-400">Sistematizados</p>
+              {countsLoading ? (
+                <div className="h-5 w-12 bg-slate-100 animate-pulse rounded-md mt-0.5" />
+              ) : (
+                <span className="text-xl font-black text-slate-800 leading-none font-mono">
+                  {counts.defunciones}
+                </span>
+              )}
+            </div>
+            <span className="text-[8.5px] font-black uppercase text-slate-600 group-hover:underline flex items-center gap-1">
+              Auditar Planilla →
+            </span>
+          </div>
+        </motion.div>
       </div>
 
       {feedbackMsg && (
@@ -908,13 +1238,112 @@ export default function AdminPortal() {
           </motion.div>
         )}
 
-        {/* TAB 2: EXPLORADOR DE BASE DE DATOS ACTIVA */}
+        {/* TAB 2: EXPLORADOR DE BASE DE DATOS ACTIVA - CON ENLACES DIRECTOS A LOS LIBROS NOMINALES EN GOOGLE SHEETS */}
         {activeTab === 'tablas' && (
           <motion.div 
             key="tablas" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             className="space-y-6"
           >
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+            {/* SECCIÓN PRINCIPAL: ECOSISTEMA DE HOJAS DE CÁLCULO GUBERNAMENTALES (GOOGLE SHEETS) */}
+            <div className="bg-gradient-to-r from-[#072437] to-[#0B3D5C] text-white p-6 rounded-3xl border border-slate-200/10 shadow-md space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wider flex items-center gap-2 text-[#FFD700]">
+                    <FileSpreadsheet size={16} />
+                    Ecosistema de Libros de Cálculo Gubernamentales (Google Sheets)
+                  </h3>
+                  <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest mt-1">
+                    Acceda en vivo a las hojas de cálculo individuales asignadas a cada eje y a los libros consolidados del estado.
+                  </p>
+                </div>
+                <span className="bg-emerald-500 text-slate-950 text-[8.5px] font-black px-2.5 py-1 rounded-full uppercase font-mono tracking-wider">
+                  En Vivo Sincronizado
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+                {/* Consolidado Semanal */}
+                <a 
+                  href="https://docs.google.com/spreadsheets/d/1iu3UpCktHPDhUJOVWhwL0-zCZ523aJelWIPgHaLE-20/edit" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/25 rounded-2xl p-4 transition-all hover:-translate-y-0.5 flex flex-col justify-between h-[115px] group select-none decoration-transparent text-white"
+                >
+                  <div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[7.5px] font-black uppercase text-yellow-300 bg-yellow-400/10 px-2 py-0.5 rounded">Consolidación</span>
+                      <ExternalLink size={12} className="text-white/40 group-hover:text-white" />
+                    </div>
+                    <h4 className="text-xs font-black uppercase mt-2 font-display text-white">Consolidado Semanal</h4>
+                    <p className="text-[9px] text-slate-300 font-bold leading-normal mt-0.5">Libro Maestro Semanal de ASIC por Ejes.</p>
+                  </div>
+                  <span className="text-[8.5px] font-mono text-yellow-300 uppercase tracking-widest font-black">Abrir Documento →</span>
+                </a>
+
+                {/* Histórico Permanente */}
+                <a 
+                  href="https://docs.google.com/spreadsheets/d/1zhkYo7kzcb-2r07Becb-wLEFzYEmb-LYxVgl07Njk-g/edit" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/25 rounded-2xl p-4 transition-all hover:-translate-y-0.5 flex flex-col justify-between h-[115px] group select-none decoration-transparent text-white"
+                >
+                  <div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[7.5px] font-black uppercase text-emerald-300 bg-emerald-400/10 px-2 py-0.5 rounded">Resguardo</span>
+                      <ExternalLink size={12} className="text-white/40 group-hover:text-white" />
+                    </div>
+                    <h4 className="text-xs font-black uppercase mt-2 font-display text-white">Histórico Permanente</h4>
+                    <p className="text-[9px] text-slate-300 font-bold leading-normal mt-0.5">Acumulado permanente de todos los períodos.</p>
+                  </div>
+                  <span className="text-[8.5px] font-mono text-emerald-300 uppercase tracking-widest font-black">Abrir Documento →</span>
+                </a>
+
+                {/* Carpeta de Respaldos ZIP */}
+                <a 
+                  href="https://drive.google.com/drive/folders/19RTGSwQuisCSr1YLZrZX6ezngQ_69Mhv" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/25 rounded-2xl p-4 transition-all hover:-translate-y-0.5 flex flex-col justify-between h-[115px] group select-none decoration-transparent text-white"
+                >
+                  <div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[7.5px] font-black uppercase text-blue-305 text-blue-300 bg-blue-400/10 px-2 py-0.5 rounded">Google Drive</span>
+                      <ExternalLink size={12} className="text-white/40 group-hover:text-white" />
+                    </div>
+                    <h4 className="text-xs font-black uppercase mt-2 font-display text-white">Respaldos ZIP</h4>
+                    <p className="text-[9px] text-slate-300 font-bold leading-normal mt-0.5">Respaldos estructurados automatizados en Drive.</p>
+                  </div>
+                  <span className="text-[8.5px] font-mono text-blue-300 uppercase tracking-widest font-black">Ver Carpeta →</span>
+                </a>
+
+                {/* Buscador Rápido de Ejes */}
+                <div className="bg-white/5 border border-white/5 rounded-2xl p-4 flex flex-col justify-between h-[115px]">
+                  <div>
+                    <span className="text-[7.5px] font-black uppercase text-purple-300 bg-purple-450/20 bg-purple-400/10 px-2 py-0.5 rounded w-fit block">Ejes Territoriales</span>
+                    <h4 className="text-xs font-black uppercase mt-1.5 font-display text-slate-200">Libros por Eje</h4>
+                    <p className="text-[8px] text-slate-300 font-bold leading-tight mt-0.5">Seleccione un eje para abrir su hoja individual en vivo.</p>
+                  </div>
+                  <select 
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        window.open(e.target.value, '_blank');
+                        e.target.value = ''; // Reset
+                      }
+                    }}
+                    className="w-full bg-white/10 border border-white/20 rounded-xl py-1.5 px-2 text-[9px] font-black text-white focus:outline-none focus:bg-[#072437] cursor-pointer"
+                  >
+                    <option value="" className="text-slate-800 font-bold">-- ABRIR HOJA DE EJE --</option>
+                    <option value="https://docs.google.com/spreadsheets/d/1amIenrqhZ5yGFnV_qSEklDUkBF-obLeC3U234KxZC18/edit" className="text-slate-800 font-bold">Altos Mirandinos (Eje)</option>
+                    <option value="https://docs.google.com/spreadsheets/d/1bFBoYIWGtplX37QypiyUerMIDl_g-MeBNnCKZifZvp0/edit" className="text-slate-800 font-bold">Valles del Tuy (Eje)</option>
+                    <option value="https://docs.google.com/spreadsheets/d/1DV2rbO771sC5pcKUUf_kr9Ej4VtkF6Oo9uL8oJHSXGQ/edit" className="text-slate-800 font-bold">Guarenas-Guatire (Eje)</option>
+                    <option value="https://docs.google.com/spreadsheets/d/1mwA2Z1ncghe4-w46BkEwbUC8Bdn_7uAWMaUND-3TB3w/edit" className="text-slate-800 font-bold">Barlovento (Eje)</option>
+                    <option value="https://docs.google.com/spreadsheets/d/1n9eFrM_CvbrP_b7uxIEb2Qm42u6X9byrRugIed_ehO0/edit" className="text-slate-800 font-bold">Metropolitano (Eje)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div id="explorador-clinico-tablas" className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
               <div>
                 <h3 className="text-sm font-black text-[#0B3D5C] uppercase tracking-wider">Explorador Clínico de Reportes Nominales</h3>
                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Audite las planillas de atenciones cargadas por los operadores regionales.</p>
@@ -1055,10 +1484,10 @@ export default function AdminPortal() {
                                 })}
                                 <td className="px-3 py-2 text-right">
                                   <button 
-                                    onClick={() => alert(`Detalle Integral de la Fila:\n\n${JSON.stringify(rec, null, 2)}`)}
+                                    onClick={() => setSelectedInspectRecord(rec)}
                                     className="text-blue-600 font-black hover:underline uppercase text-[9px] tracking-wide cursor-pointer"
                                   >
-                                    Inspeccionar
+                                    🔬 Inspeccionar
                                   </button>
                                 </td>
                               </tr>
@@ -1075,6 +1504,344 @@ export default function AdminPortal() {
           </motion.div>
         )}
 
+        {/* TAB 3: BUSCADOR INTEGRAL DE EXPEDIENTES DE PACIENTES */}
+        {activeTab === 'pacientes' && (
+          <motion.div 
+            key="pacientes" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            className="space-y-6"
+          >
+            {/* Buscador de Entrada */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+              <div>
+                <h3 className="text-sm font-black text-[#0B3D5C] uppercase tracking-wider">Buscador Unificado de Expedientes y Fichas de Pacientes</h3>
+                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
+                  Ingrese cualquier atributo identificativo (Cédula, Nombres, Apellidos o Teléfono) para traer de inmediato su expediente consolidado.
+                </p>
+              </div>
+
+              <form onSubmit={handlePatientSearchSubmit} className="flex gap-3">
+                <div className="relative flex-grow">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+                    <Search size={15} />
+                  </span>
+                  <input
+                    type="text"
+                    value={patientSearchQuery}
+                    onChange={(e) => setPatientSearchQuery(e.target.value)}
+                    placeholder="Escriba Cédula, Nombre, Apellido o Teléfono del Paciente... (Ej: Pedro, V-14234567, 0414)"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-10 pr-4 py-3 text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#0B3D5C] focus:bg-white transition"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isPatientSearching || !patientSearchQuery.trim()}
+                  className="px-6 py-3 bg-[#0B3D5C] hover:bg-[#072437] disabled:bg-slate-300 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap animate-none"
+                >
+                  {isPatientSearching ? <RefreshCw size={13} className="animate-spin" /> : <Search size={13} />}
+                  Traer Datos Paciente
+                </button>
+              </form>
+            </div>
+
+            {/* Panel de Dos Columnas */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+              
+              {/* Columna Izquierda: Resultados de Búsqueda (Cédula, Nombre, Apellido, Teléfono) */}
+              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4 lg:col-span-2">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                  <h4 className="text-xs font-black text-[#0B3D5C] uppercase tracking-wider">Hojas de Expedientes Coincidentes</h4>
+                  <span className="bg-blue-50 text-blue-700 text-[8.5px] font-black px-2.5 py-1 rounded-full uppercase font-mono">
+                    Encontrados: {patientSearchResults.length}
+                  </span>
+                </div>
+
+                {isPatientSearching ? (
+                  <div className="py-24 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest space-y-2">
+                    <RefreshCw size={20} className="animate-spin mx-auto text-[#0B3D5C]" />
+                    <p>Trayendo registros desde el conducto...</p>
+                  </div>
+                ) : patientSearchResults.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400 text-xs italic font-medium">
+                    {patientSearchQuery.trim() 
+                      ? 'No se encontraron pacientes que coincidan con la consulta de búsqueda.' 
+                      : 'Escriba un patrón arriba y presione "Traer Datos Paciente".'}
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
+                    {patientSearchResults.map((patient) => {
+                      const isSelected = selectedPatientForHistory?.cedula === patient.cedula;
+                      return (
+                        <div
+                          key={patient.cedula}
+                          onClick={() => loadPatientHistory(patient)}
+                          className={`p-4 border rounded-2xl cursor-pointer transition relative overflow-hidden group select-none text-left ${
+                            isSelected 
+                              ? 'border-blue-500 bg-blue-50/40 shadow-xs' 
+                              : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-mono text-[9px] font-black text-blue-600 bg-blue-50/80 px-2 py-0.5 rounded border border-blue-100/50 inline-block uppercase">
+                                {patient.cedula}
+                              </p>
+                              <h5 className="font-black text-slate-800 text-[11px] uppercase tracking-tight mt-1.5 leading-none">
+                                {patient.nombre} {patient.apellido}
+                              </h5>
+                            </div>
+                            <span className="text-[8.5px] font-black uppercase text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
+                              {patient.sexo || 'Femenino'} • {patient.edad || 0} años
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 mt-3 text-[9.5px] text-slate-500 font-bold border-t border-slate-100/60 pt-2">
+                            <Phone size={10} className="text-slate-400" />
+                            <span>Teléfono: <span className="font-mono text-slate-700">{patient.telefono || 'No registrado'}</span></span>
+                          </div>
+
+                          {isSelected && (
+                            <div className="absolute right-0 top-0 bottom-0 w-1 bg-blue-600" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Columna Derecha: Detalle y Historial Clínico Exhaustivo del Paciente */}
+              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4 lg:col-span-3">
+                <div className="border-b border-slate-100 pb-3">
+                  <h4 className="text-xs font-black text-[#0B3D5C] uppercase tracking-wider">Historial Clínico Consolidado</h4>
+                  <p className="text-[9px] text-slate-400 mt-0.5 font-bold uppercase tracking-widest">Procedimientos quirúrgicos, obstétricos o egresos vitales asociados.</p>
+                </div>
+
+                {!selectedPatientForHistory ? (
+                  <div className="py-24 text-center text-slate-400 text-xs italic font-semibold max-w-sm mx-auto">
+                    Seleccione una ficha de paciente de la columna izquierda para inspeccionar sus atenciones y auditoría retrospectiva.
+                  </div>
+                ) : isHistoryLoading ? (
+                  <div className="py-24 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest space-y-2">
+                    <RefreshCw size={20} className="animate-spin mx-auto text-[#0B3D5C]" />
+                    <p>Estructurando línea de tiempo clínica...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Tarjeta Detallada con Copiado Rápido */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-3xl p-4 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[8px] font-black bg-[#0B3D5C] text-white px-2.5 py-1 rounded-full uppercase tracking-wider">Expediente Activo</span>
+                        <button
+                          onClick={() => {
+                            const clipText = `Paciente: ${selectedPatientForHistory.nombre} ${selectedPatientForHistory.apellido}\nCédula: ${selectedPatientForHistory.cedula}\nEdad: ${selectedPatientForHistory.edad}\nSexo: ${selectedPatientForHistory.sexo}\nTeléfono: ${selectedPatientForHistory.telefono}`;
+                            navigator.clipboard.writeText(clipText);
+                            showNotification("Datos generales copiados al portapapeles");
+                          }}
+                          className="text-[9px] text-blue-600 font-black uppercase hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          📋 Copiar Ficha de Texto
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-xs font-bold p-1">
+                        <div>
+                          <span className="text-[8px] text-slate-400 uppercase tracking-widest block">Nombres y Apellidos</span>
+                          <span className="text-slate-800 uppercase text-[11px] font-black">{selectedPatientForHistory.nombre} {selectedPatientForHistory.apellido}</span>
+                        </div>
+                        <div>
+                          <span className="text-[8px] text-slate-400 uppercase tracking-widest block">Cédula de Identidad</span>
+                          <span className="text-slate-800 font-mono text-[11px] font-black">{selectedPatientForHistory.cedula}</span>
+                        </div>
+                        <div>
+                          <span className="text-[8px] text-slate-400 uppercase tracking-widest block">Edad / Sexo Biológico</span>
+                          <span className="text-slate-800 uppercase text-[10px]">{selectedPatientForHistory.edad || 0} años • {selectedPatientForHistory.sexo || 'Indefinido'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[8px] text-slate-400 uppercase tracking-widest block">Teléfono de Contacto</span>
+                          <span className="text-slate-800 font-mono text-[10px]">{selectedPatientForHistory.telefono || 'S/N Registrado'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Línea de Tiempo de Eventos Clínicos */}
+                    <div className="space-y-4">
+                      <h5 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Línea de Vida y Cargas Clínicas Asociadas</h5>
+                      
+                      {/* Eventos Quirúrgicos */}
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
+                          <span className="text-[9.5px] font-black text-slate-600 uppercase tracking-wider">Eventos Quirúrgicos ({selectedPatientHistory.quirurgicos.length})</span>
+                        </div>
+                        {selectedPatientHistory.quirurgicos.length === 0 ? (
+                          <p className="text-[9.5px] text-slate-400 italic font-semibold pl-3.5">No registra procedimientos quirúrgicos.</p>
+                        ) : (
+                          <div className="space-y-2 pl-3.5 border-l-2 border-emerald-100">
+                            {selectedPatientHistory.quirurgicos.map((ev: any) => (
+                              <div key={ev.id} className="bg-emerald-50/50 border border-emerald-100 p-3 rounded-2xl space-y-1.5 text-[10px] font-semibold text-slate-700">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-emerald-800 font-black uppercase text-[9px] bg-emerald-100 px-2 py-0.5 rounded-md">
+                                    {ev.tipo_intervencion || 'Operación'}
+                                  </span>
+                                  <span className="font-mono text-slate-400 text-[8.5px]">{new Date(ev.fecha || ev.created_at).toLocaleDateString()}</span>
+                                </div>
+                                <p className="text-[9.5px] font-medium uppercase mt-1">Especialidad: <span className="font-bold text-slate-800">{ev.especialidad_quirurgica}</span></p>
+                                <p className="text-[9.5px] font-medium uppercase col-span-2">Médico Cirujano: <span className="font-bold text-slate-800">{ev.nombre_medico}</span></p>
+                                <p className="text-[9.5px] font-medium uppercase mt-0.5">Establecimiento: <span className="font-bold text-[#0B3D5C]">{ev.centro_salud}</span></p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Eventos Obstétricos */}
+                      <div className="space-y-2 mt-4">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-purple-500 flex-shrink-0" />
+                          <span className="text-[9.5px] font-black text-slate-600 uppercase tracking-wider">Atención Gineco-Obstétrica ({selectedPatientHistory.obstetricos.length})</span>
+                        </div>
+                        {selectedPatientHistory.obstetricos.length === 0 ? (
+                          <p className="text-[9.5px] text-slate-400 italic font-semibold pl-3.5">No registra ingresos gineco-obstétricos.</p>
+                        ) : (
+                          <div className="space-y-2 pl-3.5 border-l-2 border-purple-100">
+                            {selectedPatientHistory.obstetricos.map((ev: any) => (
+                              <div key={ev.id} className="bg-purple-50/50 border border-purple-100 p-3 rounded-2xl space-y-1.5 text-[10px] font-semibold text-slate-700">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-purple-800 font-black uppercase text-[9px] bg-purple-100 px-2 py-0.5 rounded-md">
+                                    Parto: {ev.tipo_parto || 'Ginecológico'}
+                                  </span>
+                                  <span className="font-mono text-slate-400 text-[8.5px]">{new Date(ev.fecha || ev.created_at).toLocaleDateString()}</span>
+                                </div>
+                                <p className="text-[9.5px] font-medium uppercase mt-1">Nacidos Vivos: <span className="font-bold text-slate-800">{ev.vivos}</span> • Muertos: <span className="font-bold text-slate-800">{ev.muertos}</span></p>
+                                <p className="text-[9.5px] font-medium uppercase">Obstetra Certificador: <span className="font-bold text-slate-800">{ev.nombre_medico}</span></p>
+                                <p className="text-[9.5px] font-medium uppercase">Establecimiento: <span className="font-bold text-[#0B3D5C]">{ev.centro_salud}</span></p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Eventos de Defunción */}
+                      <div className="space-y-2 mt-4">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-rose-500 flex-shrink-0" />
+                          <span className="text-[9.5px] font-black text-slate-600 uppercase tracking-wider">Egresos por Fallecimiento ({selectedPatientHistory.defunciones.length})</span>
+                        </div>
+                        {selectedPatientHistory.defunciones.length === 0 ? (
+                          <p className="text-[9.5px] text-slate-400 italic font-semibold pl-3.5">No constan defunciones médicas en bitácora.</p>
+                        ) : (
+                          <div className="space-y-2 pl-3.5 border-l-2 border-rose-100">
+                            {selectedPatientHistory.defunciones.map((ev: any) => (
+                              <div key={ev.id} className="bg-rose-50/50 border border-rose-100 p-3 rounded-2xl space-y-1.5 text-[10px] font-semibold text-slate-700">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-rose-800 font-black uppercase text-[9px] bg-rose-100 px-2 py-0.5 rounded-md">
+                                    Defunción Certificada
+                                  </span>
+                                  <span className="font-mono text-slate-400 text-[8.5px]">{new Date(ev.fecha || ev.created_at).toLocaleDateString()} {ev.hora_fallecimiento}</span>
+                                </div>
+                                <p className="text-[9.5px] font-medium uppercase mt-1">Causa de muerte: <span className="font-bold text-rose-700">{ev.patologia}</span></p>
+                                <p className="text-[9.5px] font-medium col-span-2">Observaciones: <span className="text-slate-600 font-normal">{ev.observacion || 'Ninguna'}</span></p>
+                                <p className="text-[9.5px] font-medium uppercase">Médico Certificador: <span className="font-bold text-slate-800">{ev.nombre_medico}</span></p>
+                                <p className="text-[9.5px] font-medium uppercase">Establecimiento: <span className="font-bold text-[#0B3D5C]">{ev.centro_salud}</span></p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+                  </div>
+                )}
+              </div>
+
+            </div>
+          </motion.div>
+        )}
+
+      </AnimatePresence>
+
+      {/* MODAL DETALLADO REFLEXIVO PARA INSPECCIONAR FILAS NOMINALES */}
+      <AnimatePresence>
+        {selectedInspectRecord && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4"
+            onClick={() => setSelectedInspectRecord(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 15, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 350 }}
+              className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden select-none"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-[#0B3D5C] text-white p-5 flex items-center justify-between">
+                <div>
+                  <span className="text-[8px] font-black uppercase tracking-widest text-[#FFD700] bg-white/10 px-2.5 py-1 rounded-full border border-white/15">
+                    Ficha de Auditoría Coherente
+                  </span>
+                  <h3 className="text-sm font-black uppercase text-white mt-2 tracking-tight font-display">Detalle Integral de la Fila</h3>
+                </div>
+                <button
+                  onClick={() => setSelectedInspectRecord(null)}
+                  className="p-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition duration-150 cursor-pointer"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              {/* Contenido Clave-Valor Elegante */}
+              <div className="p-6 space-y-4 max-h-[400px] overflow-y-auto">
+                <div className="bg-slate-50 border border-slate-150/80 rounded-2xl p-4 divide-y divide-slate-200">
+                  {Object.entries(selectedInspectRecord).map(([key, value]) => {
+                    const matchedColumnDesc = selectedTableSchema?.columnas.find(c => c.name === key);
+                    const labelText = matchedColumnDesc ? matchedColumnDesc.label : key.replace(/_/g, ' ').toUpperCase();
+                    const stringifiedValue = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value === null || value === undefined ? '—' : value);
+
+                    return (
+                      <div key={key} className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] font-black text-[#0B3D5C] uppercase block tracking-wide">
+                            {labelText}
+                          </span>
+                          <span className="text-[8px] font-mono text-slate-400 block uppercase">
+                            Identificador: {key}
+                          </span>
+                        </div>
+                        <div className="font-mono text-[10px] font-bold text-slate-800 bg-white border border-slate-200 px-2 py-1 rounded-lg uppercase shadow-3xs max-w-[245px] truncate text-right">
+                          {stringifiedValue}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="bg-slate-50 border-t border-slate-100 p-4 flex gap-3 justify-end items-center">
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(JSON.stringify(selectedInspectRecord, null, 2));
+                    showNotification("Fila copiada al portapapeles como JSON");
+                  }}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-100 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer"
+                >
+                  📋 Copiar JSON
+                </button>
+                <button
+                  onClick={() => setSelectedInspectRecord(null)}
+                  className="px-5 py-2 bg-[#0B3D5C] text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-xs"
+                >
+                  Entendido
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );
