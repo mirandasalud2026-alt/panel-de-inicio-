@@ -56,15 +56,6 @@ export default function LandingPage() {
                 Acceso al Sistema
               </Link>
             </div>
-
-            {/* Nuevo botón de Actualización de Datos de Personal - colocado debajo de los dos botones */}
-            <button
-              onClick={() => setIsOnboardingOpen(true)}
-              className="mt-2 bg-emerald-600 hover:bg-emerald-550 hover:bg-opacity-90 hover:scale-[1.02] active:scale-95 text-white font-black text-[10px] uppercase tracking-wider px-6 py-2.5 rounded-xl transition duration-305 transition-all shadow-md flex items-center gap-2 cursor-pointer border border-emerald-500/20"
-              id="btn-actualizacion-datos"
-            >
-              <RefreshCw size={12} className="animate-spin-slow animate-spin" style={{ animationDuration: '4s' }} /> Actualización de Datos de Personal (Onboarding)
-            </button>
           </div>
         </div>
       </header>

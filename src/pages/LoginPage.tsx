@@ -36,7 +36,7 @@ export default function LoginPage() {
     setErrorStatus(null);
     setSuccessStatus(null);
 
-    const targetEmail = email.trim();
+    const targetEmail = email.trim().toLowerCase();
     const targetPassword = password;
 
     try {
@@ -198,7 +198,7 @@ export default function LoginPage() {
                     required
                     placeholder="Ej: nominal@mirandasalud.com"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => setEmail(e.target.value.toLowerCase())}
                     className="w-full bg-slate-50/50 border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs font-bold focus:outline-none focus:border-[#0B3D5C]"
                     id="input-login-email"
                   />

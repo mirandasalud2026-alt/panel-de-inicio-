@@ -38,6 +38,16 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
   const [errorText, setErrorText] = useState<string | null>(null);
   const [matchedRecord, setMatchedRecord] = useState<PersonalRecord | null>(null);
 
+  // Estados de depuración y diagnóstico de conexión
+  const [edgeFunctionError, setEdgeFunctionError] = useState<string | null>(null);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    status: 'idle' | 'testing' | 'success' | 'failed';
+    dbStatus?: string;
+    funcStatus?: string;
+    errorMessage?: string;
+  }>({ status: 'idle' });
+
   // Inicializar base de datos de p_personal en el localStorage si no existe
   useEffect(() => {
     const list = localStorage.getItem('s_p_personal');
@@ -165,6 +175,89 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
     }, 800);
   };
 
+  const runSupabaseTest = async () => {
+    setTestResult({ status: 'testing' });
+    try {
+      if (!supabase) {
+        setTestResult({
+          status: 'failed',
+          errorMessage: 'El cliente de Supabase no se encuentra inicializado o no tiene URL definida.',
+        });
+        return;
+      }
+      
+      const startTime = Date.now();
+      const { data, error, status } = await supabase.from('P_personal').select('cedula').limit(1);
+      const elapsed = Date.now() - startTime;
+
+      if (error) {
+        setTestResult({
+          status: 'failed',
+          errorMessage: `Error en Base de Datos: ${error.message} (Código ${error.code}, Estatus HTTP ${status})`,
+        });
+        return;
+      }
+
+      const fStartTime = Date.now();
+      let funcResMsg = '';
+      try {
+        console.log('Diagnosticando Edge Function mediante SDK...');
+        const { data: fData, error: fError } = await supabase.functions.invoke('send-onboarding-otp', {
+          body: { email: 'diagnostic-ping@mirandasalud.gob.ve', code: '0000', nombre: 'Pinger Diagnóstico' }
+        });
+        const fElapsed = Date.now() - fStartTime;
+        if (fError) {
+          throw fError;
+        } else {
+          funcResMsg = `Conexión impecable vía SDK (${fElapsed}ms): ${JSON.stringify(fData)}`;
+        }
+      } catch (fErr: any) {
+        console.warn('Fallo diagnóstico vía SDK, intentando test de contingencia vía fetch directo...', fErr);
+        try {
+          const targetUrl = 'https://tzmhagwihumwiprsnyid.supabase.co/functions/v1/send-onboarding-otp';
+          const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR6bWhhZ3dpaHVtd2lwcnNueWlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5NjU2NDUsImV4cCI6MjA5NDU0MTY0NX0.ofDFZn5JpOrDktK4YSnUk-Qsd2V5Eil1Nl-xf84rr78';
+          
+          const fDirectStart = Date.now();
+          const rawResponse = await fetch(targetUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': anonKey,
+              'Authorization': `Bearer ${anonKey}`
+            },
+            body: JSON.stringify({
+              email: 'diagnostic-ping@mirandasalud.gob.ve',
+              code: '0000',
+              nombre: 'Pinger Diagnóstico'
+            })
+          });
+
+          const fDirectElapsed = Date.now() - fDirectStart;
+          if (rawResponse.ok) {
+            const resData = await rawResponse.json();
+            funcResMsg = `¡Conexión impecable vía Fetch Directo! (${fDirectElapsed}ms): ${JSON.stringify(resData)}`;
+          } else {
+            const resText = await rawResponse.text();
+            funcResMsg = `La Edge Function falló en ambos métodos. Código Error HTTP: ${rawResponse.status} - ${resText}`;
+          }
+        } catch (fetchErr: any) {
+          funcResMsg = `Error de Red/CORS en ambos intentos: SDK [${fErr?.message || String(fErr)}] | Fetch Directo [${fetchErr?.message || String(fetchErr)}]`;
+        }
+      }
+
+      setTestResult({
+        status: 'success',
+        dbStatus: `¡Conexión DB Exitosa! Tabla 'P_personal' leída exitosamente en ${elapsed}ms.`,
+        funcStatus: funcResMsg
+      });
+    } catch (e: any) {
+      setTestResult({
+        status: 'failed',
+        errorMessage: e?.message || String(e)
+      });
+    }
+  };
+
   const handleSendOTP = async () => {
     if (!nuevoCorreo || !nuevoCorreo.includes('@')) {
       setErrorText('Por favor ingrese un correo electrónico válido.');
@@ -173,6 +266,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
 
     setLoading(true);
     setErrorText(null);
+    setEdgeFunctionError(null);
 
     // Generar código OTP aleatorio de 4 dígitos
     const code = Math.floor(1000 + Math.random() * 9000).toString();
@@ -185,6 +279,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
       // Intentar disparar el Edge Function de Supabase para envío real
       if (supabase) {
         try {
+          console.log('Intentando envío de otp vía Supabase SDK...');
           const { data, error } = await supabase.functions.invoke('send-onboarding-otp', {
             body: { 
               email: finalEmail, 
@@ -194,13 +289,47 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
           });
 
           if (!error) {
-            console.log('Edge Function ejecutado exitosamente:', data);
+            console.log('Edge Function ejecutado exitosamente vía SDK:', data);
             functionInvokedSuccessfully = true;
           } else {
-            console.warn('Fallo el Edge Function de Supabase, recurriendo a simulación:', error);
+            console.warn('Fallo el Edge Function vía SDK, intentando contingencia fetch directo...', error);
+            throw error;
           }
-        } catch (callErr) {
-          console.warn('Omitido el Edge Function, simulando despacho local de correo:', callErr);
+        } catch (callErr: any) {
+          console.warn('Invocación de Edge Function vía SDK falló, activando contingencia fetch directo...', callErr);
+          
+          try {
+            const targetUrl = 'https://tzmhagwihumwiprsnyid.supabase.co/functions/v1/send-onboarding-otp';
+            const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR6bWhhZ3dpaHVtd2lwcnNueWlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5NjU2NDUsImV4cCI6MjA5NDU0MTY0NX0.ofDFZn5JpOrDktK4YSnUk-Qsd2V5Eil1Nl-xf84rr78';
+            
+            console.log('Enviando petición fetch directa a:', targetUrl);
+            const rawResponse = await fetch(targetUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'apikey': anonKey,
+                'Authorization': `Bearer ${anonKey}`
+              },
+              body: JSON.stringify({
+                email: finalEmail,
+                code: code,
+                nombre: nombreUsuario
+              })
+            });
+
+            if (rawResponse.ok) {
+              const resJson = await rawResponse.json();
+              console.log('Edge Function ejecutado exitosamente vía Fetch directo:', resJson);
+              functionInvokedSuccessfully = true;
+            } else {
+              const errorContent = await rawResponse.text();
+              console.error('La contingencia fetch directo también falló:', rawResponse.status, errorContent);
+              setEdgeFunctionError(`Error del servidor (HTTP ${rawResponse.status}): ${errorContent || rawResponse.statusText}`);
+            }
+          } catch (fetchErr: any) {
+            console.error('Error crítico en fetch de contingencia:', fetchErr);
+            setEdgeFunctionError(`Error de Red/CORS extendido en contingencia: ${fetchErr?.message || String(fetchErr)}`);
+          }
         }
       }
 
@@ -394,7 +523,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
           </button>
         </div>
 
-        {/* Simulador flotante de correo/SMS para testing de OTP / Correo Real */}
+        {/* Simulador flotante de correo/SMS para testing de OTP/Correo Real */}
         {simulatedEmailSent && step === 4 && (
           isRealEmailSent ? (
             <div className="bg-emerald-50 border-b border-emerald-200 p-4 text-center space-y-1">
@@ -402,7 +531,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
                 📨 Envío Real Activo • Supabase & Resend
               </span>
-              <p className="text-[10.5px] text-emerald-900 font-bold leading-normal uppercase">
+              <p className="text-[10.5px] text-emerald-950 font-black leading-normal uppercase">
                 ¡Se ha despachado un código de seguridad real a su bandeja <span className="underline font-mono text-emerald-950 font-black">{nuevoCorreo}</span>!
               </p>
               <p className="text-[9px] text-slate-500 font-semibold leading-relaxed">
@@ -410,14 +539,23 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
               </p>
             </div>
           ) : (
-            <div className="bg-amber-50 border-b border-amber-200 p-3 text-center space-y-1 animate-pulse-slow">
-              <span className="inline-block px-1.5 py-0.5 text-[8.5px] font-black uppercase bg-amber-200 text-amber-800 rounded">📧 Simulador de Correo MirandaSalud</span>
+            <div className="bg-amber-50 border-b border-amber-205 p-3 text-center space-y-1">
+              <span className="inline-block px-1.5 py-0.5 text-[8.5px] font-black uppercase bg-amber-200 text-amber-850 rounded">⚠️ Alerta de Envío de Correo Real</span>
               <p className="text-[10px] text-amber-900 font-bold leading-normal">
-                Se ha enviado un código de onboarding al correo <span className="font-mono underline">{nuevoCorreo}</span> (Simulado).
+                El envío real falló y se requirió el Simulador de Correo <span className="font-mono underline">{nuevoCorreo}</span>:
               </p>
               <p className="text-xs font-black text-amber-950 uppercase tracking-widest font-mono">
-                Código de Seguridad: <span className="bg-amber-200 px-2 py-0.5 rounded text-base border border-amber-300 shadow-sm font-black">{codigoGenerado}</span>
+                Código de Seguridad: <span className="bg-amber-100 px-2 py-0.5 rounded text-base border border-amber-300 shadow-sm font-black">{codigoGenerado}</span>
               </p>
+              {edgeFunctionError && (
+                <div className="mt-1.5 text-[8.5px] text-rose-800 bg-rose-50 border border-rose-150 p-2 rounded-xl text-left font-mono">
+                  <span className="font-black uppercase block text-[7.5px] text-rose-700 mb-0.5">Motivo del fallo técnico de la Edge Function:</span>
+                  <div className="break-all">{edgeFunctionError}</div>
+                  <p className="text-[7px] text-slate-500 font-sans mt-1 uppercase font-semibold leading-normal">
+                    * Verifique sus secrets en Supabase: Asegure que ha corrido <code className="bg-slate-100 px-0.5 text-slate-800 rounded font-mono">supabase secrets set bakend_RESEND_API_KEY=su_clave</code> y recargado la función.
+                  </p>
+                </div>
+              )}
             </div>
           )
         )}
@@ -590,7 +728,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
                       type="email"
                       placeholder="Ej: nuevo.correo@gmail.com"
                       value={nuevoCorreo}
-                      onChange={e => setNuevoCorreo(e.target.value)}
+                      onChange={e => setNuevoCorreo(e.target.value.toLowerCase())}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-bold focus:outline-none focus:border-[#0B3D5C]"
                     />
                   </div>
@@ -694,6 +832,81 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
               </button>
             </div>
           )}
+
+          {/* Panel Universal de Diagnóstico Técnico de Conexión a Supabase */}
+          <div className="mt-6 pt-4 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => {
+                setShowDiagnostics(!showDiagnostics);
+                if (!showDiagnostics && testResult.status === 'idle') {
+                  runSupabaseTest();
+                }
+              }}
+              className="w-full flex items-center justify-between text-slate-400 hover:text-slate-600 transition-colors py-1 px-1"
+            >
+              <span className="flex items-center gap-1.5 text-[8.5px] font-black uppercase tracking-wider">
+                <RefreshCw size={11} className={`text-slate-500 ${testResult.status === 'testing' ? 'animate-spin' : ''}`} />
+                ⚡ Diagnóstico Técnico de Conexión Supabase
+              </span>
+              <span className="text-[9px] font-black text-slate-400 hover:text-slate-600">
+                {showDiagnostics ? 'Ocultar ▲' : 'Mostrar ▼'}
+              </span>
+            </button>
+
+            {showDiagnostics && (
+              <div className="mt-2 bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-2 text-left animate-pulse-once">
+                <div className="flex items-center justify-between">
+                  <span className="text-[7.5px] text-slate-400 uppercase font-black tracking-wider">Pruebas en tiempo real:</span>
+                  <button
+                    type="button"
+                    onClick={runSupabaseTest}
+                    disabled={testResult.status === 'testing'}
+                    className="text-[8px] font-black uppercase text-[#0B3D5C] hover:underline bg-white border border-slate-200 px-1.5 py-0.5 rounded shadow-xs cursor-pointer"
+                  >
+                    Re-testear
+                  </button>
+                </div>
+
+                {testResult.status === 'testing' && (
+                  <div className="flex items-center gap-2 py-2 text-slate-500">
+                    <Loader2 size={12} className="animate-spin text-slate-400" />
+                    <span className="text-[9px] font-black uppercase tracking-wide">Pingeando nodos y bases de datos de Supabase...</span>
+                  </div>
+                )}
+
+                {testResult.status === 'success' && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-start gap-1.5 text-[9.5px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-150 p-1.5 rounded-lg">
+                      <span className="shrink-0 text-emerald-500">●</span>
+                      <span>{testResult.dbStatus}</span>
+                    </div>
+                    <div className="flex items-start gap-1.5 text-[9px] font-bold text-blue-800 bg-blue-50 border border-blue-150 p-1.5 rounded-lg">
+                      <span className="shrink-0 text-blue-500">●</span>
+                      <span className="font-mono">{testResult.funcStatus}</span>
+                    </div>
+                  </div>
+                )}
+
+                {testResult.status === 'failed' && (
+                  <div className="bg-rose-50 border border-rose-250 text-rose-850 p-2 text-[9px] font-bold rounded-lg space-y-1">
+                    <div className="flex items-center gap-1.5 text-rose-700 font-black uppercase">
+                      <span>❌ ERROR DE TRÁNSITO</span>
+                    </div>
+                    <p className="font-mono text-rose-800 text-[8px] leading-relaxed select-all bg-rose-100 p-1 rounded border border-rose-200">{testResult.errorMessage}</p>
+                    <p className="text-[8px] text-slate-500 font-sans leading-normal">
+                      Por favor verifique que sus secretos de Supabase (como su API Key) no han expirado o rotado, y que la Edge Function <code className="font-mono bg-slate-100 px-0.5 rounded text-slate-800">send-onboarding-otp</code> está debidamente desplegada.
+                    </p>
+                  </div>
+                )}
+
+                <div className="text-[7.5px] text-slate-400 font-mono space-y-0.5 pt-1.5 border-t border-slate-200 uppercase font-semibold">
+                  <p>• API URL: <span className="text-slate-600">https://tzmhagwihumwiprsnyid.supabase.co</span></p>
+                  <p>• Función: <span className="text-slate-600">/functions/v1/send-onboarding-otp</span></p>
+                </div>
+              </div>
+            )}
+          </div>
 
         </div>
       </motion.div>

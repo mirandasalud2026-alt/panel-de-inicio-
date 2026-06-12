@@ -21,16 +21,24 @@ import { pipelineService } from '../../services/pipelineService';
 import { ConfiguracionModulo } from '../../types/admin';
 import { DynamicForm } from '../DynamicForm';
 import AnalyticsEngine from './AnalyticsEngine';
+import MiFichaPersonal from './MiFichaPersonal';
 import { motion } from 'motion/react';
 
 export default function NominalDashboard() {
   const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'carga' | 'analisis'>('carga');
+  const [activeTab, setActiveTab] = useState<'carga' | 'analisis' | 'ficha'>('carga');
 
   const [assignedModules, setAssignedModules] = useState<ConfiguracionModulo[]>([]);
   const [selectedModule, setSelectedModule] = useState<ConfiguracionModulo | null>(null);
   const [recentClaims, setRecentClaims] = useState<any[]>([]);
+
+  // Automatically restrict active tab if not fully approved
+  useEffect(() => {
+    if (profile && profile.estado !== 'aprobado' && profile.rol !== 'admin') {
+      setActiveTab('ficha');
+    }
+  }, [profile]);
 
   useEffect(() => {
     if (profile?.email) {
@@ -108,29 +116,70 @@ export default function NominalDashboard() {
         {/* INTERACTIVE VIEW MODE SWITCHER */}
         <div className="flex justify-start bg-slate-100 p-1 rounded-2xl border border-slate-200 w-fit">
           <button
-            onClick={() => setActiveTab('carga')}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+            onClick={() => {
+              if (profile?.estado === 'aprobado' || profile?.rol === 'admin') {
+                setActiveTab('carga');
+              }
+            }}
+            disabled={profile?.estado !== 'aprobado' && profile?.rol !== 'admin'}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all ${
+              profile?.estado !== 'aprobado' && profile?.rol !== 'admin'
+                ? 'opacity-50 cursor-not-allowed text-slate-400' 
+                : 'cursor-pointer'
+            } ${
               activeTab === 'carga' 
                 ? 'bg-[#0B3D5C] text-white shadow-xs' 
                 : 'text-slate-400 hover:text-slate-600'
             }`}
           >
-            Cargar Planillas
+            {profile?.estado !== 'aprobado' && profile?.rol !== 'admin' && <span className="mr-0.5">🔒</span>} Cargar Planillas
           </button>
           <button
-            onClick={() => setActiveTab('analisis')}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+            onClick={() => {
+              if (profile?.estado === 'aprobado' || profile?.rol === 'admin') {
+                setActiveTab('analisis');
+              }
+            }}
+            disabled={profile?.estado !== 'aprobado' && profile?.rol !== 'admin'}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all ${
+              profile?.estado !== 'aprobado' && profile?.rol !== 'admin'
+                ? 'opacity-50 cursor-not-allowed text-slate-400' 
+                : 'cursor-pointer'
+            } ${
               activeTab === 'analisis' 
                 ? 'bg-[#0B3D5C] text-white shadow-xs' 
                 : 'text-slate-400 hover:text-slate-600'
             }`}
           >
-            <BarChart3 size={14} /> Sala de Análisis
+            {profile?.estado !== 'aprobado' && profile?.rol !== 'admin' && <span className="mr-0.5">🔒</span>} <BarChart3 size={14} /> Sala de Análisis
+          </button>
+          <button
+            onClick={() => setActiveTab('ficha')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+              activeTab === 'ficha' 
+                ? 'bg-[#0B3D5C] text-white shadow-xs' 
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <User size={13} /> Mi Ficha de Personal
           </button>
         </div>
 
+        {profile?.estado !== 'aprobado' && profile?.rol !== 'admin' && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-3xl p-5 mb-2 text-center shadow-xs">
+            <h3 className="text-sm font-black uppercase tracking-wider text-amber-850 flex items-center justify-center gap-2 font-display">
+              ⚠️ Acceso Restringido - Cuenta Pendiente de Aprobación
+            </h3>
+            <p className="text-[10px] font-bold max-w-2xl mx-auto leading-relaxed mt-2 uppercase">
+              Usted tiene acceso exclusivo de lectura y edición de su Ficha de Personal. Sin embargo, para realizar atenciones nominales o acceder a la Sala de Análisis, un Administrador de la Dirección Estadal de Salud debe habilitar y asignarle el Establecimiento en el Panel de Control.
+            </p>
+          </div>
+        )}
+
         {activeTab === 'analisis' ? (
           <AnalyticsEngine />
+        ) : activeTab === 'ficha' ? (
+          <MiFichaPersonal />
         ) : (
           <>
             {/* BANNER IDENTIDAD DEL OPERADOR */}

@@ -51,12 +51,109 @@ export default function AdminPortal() {
 
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'err'; text: string } | null>(null);
 
-  // Cargar datos iniciales
+  // Listas de referencia de territorio cargados desde la base de datos con fallbacks
+  const [ejesList, setEjesList] = useState<{ cod_eje: string; nombre_eje: string }[]>([
+    { cod_eje: 'MET', nombre_eje: 'Metropolitano' },
+    { cod_eje: 'AMI', nombre_eje: 'Altos Mirandinos' },
+    { cod_eje: 'VTY', nombre_eje: 'Valles del Tuy' },
+    { cod_eje: 'GGU', nombre_eje: 'Guarenas Guatire' },
+    { cod_eje: 'BAR', nombre_eje: 'Barlovento' }
+  ]);
+  
+  const [centrosList, setCentrosList] = useState<{ nombre_establecimiento: string; cod_asic: string; cod_eje: string }[]>([
+    { nombre_establecimiento: 'CLÍNICA POPULAR PARACOTOS', cod_asic: 'AMI-01', cod_eje: 'AMI' },
+    { nombre_establecimiento: 'CDI DOCTOR JOSÉ GREGORIO HERNÁNDEZ', cod_asic: 'AMI-01', cod_eje: 'AMI' },
+    { nombre_establecimiento: 'AMBULATORIO PRADO DE MARÍA', cod_asic: 'AMI-02', cod_eje: 'AMI' },
+    { nombre_establecimiento: 'CDI CONTEXTO MIRANDINO', cod_asic: 'AMI-03', cod_eje: 'AMI' },
+    { nombre_establecimiento: 'CLÍNICA POPULAR HUGO CHÁVEZ', cod_asic: 'VTY-01', cod_eje: 'VTY' },
+    { nombre_establecimiento: 'CDI CARTANAL', cod_asic: 'VTY-03', cod_eje: 'VTY' },
+    { nombre_establecimiento: 'CLÍNICA POPULAR VALLES DEL TUY', cod_asic: 'VTY-02', cod_eje: 'VTY' },
+    { nombre_establecimiento: 'HOSPITAL GENERAL DE GUARENAS', cod_asic: 'GGU-01', cod_eje: 'GGU' },
+    { nombre_establecimiento: 'CDI EL QUEMADO', cod_asic: 'GGU-02', cod_eje: 'GGU' },
+    { nombre_establecimiento: 'HOSPITAL HIGUEROTE', cod_asic: 'BAR-01', cod_eje: 'BAR' },
+    { nombre_establecimiento: 'CLÍNICA POPULAR RIO CHICO', cod_asic: 'BAR-02', cod_eje: 'BAR' },
+    { nombre_establecimiento: 'HOSPITAL ANA FRANCISCA PEREZ DE LEON II', cod_asic: 'MET-01', cod_eje: 'MET' },
+    { nombre_establecimiento: 'AMBULATORIO CHACAO', cod_asic: 'MET-02', cod_eje: 'MET' },
+    { nombre_establecimiento: 'HOSPITAL DOMINGO LUCIANI', cod_asic: 'MET-01', cod_eje: 'MET' }
+  ]);
+
+  // Cargar datos iniciales de base de datos
   useEffect(() => {
     fetchUsers();
     loadTablesList();
     fetchOnboardingAlerts();
+    fetchTerritoryMetadata();
   }, []);
+
+  const fetchTerritoryMetadata = async () => {
+    if (!supabase) return;
+    try {
+      // Query DG_ejes
+      const { data: ejesData, error: ejesErr } = await supabase
+        .from('DG_ejes')
+        .select('*');
+      let finalEjes = [
+        { cod_eje: 'MET', nombre_eje: 'Metropolitano' },
+        { cod_eje: 'AMI', nombre_eje: 'Altos Mirandinos' },
+        { cod_eje: 'VTY', nombre_eje: 'Valles del Tuy' },
+        { cod_eje: 'GGU', nombre_eje: 'Guarenas Guatire' },
+        { cod_eje: 'BAR', nombre_eje: 'Barlovento' }
+      ];
+
+      if (!ejesErr && ejesData && ejesData.length > 0) {
+        finalEjes = ejesData.map((item: any) => ({
+          cod_eje: String(item.cod_eje || item.Cod_Eje || ''),
+          nombre_eje: String(item.nombre_eje || item.eje || item.cod_eje || '')
+        })).filter(e => e.cod_eje);
+        setEjesList(finalEjes);
+      }
+
+      // Query TASIC to map ASIC to Eje Geografico
+      const { data: asicsData } = await supabase.from('TASIC').select('*');
+      const asicToEjeMap: Record<string, string> = {};
+      if (asicsData) {
+        asicsData.forEach((item: any) => {
+          const rawAsic = item.Cod_ASIC || item.cod_asic || '';
+          const rawEje = item.Cod_Eje || item.cod_eje || '';
+          if (rawAsic && rawEje) {
+            asicToEjeMap[rawAsic.toUpperCase()] = rawEje.toUpperCase();
+          }
+        });
+      }
+
+      // Query TClinicas_populares
+      const { data: clinicasData, error: clinicasErr } = await supabase
+        .from('TClinicas_populares')
+        .select('*')
+        .order('nombre_establecimiento', { ascending: true });
+
+      if (!clinicasErr && clinicasData && clinicasData.length > 0) {
+        const finalCentros = clinicasData.map((item: any) => {
+          const tempAsic = String(item.cod_asic || '').toUpperCase();
+          let tempEje = 'MET';
+          if (asicToEjeMap[tempAsic]) {
+            tempEje = asicToEjeMap[tempAsic];
+          } else if (tempAsic.startsWith('AMI')) {
+            tempEje = 'AMI';
+          } else if (tempAsic.startsWith('VTY')) {
+            tempEje = 'VTY';
+          } else if (tempAsic.startsWith('GGU')) {
+            tempEje = 'GGU';
+          } else if (tempAsic.startsWith('BAR')) {
+            tempEje = 'BAR';
+          }
+          return {
+            nombre_establecimiento: String(item.nombre_establecimiento || ''),
+            cod_asic: tempAsic,
+            cod_eje: tempEje
+          };
+        });
+        setCentrosList(finalCentros);
+      }
+    } catch (err) {
+      console.warn('Error loading territory data maps in Admin:', err);
+    }
+  };
 
   useEffect(() => {
     if (tablaSeleccionada) {
@@ -80,7 +177,7 @@ export default function AdminPortal() {
     // Inicializar datos para asignación rápida
     const initialConfig: Record<string, { cod_eje: string; id_centro: string }> = {};
     pending.forEach((alert: any) => {
-      initialConfig[alert.id] = { cod_eje: 'MET-01', id_centro: '' };
+      initialConfig[alert.id] = { cod_eje: 'MET', id_centro: '' };
     });
     setQuickAssignData(prev => ({ ...prev, ...initialConfig }));
   };
@@ -207,6 +304,29 @@ export default function AdminPortal() {
 
     addAuditLog('APROBAR_CUENTA', 'usuarios', userId);
     showNotification('Estado de cuenta actualizado');
+  };
+
+  // Modificar adscripción física (eje y centro) del usuario
+  const handleUserAdscriptionChange = async (userId: string, newEje: string, newCentro: string) => {
+    setSystemUsers(prev => prev.map(u => u.id === userId ? { ...u, cod_eje: newEje, id_centro: newCentro } : u));
+    
+    try {
+      if (supabase) {
+        await supabase.from('usuarios').update({ cod_eje: newEje, id_centro: newCentro }).eq('id', userId);
+      }
+    } catch (e) {
+      console.warn('Error al guardar adscripción territorial en la nube:', e);
+    }
+
+    const localVirtualUsers = localStorage.getItem('s_admin_virtual_users');
+    if (localVirtualUsers) {
+      const list = JSON.parse(localVirtualUsers);
+      const updated = list.map((u: any) => u.id === userId ? { ...u, cod_eje: newEje, id_centro: newCentro } : u);
+      localStorage.setItem('s_admin_virtual_users', JSON.stringify(updated));
+    }
+
+    addAuditLog('MODIFICAR_ADSCRIPCION', 'usuarios', userId);
+    showNotification('Adscripción territorial del operador actualizada.');
   };
 
   // Eliminar usuario
@@ -520,32 +640,41 @@ export default function AdminPortal() {
                         <div className="space-y-1">
                           <label className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block">Eje Geográfico</label>
                           <select
-                            value={quickAssignData[alert.id]?.cod_eje || 'MET-01'}
-                            onChange={e => setQuickAssignData(prev => ({
-                              ...prev,
-                              [alert.id]: { ...(prev[alert.id] || { cod_eje: 'MET-01', id_centro: '' }), cod_eje: e.target.value }
-                            }))}
+                            value={quickAssignData[alert.id]?.cod_eje || (ejesList[0]?.cod_eje || 'MET')}
+                            onChange={e => {
+                              const selectedEje = e.target.value;
+                              const firstCenter = centrosList.find(c => c.cod_eje === selectedEje)?.nombre_establecimiento || '';
+                              setQuickAssignData(prev => ({
+                                ...prev,
+                                [alert.id]: { cod_eje: selectedEje, id_centro: firstCenter }
+                              }));
+                            }}
                             className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[9px] font-bold focus:outline-none"
                           >
-                            <option value="MET-01">Metropolitano</option>
-                            <option value="AMI-01">Altos Mirandinos</option>
-                            <option value="VTY-01">Valles del Tuy</option>
-                            <option value="GGU-01">Guarenas Guatire</option>
-                            <option value="BAX-01">Barlovento</option>
+                            {ejesList.map(e => (
+                              <option key={e.cod_eje} value={e.cod_eje}>{e.nombre_eje || e.cod_eje}</option>
+                            ))}
                           </select>
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block">Centro de Salud (ID)</label>
-                          <input
-                            type="text"
-                            placeholder="Ej: CDI Guarenas"
+                          <label className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block">Centro de Salud</label>
+                          <select
                             value={quickAssignData[alert.id]?.id_centro || ''}
                             onChange={e => setQuickAssignData(prev => ({
                               ...prev,
-                              [alert.id]: { ...(prev[alert.id] || { cod_eje: 'MET-01', id_centro: '' }), id_centro: e.target.value }
+                              [alert.id]: { ...(prev[alert.id] || { cod_eje: ejesList[0]?.cod_eje || 'MET', id_centro: '' }), id_centro: e.target.value }
                             }))}
-                            className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[9px] font-bold focus:outline-none placeholder-slate-350"
-                          />
+                            className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[9px] font-bold focus:outline-none"
+                          >
+                            <option value="">-- SELECCIONE CENTRO --</option>
+                            {centrosList
+                              .filter(c => c.cod_eje === (quickAssignData[alert.id]?.cod_eje || ejesList[0]?.cod_eje || 'MET'))
+                              .map(c => (
+                                <option key={c.nombre_establecimiento} value={c.nombre_establecimiento}>
+                                  {c.nombre_establecimiento}
+                                </option>
+                              ))}
+                          </select>
                         </div>
                       </div>
 
@@ -615,20 +744,37 @@ export default function AdminPortal() {
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Centro de Salud (id_centro)</label>
-                    <input 
-                      type="text" placeholder="Ej: CDI-01 o CP-03"
-                      value={newUser.id_centro} onChange={e => setNewUser(prev => ({ ...prev, id_centro: e.target.value }))}
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Código de Eje Geográfico</label>
+                    <select
+                      value={newUser.cod_eje || 'MET'}
+                      onChange={e => {
+                        const selectedEje = e.target.value;
+                        const firstCenter = centrosList.find(c => c.cod_eje === selectedEje)?.nombre_establecimiento || '';
+                        setNewUser(prev => ({ ...prev, cod_eje: selectedEje, id_centro: firstCenter }));
+                      }}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#0B3D5C]"
-                    />
+                    >
+                      {ejesList.map(e => (
+                        <option key={e.cod_eje} value={e.cod_eje}>{e.nombre_eje || e.cod_eje}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Código de Eje Geográfico</label>
-                    <input 
-                      type="text" placeholder="Ej: MET-01"
-                      value={newUser.cod_eje || ''} onChange={e => setNewUser(prev => ({ ...prev, cod_eje: e.target.value }))}
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Centro de Salud</label>
+                    <select
+                      value={newUser.id_centro}
+                      onChange={e => setNewUser(prev => ({ ...prev, id_centro: e.target.value }))}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#0B3D5C]"
-                    />
+                    >
+                      <option value="">-- SELECCIONE CENTRO --</option>
+                      {centrosList
+                        .filter(c => c.cod_eje === (newUser.cod_eje || 'MET'))
+                        .map(c => (
+                          <option key={c.nombre_establecimiento} value={c.nombre_establecimiento}>
+                            {c.nombre_establecimiento}
+                          </option>
+                        ))}
+                    </select>
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Contraseña / Cédula</label>
@@ -690,13 +836,46 @@ export default function AdminPortal() {
                               <option value="nominal">Operador Carga Nominal</option>
                             </select>
                           </td>
-                          <td className="px-4 py-3">
-                            <p className="text-[10px] font-black text-slate-700 uppercase flex items-center gap-1">
-                              <MapPin size={10} className="text-[#0B3D5C]" /> {u.cod_eje || 'SIN ASIGNAR'}
-                            </p>
-                            <p className="text-[9px] font-bold text-slate-400 uppercase mt-0.5 flex items-center gap-1">
-                              <Building size={10} /> {u.id_centro || 'Sin centro adscrito'}
-                            </p>
+                          <td className="px-4 py-3 space-y-1">
+                            <div className="flex items-center gap-1">
+                              <span className="text-[8px] font-black uppercase text-slate-400 w-8 inline-block">Eje:</span>
+                              <select 
+                                value={u.cod_eje || ''} 
+                                onChange={async (e) => {
+                                  const newEje = e.target.value;
+                                  // Update Axis in Supabase & local simulated state
+                                  const firstCenterOfEje = centrosList.find(c => c.cod_eje === newEje)?.nombre_establecimiento || '';
+                                  await handleUserAdscriptionChange(u.id, newEje, firstCenterOfEje);
+                                }}
+                                className="text-[9px] font-black px-1 py-0.5 rounded border border-slate-200 bg-white"
+                              >
+                                <option value="">SIN ASIGNAR</option>
+                                {ejesList.map(e => (
+                                  <option key={e.cod_eje} value={e.cod_eje}>{e.cod_eje}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[8px] font-black uppercase text-slate-400 w-8 inline-block">Centro:</span>
+                              <select 
+                                value={u.id_centro || ''} 
+                                onChange={async (e) => {
+                                  const newCentro = e.target.value;
+                                  const matchedEje = centrosList.find(c => c.nombre_establecimiento === newCentro)?.cod_eje || u.cod_eje || 'MET';
+                                  await handleUserAdscriptionChange(u.id, matchedEje, newCentro);
+                                }}
+                                className="text-[9px] font-bold px-1 py-0.5 rounded border border-slate-200 bg-white max-w-[140px] truncate"
+                              >
+                                <option value="">SIN CENTRO</option>
+                                {centrosList
+                                  .filter(c => !u.cod_eje || c.cod_eje === u.cod_eje)
+                                  .map(c => (
+                                    <option key={c.nombre_establecimiento} value={c.nombre_establecimiento}>
+                                      {c.nombre_establecimiento}
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
                           </td>
                           <td className="px-4 py-3">
                             <select 

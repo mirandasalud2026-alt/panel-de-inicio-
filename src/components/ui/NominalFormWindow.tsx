@@ -47,6 +47,61 @@ export default function NominalFormWindow() {
   const [status, setStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [pacienteStatus, setPacienteStatus] = useState('');
   const [medicoStatus, setMedicoStatus] = useState('');
+  const [centrosList, setCentrosList] = useState<string[]>([]);
+
+  // Automatically fetch operator profile and dynamically load clinical centers
+  useEffect(() => {
+    const fetchCentersAndProfile = async () => {
+      const email = userEmail || user?.email;
+      if (!supabase) return;
+
+      try {
+        // Query Profile to find assigned center
+        if (email) {
+          const { data, error } = await supabase
+            .from('usuarios')
+            .select('id_centro')
+            .eq('email', email.trim().toLowerCase())
+            .maybeSingle();
+          if (!error && data && data.id_centro) {
+            setFormData(prev => ({ ...prev, centro_salud: data.id_centro }));
+          }
+        }
+
+        // Query TClinicas_populares for dropdown selection
+        const { data: clinicas, error: clinicasErr } = await supabase
+          .from('TClinicas_populares')
+          .select('nombre_establecimiento')
+          .order('nombre_establecimiento', { ascending: true });
+        if (!clinicasErr && clinicas && clinicas.length > 0) {
+          const list = clinicas.map((e: any) => String(e.nombre_establecimiento || '')).filter(Boolean);
+          setCentrosList(list);
+        } else {
+          // Fallback static list
+          setCentrosList([
+            'CLÍNICA POPULAR PARACOTOS',
+            'CDI DOCTOR JOSÉ GREGORIO HERNÁNDEZ',
+            'AMBULATORIO PRADO DE MARÍA',
+            'CDI CONTEXTO MIRANDINO',
+            'CLÍNICA POPULAR HUGO CHÁVEZ',
+            'CDI CARTANAL',
+            'CLÍNICA POPULAR VALLES DEL TUY',
+            'HOSPITAL GENERAL DE GUARENAS',
+            'CDI EL QUEMADO',
+            'HOSPITAL HIGUEROTE',
+            'CLÍNICA POPULAR RIO CHICO',
+            'HOSPITAL ANA FRANCISCA PEREZ DE LEON II',
+            'AMBULATORIO CHACAO',
+            'HOSPITAL DOMINGO LUCIANI'
+          ]);
+        }
+      } catch (err) {
+        console.warn('Error loading centers in form:', err);
+      }
+    };
+
+    fetchCentersAndProfile();
+  }, [userEmail, user?.email]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -277,15 +332,20 @@ export default function NominalFormWindow() {
                 <label className="text-[8.5px] font-black tracking-widest text-[#0B3D5C] uppercase block mb-1.5">
                   Centro de Salud *
                 </label>
-                <input 
-                  type="text" 
-                  name="centro_salud" 
-                  value={formData.centro_salud} 
+                <select
+                  name="centro_salud"
+                  value={formData.centro_salud}
                   onChange={handleChange}
-                  required 
-                  placeholder="Ej: Hosp Victorino Santaella"
-                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold uppercase placeholder:text-slate-300 focus:outline-none focus:border-[#0B3D5C]"
-                />
+                  required
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-[#0B3D5C]"
+                >
+                  <option value="">-- SELECCIONE UN CENTRO --</option>
+                  {centrosList.map(c => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
