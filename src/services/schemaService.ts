@@ -17,15 +17,16 @@ const SYSTEM_TABLES_METADATA: Record<string, { descripcion: string; columnas: { 
       { name: 'created_at', type: 'timestamp', label: 'Fecha de Registro' }
     ]
   },
-  pacientes: {
-    descripcion: 'Historial unificado y maestro nominal de pacientes del Estado Miranda.',
+  P_pacientes: {
+    descripcion: 'Historial unificado y maestro nominal de pacientes del Estado Miranda (P_pacientes).',
     columnas: [
       { name: 'cedula', type: 'text', label: 'Cédula de Identidad' },
-      { name: 'nombre', type: 'text', label: 'Nombres' },
-      { name: 'apellido', type: 'text', label: 'Apellidos' },
+      { name: 'nacionalidad', type: 'text', label: 'Nacionalidad (V/E)' },
+      { name: 'nombre_y_apellido', type: 'text', label: 'Nombre y Apellido' },
+      { name: 'sexo', type: 'text', label: 'Sexo (M/F)' },
+      { name: 'f_nac', type: 'text', label: 'Fecha Nacimiento' },
       { name: 'edad', type: 'number', label: 'Edad Actual' },
-      { name: 'sexo', type: 'text', label: 'Sexo Biológico' },
-      { name: 'telefono', type: 'text', label: 'Teléfono Móvil' },
+      { name: 'movil01', type: 'text', label: 'Teléfono Móvil' },
       { name: 'created_at', type: 'timestamp', label: 'Sincronizado' }
     ]
   },
@@ -204,11 +205,11 @@ export const schemaService = {
           { id: '3', nombre: 'Operador Nominal CDI Guarenas', email: 'nominal@mirandasalud.com', rol: 'nominal', estado: 'aprobado', id_centro: 'AMI-02', cod_eje: 'GGU-01', created_at: now },
           { id: '4', nombre: 'Enfermera Coordinadora Paracotos', email: 'paracotos.salud@gmail.com', rol: 'nominal', estado: 'pendiente', id_centro: 'AMI-01', cod_eje: 'AMI-01', created_at: now }
         ];
-      case 'pacientes':
+      case 'P_pacientes':
         return [
-          { cedula: 'V-14234567', nombre: 'PEDRO', apellido: 'PÉREZ', edad: 42, sexo: 'M', telefono: '04141112233', created_at: now },
-          { cedula: 'V-18902534', nombre: 'YULITZA', apellido: 'GÓMEZ', edad: 28, sexo: 'F', telefono: '04125556677', created_at: now },
-          { cedula: 'V-8345129', nombre: 'ALEJANDRO', apellido: 'RODRÍGUEZ', edad: 67, sexo: 'M', telefono: '04169998822', created_at: now }
+          { cedula: 'V-14234567', nacionalidad: 'V', nombre_y_apellido: 'PEDRO PÉREZ', edad: 42, sexo: 'M', movil01: '04141112233', f_nac: '1984-05-12', created_at: now },
+          { cedula: 'V-18902534', nacionalidad: 'V', nombre_y_apellido: 'YULITZA GÓMEZ', edad: 28, sexo: 'F', movil01: '04125556677', f_nac: '1998-09-20', created_at: now },
+          { cedula: 'V-8345129', nacionalidad: 'V', nombre_y_apellido: 'ALEJANDRO RODRÍGUEZ', edad: 67, sexo: 'M', movil01: '04169998822', f_nac: '1959-01-15', created_at: now }
         ];
       case 'nominales':
         return [

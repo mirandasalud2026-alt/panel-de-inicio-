@@ -509,7 +509,7 @@ function limpiarNominalesAntiguosViaAPI() {
  */
 function guardarEnGoogleSheet(tipo, payload) {
   var props = PropertiesService.getScriptProperties();
-  var spreadsheetId = props.getProperty('SPREADSHEET_ID') || "1WeJ4q40PcNrIi6e2Odi_LtiOq4LWx4qdYRwdE1RGTL0";
+  var spreadsheetId = props.getProperty('SPREADSHEET_ID') || "1QrBkeIq3uucaRdpArnVlwMoJMwdkUI9wsftO2U1Q0p8";
   
   if (!spreadsheetId) {
     Logger.log("No se definió 'SPREADSHEET_ID'. Omite sincronización directa a Sheets.");
@@ -525,7 +525,7 @@ function guardarEnGoogleSheet(tipo, payload) {
   var stamp = Utilities.formatDate(new Date(), "America/Caracas", "yyyy-MM-dd HH:mm:ss");
   
   if (tipo === 'quirurgica') {
-    sheetName = "Nominas Quirurgicas";
+    sheetName = "QUIRURGICA";
     headers = [
       "Fecha Registro", "Fecha Operacion", "Estado", "Centro de Salud", 
       "Cedula Paciente", "Nombre Paciente", "Apellido Paciente", "Edad", "Sexo", "Telefono Paciente",
@@ -539,7 +539,7 @@ function guardarEnGoogleSheet(tipo, payload) {
       payload.cedula_medico, payload.nombre_medico, payload.apellido_medico, payload.telefono_medico
     ];
   } else if (tipo === 'obstetrica') {
-    sheetName = "Nominas Obstetricas";
+    sheetName = "OBSTETRICIA";
     headers = [
       "Fecha Registro", "Fecha Evento", "Estado", "Centro de Salud",
       "Cedula Madre", "Nombre Madre", "Apellido Madre", "Edad Madre", "Telefono Madre",
@@ -553,7 +553,7 @@ function guardarEnGoogleSheet(tipo, payload) {
       payload.cedula_medico, payload.nombre_medico, payload.apellido_medico, payload.telefono_medico
     ];
   } else if (tipo === 'defuncion') {
-    sheetName = "Nominas Defunciones";
+    sheetName = "DEFUNCION";
     headers = [
       "Fecha Registro", "Fecha Fallecimiento", "Estado", "Centro de Salud",
       "Cedula Fallecido", "Nombre Fallecido", "Apellido Fallecido", "Edad Fallecido", "Sexo Fallecido",

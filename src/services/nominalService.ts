@@ -7,6 +7,7 @@ export interface Paciente {
   edad: number;
   sexo: string;
   telefono: string;
+  nacionalidad?: string;
 }
 
 export interface Medico {
@@ -102,7 +103,7 @@ export const nominalService = {
     if (supabase) {
       try {
         const { data, error } = await supabase
-          .from('pacientes')
+          .from('P_pacientes')
           .select('*')
           .or(`cedula.ilike.%${term}%,nombre_y_apellido.ilike.%${term}%,movil01.ilike.%${term}%`)
           .limit(40);
@@ -112,6 +113,7 @@ export const nominalService = {
             const { nombres, apellidos } = splitNombreCompleto(raw.nombre_y_apellido || '');
             return {
               cedula: raw.cedula,
+              nacionalidad: raw.nacionalidad || '',
               nombre: nombres,
               apellido: apellidos,
               edad: parseInt(raw.edad) || 0,
@@ -154,7 +156,7 @@ export const nominalService = {
       try {
         // 1. Buscar en tabla dedicada pacientes
         const { data: pData, error: pError } = await supabase
-          .from('pacientes')
+          .from('P_pacientes')
           .select('*')
           .in('cedula', candidates)
           .limit(1)
@@ -174,6 +176,7 @@ export const nominalService = {
           }
           return {
             cedula: raw.cedula,
+            nacionalidad: raw.nacionalidad || '',
             nombre: nombres,
             apellido: apellidos,
             edad: parseInt(raw.edad) || 0,
@@ -354,16 +357,38 @@ export const nominalService = {
   async asegurarPaciente(paciente: Paciente): Promise<void> {
     if (supabase) {
       try {
+        let nac = paciente.nacionalidad;
+        if (!nac) {
+          const upperCed = paciente.cedula.toUpperCase();
+          if (upperCed.startsWith('V-') || upperCed.startsWith('V')) {
+            nac = 'V';
+          } else if (upperCed.startsWith('E-') || upperCed.startsWith('E')) {
+            nac = 'E';
+          } else {
+            nac = 'V';
+          }
+        }
+
+        const rawPaciente = {
+          cedula: paciente.cedula.trim(),
+          nacionalidad: nac,
+          nombre_y_apellido: `${paciente.nombre || ''} ${paciente.apellido || ''}`.replace(/\s+/g, ' ').trim().toUpperCase(),
+          sexo: paciente.sexo === 'MASCULINO' ? 'M' : 'F',
+          edad: paciente.edad,
+          movil01: paciente.telefono || null
+        };
         const { error } = await supabase
-          .from('pacientes')
-          .upsert(paciente, { onConflict: 'cedula' });
+          .from('P_pacientes')
+          .upsert(rawPaciente, { onConflict: 'cedula' });
         if (!error) {
           // Propagar cambios
           await this.propagarReajustePorCedula(paciente.cedula, paciente.nombre, paciente.apellido, paciente.telefono, paciente.edad, paciente.sexo);
           return;
+        } else {
+          console.warn('Supabase upsert paciente error:', error);
         }
       } catch (err) {
-        console.warn('Supabase upsert paciente error:', err);
+        console.warn('Supabase upsert paciente error catch:', err);
       }
     }
 
@@ -383,16 +408,23 @@ export const nominalService = {
   async asegurarMedico(medico: Medico): Promise<void> {
     if (supabase) {
       try {
+        const rawMedico = {
+          cedula: medico.cedula.trim(),
+          nombre_medico: `${medico.nombre || ''} ${medico.apellido || ''}`.replace(/\s+/g, ' ').trim().toUpperCase(),
+          movil01: medico.telefono || null
+        };
         const { error } = await supabase
           .from('DATOS_DEL_MEDICO_TRATANTE')
-          .upsert(medico, { onConflict: 'cedula' });
+          .upsert(rawMedico, { onConflict: 'cedula' });
         if (!error) {
           // Propagar cambios
           await this.propagarReajustePorCedula(medico.cedula, medico.nombre, medico.apellido, medico.telefono);
           return;
+        } else {
+          console.warn('Supabase upsert medico error:', error);
         }
       } catch (err) {
-        console.warn('Supabase upsert medico error:', err);
+        console.warn('Supabase upsert medico error catch:', err);
       }
     }
 

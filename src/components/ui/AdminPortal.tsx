@@ -343,7 +343,7 @@ export default function AdminPortal() {
 
   const loadTablesList = async () => {
     // Filtrar para mostrar solo las tablas maestras reales del sistema nominal requeridas por el usuario
-    const masterTables = ['nominales', 'pacientes', 'registros_quirurgicos', 'registros_obstetricos', 'registros_defunciones', 'usuarios'];
+    const masterTables = ['nominales', 'P_pacientes', 'registros_quirurgicos', 'registros_obstetricos', 'registros_defunciones', 'usuarios'];
     setListaTablas(masterTables);
   };
 
@@ -1185,7 +1185,7 @@ export default function AdminPortal() {
                 {/* Quirúrgica */}
                 <div className="border border-blue-100 bg-blue-50/15 p-5 rounded-2xl flex flex-col justify-between space-y-4">
                   <div>
-                    <span className="text-[8px] font-black bg-blue-100 text-blue-800 px-2 py-0.5 rounded uppercase tracking-wider font-mono">Pestaña: Nominas Quirurgicas</span>
+                    <span className="text-[8px] font-black bg-blue-100 text-blue-800 px-2 py-0.5 rounded uppercase tracking-wider font-mono">Pestaña: QUIRURGICA</span>
                     <h4 className="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5 mt-2">
                       <span className="w-2 h-2 rounded-full bg-blue-500"></span>
                       Planilla Quirúrgica
@@ -1195,7 +1195,7 @@ export default function AdminPortal() {
                     </p>
                   </div>
                   <a 
-                    href="https://docs.google.com/spreadsheets/d/1WeJ4q40PcNrIi6e2Odi_LtiOq4LWx4qdYRwdE1RGTL0/edit" 
+                    href="https://docs.google.com/spreadsheets/d/1QrBkeIq3uucaRdpArnVlwMoJMwdkUI9wsftO2U1Q0p8/edit" 
                     target="_blank" 
                     rel="noreferrer"
                     className="w-full text-center py-2.5 bg-[#0B3D5C] hover:bg-[#072437] text-white rounded-xl text-[9.5px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer shadow-xs decoration-transparent"
@@ -1207,7 +1207,7 @@ export default function AdminPortal() {
                 {/* Materna/Obstétrica */}
                 <div className="border border-purple-100 bg-purple-50/15 p-5 rounded-2xl flex flex-col justify-between space-y-4">
                   <div>
-                    <span className="text-[8px] font-black bg-purple-100 text-purple-800 px-2 py-0.5 rounded uppercase tracking-wider font-mono">Pestaña: Nominas Obstetricas</span>
+                    <span className="text-[8px] font-black bg-purple-100 text-purple-800 px-2 py-0.5 rounded uppercase tracking-wider font-mono">Pestaña: OBSTETRICIA</span>
                     <h4 className="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5 mt-2">
                       <span className="w-2 h-2 rounded-full bg-purple-500"></span>
                       Carga Obstétrica / Materna
@@ -1217,7 +1217,7 @@ export default function AdminPortal() {
                     </p>
                   </div>
                   <a 
-                    href="https://docs.google.com/spreadsheets/d/1WeJ4q40PcNrIi6e2Odi_LtiOq4LWx4qdYRwdE1RGTL0/edit" 
+                    href="https://docs.google.com/spreadsheets/d/1QrBkeIq3uucaRdpArnVlwMoJMwdkUI9wsftO2U1Q0p8/edit" 
                     target="_blank" 
                     rel="noreferrer"
                     className="w-full text-center py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[9.5px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer shadow-xs decoration-transparent"
@@ -1229,7 +1229,7 @@ export default function AdminPortal() {
                 {/* Defunciones */}
                 <div className="border border-rose-100 bg-rose-50/15 p-5 rounded-2xl flex flex-col justify-between space-y-4">
                   <div>
-                    <span className="text-[8px] font-black bg-rose-100 text-rose-800 px-2 py-0.5 rounded uppercase tracking-wider font-mono">Pestaña: Nominas Defunciones</span>
+                    <span className="text-[8px] font-black bg-rose-100 text-rose-800 px-2 py-0.5 rounded uppercase tracking-wider font-mono">Pestaña: DEFUNCION</span>
                     <h4 className="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5 mt-2">
                       <span className="w-2 h-2 rounded-full bg-rose-500"></span>
                       Registro de Defunciones
@@ -1239,7 +1239,7 @@ export default function AdminPortal() {
                     </p>
                   </div>
                   <a 
-                    href="https://docs.google.com/spreadsheets/d/1WeJ4q40PcNrIi6e2Odi_LtiOq4LWx4qdYRwdE1RGTL0/edit" 
+                    href="https://docs.google.com/spreadsheets/d/1QrBkeIq3uucaRdpArnVlwMoJMwdkUI9wsftO2U1Q0p8/edit" 
                     target="_blank" 
                     rel="noreferrer"
                     className="w-full text-center py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[9.5px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer shadow-xs decoration-transparent"

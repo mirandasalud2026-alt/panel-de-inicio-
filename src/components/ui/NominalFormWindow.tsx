@@ -20,6 +20,7 @@ export default function NominalFormWindow() {
     fecha: new Date().toISOString().split('T')[0],
     estado: 'MIRANDA',
     centro_salud: '',
+    nacionalidad: 'V',
     cedula_paciente: '',
     nombre_paciente: '',
     apellido_paciente: '',
@@ -109,13 +110,40 @@ export default function NominalFormWindow() {
   };
 
   const buscarPaciente = async () => {
-    if (!formData.cedula_paciente) return;
+    const inputCedula = formData.cedula_paciente.trim().toUpperCase();
+    if (!inputCedula) return;
+
+    // Detectar si ingresó con prefijo (ej: V-123456, V123456, E-123456, E123456)
+    let currentNac = formData.nacionalidad || 'V';
+    let numeric = inputCedula;
+
+    const matches = inputCedula.match(/^(V|E)-?(\d+)$/);
+    if (matches) {
+      currentNac = matches[1];
+      numeric = matches[2];
+    } else {
+      // Limpiar de cualquier caracter no numérico
+      numeric = inputCedula.replace(/\D/g, '');
+    }
+
     setPacienteStatus('Buscando...');
     try {
-      const data = await nominalService.buscarPaciente(formData.cedula_paciente);
+      const fullCedula = `${currentNac}-${numeric}`;
+      const data = await nominalService.buscarPaciente(fullCedula);
       if (data) {
+        // Encontrado: extraer la nacionalidad y número limpio
+        let resNac = 'V';
+        let resNum = data.cedula;
+        const resMatches = data.cedula.toUpperCase().trim().match(/^(V|E)-?(\d+)$/);
+        if (resMatches) {
+          resNac = resMatches[1];
+          resNum = resMatches[2];
+        }
+
         setFormData(prev => ({
           ...prev,
+          nacionalidad: resNac,
+          cedula_paciente: resNum,
           nombre_paciente: data.nombre || '',
           apellido_paciente: data.apellido || '',
           edad: data.edad ? data.edad.toString() : '',
@@ -124,6 +152,12 @@ export default function NominalFormWindow() {
         }));
         setPacienteStatus('✓ Encontrado');
       } else {
+        // No encontrado -> actualizamos con el id numérico limpio pero mantenemos estado 'Nuevo'
+        setFormData(prev => ({
+          ...prev,
+          nacionalidad: currentNac,
+          cedula_paciente: numeric,
+        }));
         setPacienteStatus('Nuevo paciente');
       }
     } catch (err) {
@@ -159,40 +193,22 @@ export default function NominalFormWindow() {
     setStatus(null);
 
     try {
-      // 1. Upsert paciente
-      if (formData.cedula_paciente) {
-        await supabase.from('pacientes').upsert({
-          cedula: formData.cedula_paciente.trim(),
-          nombre: formData.nombre_paciente.trim().toUpperCase(),
-          apellido: formData.apellido_paciente.trim().toUpperCase(),
-          edad: parseInt(formData.edad) || 0,
-          sexo: formData.sexo,
-          telefono: formData.telefono,
-        }, { onConflict: 'cedula' });
-      }
+      let result: any = null;
 
-      // 2. Upsert médico
-      if (formData.cedula_medico) {
-        await supabase.from('medicos').upsert({
-          cedula: formData.cedula_medico.trim(),
-          nombre: formData.nombre_medico.trim().toUpperCase(),
-          apellido: formData.apellido_medico.trim().toUpperCase(),
-        }, { onConflict: 'cedula' });
+      const formattedCed = formData.cedula_paciente.trim().toUpperCase();
+      let fullCedula = formattedCed;
+      if (formattedCed && !/^(V|E)-/i.test(formattedCed)) {
+        fullCedula = `${formData.nacionalidad || 'V'}-${formattedCed}`;
       }
-
-      // 3. Insertar en tabla específica
-      let table = '';
-      let payload: any = {};
 
       if (type === 'QUIRURGICA') {
-        table = 'registros_quirurgicos';
-        payload = {
+        const payload = {
           fecha: formData.fecha,
           estado: formData.estado,
           centro_salud: formData.centro_salud,
-          cedula_paciente: formData.cedula_paciente,
-          nombre_paciente: formData.nombre_paciente,
-          apellido_paciente: formData.apellido_paciente,
+          cedula_paciente: fullCedula,
+          nombre_paciente: formData.nombre_paciente.trim().toUpperCase(),
+          apellido_paciente: formData.apellido_paciente.trim().toUpperCase(),
           edad_paciente: parseInt(formData.edad) || 0,
           sexo_paciente: formData.sexo,
           telefono_paciente: formData.telefono,
@@ -200,65 +216,60 @@ export default function NominalFormWindow() {
           tipo_intervencion: formData.intervencion,
           urgente_electiva: formData.prioridad,
           cantidad_intervencion: parseInt(formData.cantidad) || 1,
-          cedula_medico: formData.cedula_medico,
-          nombre_medico: formData.nombre_medico,
-          apellido_medico: formData.apellido_medico,
+          cedula_medico: formData.cedula_medico.trim(),
+          nombre_medico: formData.nombre_medico.trim().toUpperCase(),
+          apellido_medico: formData.apellido_medico.trim().toUpperCase(),
+          telefono_medico: ''
         };
+        result = await nominalService.guardarQuirurgica(payload);
       } else if (type === 'OBSTETRICA') {
-        table = 'registros_obstetricos';
-        payload = {
+        const payload = {
           fecha: formData.fecha,
           estado: formData.estado,
           centro_salud: formData.centro_salud,
-          cedula_madre: formData.cedula_paciente,
-          nombre_madre: formData.nombre_paciente,
-          apellido_madre: formData.apellido_paciente,
+          cedula_madre: fullCedula,
+          nombre_madre: formData.nombre_paciente.trim().toUpperCase(),
+          apellido_madre: formData.apellido_paciente.trim().toUpperCase(),
           edad_madre: parseInt(formData.edad) || 0,
           telefono_madre: formData.telefono,
           nombre_infante: formData.nombre_infante,
           sexo_infante: formData.sexo_infante,
           tipo_parto: formData.tipo_parto,
           tipo_intervencion: formData.tipo_intervencion_o,
-          cedula_medico: formData.cedula_medico,
-          nombre_medico: formData.nombre_medico,
-          apellido_medico: formData.apellido_medico,
+          vivos: 1,
+          muertos: 0,
+          complicaciones: 'NINGUNA',
+          cedula_medico: formData.cedula_medico.trim(),
+          nombre_medico: formData.nombre_medico.trim().toUpperCase(),
+          apellido_medico: formData.apellido_medico.trim().toUpperCase(),
+          telefono_medico: ''
         };
+        result = await nominalService.guardarObstetrica(payload);
       } else {
-        table = 'registros_defunciones';
-        payload = {
+        const payload = {
           fecha: formData.fecha,
           estado: formData.estado,
           centro_salud: formData.centro_salud,
-          cedula_fallecido: formData.cedula_paciente,
-          nombre_fallecido: formData.nombre_paciente,
-          apellido_fallecido: formData.apellido_paciente,
+          cedula_fallecido: fullCedula,
+          nombre_fallecido: formData.nombre_paciente.trim().toUpperCase(),
+          apellido_fallecido: formData.apellido_paciente.trim().toUpperCase(),
           edad_fallecido: parseInt(formData.edad) || 0,
           sexo_fallecido: formData.sexo,
           hora_fallecimiento: formData.hora_fallecimiento,
           patologia: formData.patologia,
           observacion: formData.observacion,
-          cedula_medico: formData.cedula_medico,
-          nombre_medico: formData.nombre_medico,
-          apellido_medico: formData.apellido_medico,
+          cedula_medico: formData.cedula_medico.trim(),
+          nombre_medico: formData.nombre_medico.trim().toUpperCase(),
+          apellido_medico: formData.apellido_medico.trim().toUpperCase(),
+          telefono_medico: ''
         };
+        result = await nominalService.guardarDefuncion(payload);
       }
 
-      const { data: inserted, error: insertError } = await supabase.from(table).insert(payload).select('id').single();
-      if (insertError) throw insertError;
-
-      // 4. Guardar en nominales (bitácora)
-      await supabase.from('nominales').insert({
-        tipo_registro: type.toLowerCase(),
-        registro_id: inserted.id,
-        cedula_principal: formData.cedula_paciente || 'S/C',
-        centro_salud: formData.centro_salud,
-        datos: payload,
-      });
-
-      setStatus({ type: 'success', text: `Registro guardado correctamente (ID: ${inserted.id})` });
+      setStatus({ type: 'success', text: `Registro guardado correctamente (ID: ${result?.id || 'NUEVO'})` });
       setTimeout(() => window.close(), 2000);
     } catch (err: any) {
-      setStatus({ type: 'error', text: err.message });
+      setStatus({ type: 'error', text: err.hasOwnProperty('message') ? err.message : 'Error al guardar el registro' });
     } finally {
       setLoading(false);
     }
@@ -378,23 +389,34 @@ export default function NominalFormWindow() {
                   <label className="text-[8.5px] font-black tracking-widest text-slate-400 uppercase block mb-1.5">
                     Cédula {type === 'OBSTETRICA' ? 'Madre' : type === 'DEFUNCION' ? 'Fallecido (Opc)' : 'Paciente'} *
                   </label>
-                  <div className="relative">
-                    <input 
-                      type="text" 
-                      name="cedula_paciente" 
-                      value={formData.cedula_paciente} 
+                  <div className="flex gap-1.5">
+                    <select
+                      name="nacionalidad"
+                      value={formData.nacionalidad}
                       onChange={handleChange}
-                      onBlur={buscarPaciente}
-                      placeholder="Ej: V-12345678"
-                      className="w-full bg-white border border-slate-200 rounded-xl pl-3 pr-10 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-[#0B3D5C]"
-                    />
-                    <button 
-                      type="button" 
-                      onClick={buscarPaciente} 
-                      className="absolute right-2 top-2 text-[#0B3D5C] hover:scale-110 transition-transform"
+                      className="bg-white border border-slate-200 rounded-xl px-2 py-2 text-[10.5px] font-bold text-center focus:outline-none focus:border-[#0B3D5C] w-12"
                     >
-                      <Search size={14} />
-                    </button>
+                      <option value="V">V</option>
+                      <option value="E">E</option>
+                    </select>
+                    <div className="relative flex-grow">
+                      <input 
+                        type="text" 
+                        name="cedula_paciente" 
+                        value={formData.cedula_paciente} 
+                        onChange={handleChange}
+                        onBlur={buscarPaciente}
+                        placeholder="Ej: 12345678"
+                        className="w-full bg-white border border-slate-200 rounded-xl pl-3 pr-10 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-[#0B3D5C]"
+                      />
+                      <button 
+                        type="button" 
+                        onClick={buscarPaciente} 
+                        className="absolute right-2 top-2 text-[#0B3D5C] hover:scale-110 transition-transform"
+                      >
+                        <Search size={14} />
+                      </button>
+                    </div>
                   </div>
                   {pacienteStatus && (
                     <span className={`text-[7.5px] font-black uppercase mt-1 block ${
