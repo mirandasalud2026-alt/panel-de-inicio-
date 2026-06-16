@@ -46,7 +46,7 @@ export default function LandingPage() {
                 className="bg-transparent hover:bg-white/10 text-white border-2 border-white/20 px-5 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition-all duration-300 shadow-sm"
                 id="btn-ver-informativo"
               >
-                Ver Informativo
+                Reporte de Atenciones
               </Link>
               <Link 
                 to="/login" 

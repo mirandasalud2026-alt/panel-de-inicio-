@@ -8,6 +8,7 @@ export interface Paciente {
   sexo: string;
   telefono: string;
   nacionalidad?: string;
+  f_nac?: string;
 }
 
 export interface Medico {
@@ -15,6 +16,7 @@ export interface Medico {
   nombre: string;
   apellido: string;
   telefono: string;
+  nacionalidad?: string;
 }
 
 // Interfaz para el registro consolidado en la tabla temporal nominales
@@ -181,7 +183,8 @@ export const nominalService = {
             apellido: apellidos,
             edad: parseInt(raw.edad) || 0,
             sexo: sexoMapeado,
-            telefono: raw.movil01 || raw.telefono || ''
+            telefono: raw.movil01 || raw.telefono || '',
+            f_nac: raw.f_nac || ''
           };
         }
 
@@ -282,8 +285,14 @@ export const nominalService = {
         if (!mError && mData) {
           const raw = mData as any;
           const { nombres, apellidos } = splitNombreCompleto(raw.nombre_medico || raw.nombre || '');
+          let nacParsed = 'V';
+          const match = raw.cedula.toUpperCase().trim().match(/^(V|E)-?(\d+)$/);
+          if (match) {
+            nacParsed = match[1];
+          }
           return {
             cedula: raw.cedula,
+            nacionalidad: raw.nacionalidad || nacParsed,
             nombre: nombres,
             apellido: apellidos,
             telefono: raw.movil01 || raw.telefono || ''
@@ -375,6 +384,7 @@ export const nominalService = {
           nombre_y_apellido: `${paciente.nombre || ''} ${paciente.apellido || ''}`.replace(/\s+/g, ' ').trim().toUpperCase(),
           sexo: paciente.sexo === 'MASCULINO' ? 'M' : 'F',
           edad: paciente.edad,
+          f_nac: paciente.f_nac || null,
           movil01: paciente.telefono || null
         };
         const { error } = await supabase
@@ -552,7 +562,8 @@ export const nominalService = {
       apellido: record.apellido_paciente,
       edad: parseInt(record.edad_paciente) || 0,
       sexo: record.sexo_paciente,
-      telefono: record.telefono_paciente
+      telefono: record.telefono_paciente,
+      f_nac: record.f_nac
     });
 
     await this.asegurarMedico({
@@ -637,7 +648,8 @@ export const nominalService = {
       apellido: record.apellido_madre,
       edad: parseInt(record.edad_madre) || 0,
       sexo: 'FEMENINO',
-      telefono: record.telefono_madre
+      telefono: record.telefono_madre,
+      f_nac: record.f_nac
     });
 
     await this.asegurarMedico({
@@ -729,7 +741,8 @@ export const nominalService = {
         apellido: record.apellido_fallecido,
         edad: parseInt(record.edad_fallecido) || 0,
         sexo: record.sexo_fallecido,
-        telefono: ''
+        telefono: '',
+        f_nac: record.f_nac
       });
     }
 

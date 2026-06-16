@@ -24,6 +24,7 @@ export default function NominalFormWindow() {
     cedula_paciente: '',
     nombre_paciente: '',
     apellido_paciente: '',
+    f_nac: '',
     edad: '',
     sexo: 'FEMENINO',
     telefono: '',
@@ -31,6 +32,7 @@ export default function NominalFormWindow() {
     intervencion: '',
     prioridad: 'ELECTIVA',
     cantidad: '1',
+    nacionalidad_medico: 'V',
     cedula_medico: '',
     nombre_medico: '',
     apellido_medico: '',
@@ -105,6 +107,22 @@ export default function NominalFormWindow() {
     fetchCentersAndProfile();
   }, [userEmail, user?.email]);
 
+  const calcularEdad = (fechaNac: string) => {
+    if (!fechaNac) return '';
+    try {
+      const hoy = new Date();
+      const cumple = new Date(fechaNac);
+      let edadNum = hoy.getFullYear() - cumple.getFullYear();
+      const m = hoy.getMonth() - cumple.getMonth();
+      if (m < 0 || (m === 0 && hoy.getDate() < cumple.getDate())) {
+        edadNum--;
+      }
+      return edadNum >= 0 ? edadNum.toString() : '';
+    } catch {
+      return '';
+    }
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
@@ -146,6 +164,7 @@ export default function NominalFormWindow() {
           cedula_paciente: resNum,
           nombre_paciente: data.nombre || '',
           apellido_paciente: data.apellido || '',
+          f_nac: data.f_nac || '',
           edad: data.edad ? data.edad.toString() : '',
           sexo: data.sexo || 'FEMENINO',
           telefono: data.telefono || '',
@@ -167,18 +186,51 @@ export default function NominalFormWindow() {
   };
 
   const buscarMedico = async () => {
-    if (!formData.cedula_medico) return;
+    const inputCedula = formData.cedula_medico.trim().toUpperCase();
+    if (!inputCedula) return;
+
+    // Detectar si ingresó con prefijo (ej: V-123456, V123456, E-123456, E123456)
+    let currentNac = formData.nacionalidad_medico || 'V';
+    let numeric = inputCedula;
+
+    const matches = inputCedula.match(/^(V|E)-?(\d+)$/);
+    if (matches) {
+      currentNac = matches[1];
+      numeric = matches[2];
+    } else {
+      // Limpiar de cualquier caracter no numérico
+      numeric = inputCedula.replace(/\D/g, '');
+    }
+
     setMedicoStatus('Buscando...');
     try {
-      const data = await nominalService.buscarMedico(formData.cedula_medico);
+      const fullCedula = `${currentNac}-${numeric}`;
+      const data = await nominalService.buscarMedico(fullCedula);
       if (data) {
+        // Encontrado: extraer la nacionalidad y número limpio
+        let resNac = 'V';
+        let resNum = data.cedula;
+        const resMatches = data.cedula.toUpperCase().trim().match(/^(V|E)-?(\d+)$/);
+        if (resMatches) {
+          resNac = resMatches[1];
+          resNum = resMatches[2];
+        }
+
         setFormData(prev => ({
           ...prev,
+          nacionalidad_medico: resNac,
+          cedula_medico: resNum,
           nombre_medico: data.nombre || '',
           apellido_medico: data.apellido || '',
         }));
         setMedicoStatus('✓ Encontrado');
       } else {
+        // No encontrado -> actualizamos con el id numérico de médico limpio pero mantenemos estado 'Nuevo médico'
+        setFormData(prev => ({
+          ...prev,
+          nacionalidad_medico: currentNac,
+          cedula_medico: numeric,
+        }));
         setMedicoStatus('Nuevo médico');
       }
     } catch (err) {
@@ -201,6 +253,12 @@ export default function NominalFormWindow() {
         fullCedula = `${formData.nacionalidad || 'V'}-${formattedCed}`;
       }
 
+      const formattedCedMedico = formData.cedula_medico.trim().toUpperCase();
+      let fullCedulaMedico = formattedCedMedico;
+      if (formattedCedMedico && !/^(V|E)-/i.test(formattedCedMedico)) {
+        fullCedulaMedico = `${formData.nacionalidad_medico || 'V'}-${formattedCedMedico}`;
+      }
+
       if (type === 'QUIRURGICA') {
         const payload = {
           fecha: formData.fecha,
@@ -209,6 +267,7 @@ export default function NominalFormWindow() {
           cedula_paciente: fullCedula,
           nombre_paciente: formData.nombre_paciente.trim().toUpperCase(),
           apellido_paciente: formData.apellido_paciente.trim().toUpperCase(),
+          f_nac: formData.f_nac,
           edad_paciente: parseInt(formData.edad) || 0,
           sexo_paciente: formData.sexo,
           telefono_paciente: formData.telefono,
@@ -216,7 +275,7 @@ export default function NominalFormWindow() {
           tipo_intervencion: formData.intervencion,
           urgente_electiva: formData.prioridad,
           cantidad_intervencion: parseInt(formData.cantidad) || 1,
-          cedula_medico: formData.cedula_medico.trim(),
+          cedula_medico: fullCedulaMedico,
           nombre_medico: formData.nombre_medico.trim().toUpperCase(),
           apellido_medico: formData.apellido_medico.trim().toUpperCase(),
           telefono_medico: ''
@@ -230,6 +289,7 @@ export default function NominalFormWindow() {
           cedula_madre: fullCedula,
           nombre_madre: formData.nombre_paciente.trim().toUpperCase(),
           apellido_madre: formData.apellido_paciente.trim().toUpperCase(),
+          f_nac: formData.f_nac,
           edad_madre: parseInt(formData.edad) || 0,
           telefono_madre: formData.telefono,
           nombre_infante: formData.nombre_infante,
@@ -239,7 +299,7 @@ export default function NominalFormWindow() {
           vivos: 1,
           muertos: 0,
           complicaciones: 'NINGUNA',
-          cedula_medico: formData.cedula_medico.trim(),
+          cedula_medico: fullCedulaMedico,
           nombre_medico: formData.nombre_medico.trim().toUpperCase(),
           apellido_medico: formData.apellido_medico.trim().toUpperCase(),
           telefono_medico: ''
@@ -253,12 +313,13 @@ export default function NominalFormWindow() {
           cedula_fallecido: fullCedula,
           nombre_fallecido: formData.nombre_paciente.trim().toUpperCase(),
           apellido_fallecido: formData.apellido_paciente.trim().toUpperCase(),
+          f_nac: formData.f_nac,
           edad_fallecido: parseInt(formData.edad) || 0,
           sexo_fallecido: formData.sexo,
           hora_fallecimiento: formData.hora_fallecimiento,
           patologia: formData.patologia,
           observacion: formData.observacion,
-          cedula_medico: formData.cedula_medico.trim(),
+          cedula_medico: fullCedulaMedico,
           nombre_medico: formData.nombre_medico.trim().toUpperCase(),
           apellido_medico: formData.apellido_medico.trim().toUpperCase(),
           telefono_medico: ''
@@ -463,6 +524,27 @@ export default function NominalFormWindow() {
                     value={formData.telefono} 
                     onChange={handleChange}
                     placeholder="04xx-xxxxxxx"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold focus:outline-none focus:border-[#0B3D5C]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[8.5px] font-black tracking-widest text-slate-400 uppercase block mb-1.5">
+                    F. de Nacimiento (f_nac)
+                  </label>
+                  <input 
+                    type="date" 
+                    name="f_nac" 
+                    value={formData.f_nac} 
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const calculatedAge = calcularEdad(val);
+                      setFormData(prev => ({
+                        ...prev,
+                        f_nac: val,
+                        edad: calculatedAge || prev.edad
+                      }));
+                    }}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-bold focus:outline-none focus:border-[#0B3D5C]"
                   />
                 </div>
@@ -731,24 +813,35 @@ export default function NominalFormWindow() {
                   <label className="text-[8.5px] font-black tracking-widest text-indigo-900/60 uppercase block mb-1.5 col-span-1">
                     Cédula Médico *
                   </label>
-                  <div className="relative">
-                    <input 
-                      type="text" 
-                      name="cedula_medico" 
-                      value={formData.cedula_medico} 
+                  <div className="flex gap-1.5">
+                    <select
+                      name="nacionalidad_medico"
+                      value={formData.nacionalidad_medico}
                       onChange={handleChange}
-                      onBlur={buscarMedico}
-                      required 
-                      placeholder="Ej: V-87654321"
-                      className="w-full bg-white border border-indigo-100 rounded-xl pl-3 pr-10 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-indigo-600"
-                    />
-                    <button 
-                      type="button" 
-                      onClick={buscarMedico} 
-                      className="absolute right-2 top-2 text-[#0B3D5C] hover:scale-110 transition-transform"
+                      className="bg-white border border-indigo-100 rounded-xl px-2 py-2 text-[10.5px] font-bold text-center focus:outline-none focus:border-indigo-600 w-12"
                     >
-                      <Search size={14} />
-                    </button>
+                      <option value="V">V</option>
+                      <option value="E">E</option>
+                    </select>
+                    <div className="relative flex-grow">
+                      <input 
+                        type="text" 
+                        name="cedula_medico" 
+                        value={formData.cedula_medico} 
+                        onChange={handleChange}
+                        onBlur={buscarMedico}
+                        required 
+                        placeholder="Ej: 87654321"
+                        className="w-full bg-white border border-indigo-100 rounded-xl pl-3 pr-10 py-2 text-[10.5px] font-bold uppercase focus:outline-none focus:border-indigo-600"
+                      />
+                      <button 
+                        type="button" 
+                        onClick={buscarMedico} 
+                        className="absolute right-2 top-2 text-[#0B3D5C] hover:scale-110 transition-transform"
+                      >
+                        <Search size={14} />
+                      </button>
+                    </div>
                   </div>
                   {medicoStatus && (
                     <span className={`text-[7.5px] font-black uppercase mt-1 block ${
